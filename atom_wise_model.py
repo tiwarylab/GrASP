@@ -244,7 +244,7 @@ for epoch in range(num_epochs):
         # It turns out # atoms * 0.001 is ususually around 100, so we'll set that to our batch size
         train_sampler = NeighborLoader(batch, num_neighbors=[-1,-1, -1], batch_size=500,
         input_nodes= torch.LongTensor(np.concatenate((positives, negatives))),
-        directed=True, num_workers=num_cpus) 
+        directed=True, num_workers=num_cpus, persistent_workers=False) 
         # We can set directed to true because the number of gnn layers is equal to the number of layers sampled.
         # Doing this provides some speedup.add()
         

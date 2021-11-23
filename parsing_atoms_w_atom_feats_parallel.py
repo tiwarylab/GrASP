@@ -111,6 +111,7 @@ def process_system(filename):
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
 
     np.savez_compressed('./data_atoms_w_atom_feats/'+ filename, adj_matrix = trimmed, feature_matrix = feature_array, class_array = classes, edge_attributes = edge_attributes)
+    protein.atoms.write('./mol2_atoms_w_atom_feats/'+ str(filename) +'.mol2',)
 
 
 residue_properties = pd.read_csv('./Amino_Acid_Properties_for_Atoms.csv')                                       # A csv containing properties of amino acids and a on-hot encoding of their name
@@ -139,13 +140,18 @@ inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
 if not os.path.isdir('./data_atoms_w_atom_feats'):
     os.makedirs('./data_atoms_w_atom_feats')
 
+##########################################
+# Comment me out to run just one file
 if __name__ == "__main__":
     Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1752+2448:]))
 
 np.savez('./failed_list', np.array(failed_list))
+##########################################
 
+##########################################
+# Uncomment me to run just one file
+# process_system('1iep_1') 
+##########################################
 
-# process_system('1iep_1')
-
-
-# Key Error 'Br'
+# Key Error 'Br' <--- some old error, means I need to add Br to the atom_dict but that also requires reparsing everything. 
+# For now, I chose to let the one file containing it go
