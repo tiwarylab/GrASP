@@ -4,3 +4,5 @@ held_out/
 shaper_similarity_dict.npy
 ssh_key*
 scPRB_raw_data/
+test_probs/
+test_mol/
