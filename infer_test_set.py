@@ -27,9 +27,10 @@ import time
 
 prepend = str(os.getcwd())
 
-model_path = prepend + "/trained_models/trained_model_1636421443.2471824_epoch_0"
+model_path = prepend + "/trained_models/trained_model_1636503465.3151033_epoch_1"
 device = 'cpu'
-data_path = prepend + "/held_out/"
+data_path = prepend + "/../../storage/held_out/"
+#data_path = prepend + "/test_mol/"
 num_cpus = 4
 
 class KLIFSData(Dataset):
@@ -74,7 +75,7 @@ class KLIFSData(Dataset):
         # Convert Labels from one-hot to 1D target
         y = torch.LongTensor([0 if label[0] == 1 else 1 for label in arr['class_array']] )
         # print("0.6")
-        return Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
+        return Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y, name=self.paths[idx].split('/')[-1][:-4])
 
 class GATModel(nn.Module):
     def __init__(self, input_dim, output_dim=2):
@@ -118,7 +119,7 @@ model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
 
 test_set = KLIFSData(np.array([data_path + x for x in os.listdir(data_path)]) , mode='test')
-test_dataloader =  DataLoader(test_set, batch_size = 4, shuffle=True, pin_memory=True, num_workers=num_cpus)
+test_dataloader =  DataLoader(test_set, batch_size = 1, shuffle=True, pin_memory=True, num_workers=num_cpus)
  
 test_epoch_loss = []
 test_epoch_acc = []
@@ -133,6 +134,7 @@ with torch.no_grad():
         labels = batch.y
 
         out = model.forward(batch.to(device))
+        probs = F.softmax(out)
         loss = F.cross_entropy(out, batch.y)
         preds = np.argmax(out.detach().cpu().numpy(), axis=1)
         bl = loss.detach().cpu().item()
@@ -143,9 +145,10 @@ with torch.no_grad():
         test_batch_loss += bl
         test_batch_acc  += ba
         test_batch_mcc  += bm
-        print("Training Batch Loss:", bl)
-        print("Training Batch Accu:", ba)
-        print("Training Batch MCC:", bm)
+        print("Test Batch Loss:", bl)
+        print("Test Batch Accu:", ba)
+        print("Test Batch MCC:", bm)
+        np.save(f'test_probs/{batch.name[0]}', probs)
 
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)

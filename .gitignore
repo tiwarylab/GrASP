@@ -3,3 +3,5 @@ Old/
 held_out/
 shaper_similarity_dict.npy
 ssh_key*
+test_probs/
+test_mol/
