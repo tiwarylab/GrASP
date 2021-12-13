@@ -12,6 +12,8 @@ from fast_distance_computation import get_distance_matrix
 
 # imports for bond features
 from rdkit import Chem
+from mdtraj import shrake_rupley
+from mdtraj import load as mdtrajload
 
 
 import multiprocessing
@@ -27,15 +29,23 @@ def process_system(filename):
 
     # Adjacency Matrix
     path_to_files = './scPDB_raw_data/' + filename
-    filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
+    # filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
     
-    protein = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
-    # protein_rdkit = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs=False)
-    res_names = protein.residues.resnames
+    protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
+    res_names = protein_w_H.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
-    protein.residues.resnames = new_names
+    protein_w_H.residues.resnames = new_names
+    
+    protein_w_H = protein_w_H.select_atoms(selection_str)
 
-    protein = protein.select_atoms(selection_str)
+    # traj = mdtrajload(path_to_files + '/protein.mol2')
+    # SAS = shrake_rupley(traj, mode='atom')
+    # print(len(protein_w_H.atoms))
+    # print(len(SAS[0]))
+    # print(SAS)
+    # return
+
+    protein = protein_w_H.select_atoms("not type H")
     protein.ids = np.arange(0,len(protein.atoms))   # Reset ids to contiguous values
 
     trimmed = scipy.sparse.lil_matrix((len(protein.atoms.positions), len(protein.atoms.positions)), dtype='float')
@@ -46,11 +56,6 @@ def process_system(filename):
     # Feature Matrix
     feature_array = []  # This will contain all of the features for a given molecule
     flag = False
-    # I don't know what this error condition used to be for, doesn't seem important now
-    # if len(protein_ca.residues) != len(trimmed):
-    #     failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while parsing {}.".format(name, path_to_files)])
-    #     continue 
-    #     raise ValueError ("Expected {} residues, got {}.".format(len(trimmed), len(protein_ca.residues)))
 
     bins = np.arange(0,6)
     pi_4 = 4 * np.pi
@@ -86,7 +91,7 @@ def process_system(filename):
     res_names = site.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
     site.residues.resnames = new_names
-    site = site.select_atoms(selection_str)
+    site = site.select_atoms(selection_str).select_atoms("not type H")
 
     site.ids = np.arange(0,len(site.atoms))
 
@@ -123,7 +128,7 @@ resname_dict = {'ALA':0, 'ARG':1, 'ASN':2, 'ASP':3, 'CYS':4, 'GLN':5,           
                 "A":22, "U":23, "I":24, "DC":25, "DG":26, "DA":27,
                 "DU":28, "DT":29, "DI":30}
 
-atom_dict = {'C':0,'N':1,'O':2,'S':3,'H':4,'MG':5,'Z':6,'MN':7,'CA':8,'FE':9,'P':10, 'CL':11, 'F':12, 'I':13}
+atom_dict = {'C':0,'N':1,'O':2,'S':3,'H':4,'MG':5,'Z':6,'MN':7,'CA':8,'FE':9,'P':10, 'CL':11, 'F':12, 'I':13, 'Br':14}
 
 bond_type_dict = {'1':[1,0,0,0,0],'2':[0,1,0,0,0],'3':[0,0,1,0,0],'ar':[0,0,0,1,0],'am':[0,0,0,0,1],'un':[0,0,0,0,0]}
 
@@ -142,15 +147,15 @@ if not os.path.isdir('./data_atoms_w_atom_feats'):
 
 ##########################################
 # Comment me out to run just one file
-if __name__ == "__main__":
-    Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1752+2448:]))
+# if __name__ == "__main__":
+#     Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1752+2448:]))
 
-np.savez('./failed_list', np.array(failed_list))
+# np.savez('./failed_list', np.array(failed_list))
 ##########################################
 
 ##########################################
 # Uncomment me to run just one file
-# process_system('1iep_1') 
+process_system('1iep_1') 
 ##########################################
 
 # Key Error 'Br' <--- some old error, means I need to add Br to the atom_dict but that also requires reparsing everything. 
