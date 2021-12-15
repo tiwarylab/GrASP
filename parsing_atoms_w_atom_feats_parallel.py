@@ -65,12 +65,12 @@ def process_system(filename):
     # Add SAS from hydrogen to bonded atom, create number of bonded hydrogens feature
     num_bonded_H = np.zeros(len(protein_w_H.atoms))
     for atom in protein_w_H:
-        is_bonded_to_H = [re.search("^[a-zA-Z]+", value).group().upper() == 'H' for _, value in atom.bonds.types()]
+        is_bonded_to_H = [re.search("^[a-zA-Z]+", bond.type).group().upper() == 'H' for _, bond in atom.bonds]
         num_bonded_H[atom.id] = sum(is_bonded_to_H)
         # Because the bonds have the old ids, we use our map to the new ids to access the SAS value, if the value is -1
         # it means that the bonded atom no longer exists in our universe (i.e., it was dropped). If this happens it will
         # be a very rare occasion as must things other than solvents are not droppped.
-        local_SAS = [SAS[mapping[atom_id[1]]] if mapping[atom_id[1]] != -1 else 0 for atom_id in atom.bonds.indices]    
+        local_SAS = np.array([SAS[mapping[atom_id[1]]] if mapping[atom_id[1]] != -1 else 0 for atom_id in atom.bonds.indices])    
         SAS[atom.id] = np.sum(local_SAS * is_bonded_to_H)       # Only take the values from hydrogens
 
     # Drop Hydrogens
