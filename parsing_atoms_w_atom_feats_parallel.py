@@ -15,6 +15,7 @@ from rdkit import Chem
 from mdtraj import shrake_rupley#, baker_hubbard, kabsch_sander, wernet_nilsson
 from mdtraj import load as mdtrajload
 import mdtraj as md
+from collections import defaultdict
 # from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis as HBA
 
 import multiprocessing
@@ -39,12 +40,6 @@ def process_system(filename):
     protein_w_H.residues.resnames = new_names
     
     protein_w_H = protein_w_H.select_atoms(selection_str)
-    original_ids = protein_w_H.ids
-    # Keeping track of the ids is getting weird so I'm going to make a comment about it:
-    # Every time we select atoms, we will need to know which atoms are saved and which get dropped
-    # In this case, original_ids stores what atoms are left over after applying our selection string.
-    # We'll use this to mask the mdtraj SAS output so we have the same atoms from each. We'll use it 
-    # again later when we drop hydrogens
 
     # Calculate SAS for each atom, this needs to be done before hydrogens are dropped
     traj = mdtrajload(path_to_files + '/protein.mol2')
@@ -53,6 +48,17 @@ def process_system(filename):
         # Sanity check, I'm pretty sure this should never happen
         raise Exception("Did not expext more than one list of SAS values")   
     SAS = SAS[0]
+
+    mapping = defaultdict(lambda: -1)                           # A mapping from the old ids to the new ids
+    for i in range(len(protein_w_H.atoms.ids)):
+        mapping[protein_w_H.atoms.ids[i]] = i
+    original_ids = protein_w_H.ids
+    # Keeping track of the ids is getting weird so I'm going to make a comment about it:
+    # Every time we select atoms, we will need to know which atoms are saved and which get dropped
+    # In this case, original_ids stores what atoms are left over after applying our selection string.
+    # We'll use this to mask the mdtraj SAS output so we have the same atoms from each. We'll use it 
+    # again later when we drop hydrogens
+
     SAS = [SAS[i] for i in original_ids]                        # Sync SAS atoms with mda atoms
     protein_w_H.ids = np.arange(0,len(protein_w_H.atoms))       # Reset ids to contiguous values
 
@@ -61,11 +67,15 @@ def process_system(filename):
     for atom in protein_w_H:
         is_bonded_to_H = [re.search("^[a-zA-Z]+", value).group().upper() == 'H' for _, value in atom.bonds.types()]
         num_bonded_H[atom.id] = sum(is_bonded_to_H)
-        SAS[atom.id] += np.sum([SAS[atom_id[1]] for atom_id in atom.bonds.indices])
+        # Because the bonds have the old ids, we use our map to the new ids to access the SAS value, if the value is -1
+        # it means that the bonded atom no longer exists in our universe (i.e., it was dropped). If this happens it will
+        # be a very rare occasion as must things other than solvents are not droppped.
+        local_SAS = [SAS[mapping[atom_id[1]]] if mapping[atom_id[1]] != -1 else 0 for atom_id in atom.bonds.indices]    
+        SAS[atom.id] = np.sum(local_SAS * is_bonded_to_H)       # Only take the values from hydrogens
 
     # Drop Hydrogens
     protein = protein_w_H.select_atoms("not type H")
-    original_ids = protein.ids                                  # Save the indices so we know what got dropped
+    original_ids = protein.ids                                  # Save the ids so we know what got dropped
     protein.ids = np.arange(0,len(protein.atoms))               # Reset ids to contiguous values
     SAS = [SAS[i] for i in original_ids]                        # Remove Hydrogens From SAS
     num_bonded_H = [num_bonded_H[i] for i in original_ids]      # Remove hydroges from count of bonded hydrogens to each atom
