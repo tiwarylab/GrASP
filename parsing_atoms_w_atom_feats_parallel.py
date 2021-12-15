@@ -34,6 +34,7 @@ def process_system(filename):
     # filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
     
     protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
+    protein_w_H.ids = np.arange(0,len(protein_w_H.atoms))       # I'll be abusing the id attributes as by own settable index
 
     res_names = protein_w_H.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
