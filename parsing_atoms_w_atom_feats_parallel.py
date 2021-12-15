@@ -12,9 +12,10 @@ from fast_distance_computation import get_distance_matrix
 
 # imports for bond features
 from rdkit import Chem
-from mdtraj import shrake_rupley
+from mdtraj import shrake_rupley, baker_hubbard, kabsch_sander, wernet_nilsson
 from mdtraj import load as mdtrajload
-
+import mdtraj as md
+from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis as HBA
 
 import multiprocessing
 from joblib import Parallel, delayed
@@ -32,26 +33,29 @@ def process_system(filename):
     # filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
     
     protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
+
     res_names = protein_w_H.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
     protein_w_H.residues.resnames = new_names
     
     protein_w_H = protein_w_H.select_atoms(selection_str)
+    indices = protein_w_H.indices # Save the indices so we know what got dropped and an apply it to the mdtraj topology
 
-    # traj = mdtrajload(path_to_files + '/protein.mol2')
-    # SAS = shrake_rupley(traj, mode='atom')
-    # print(len(protein_w_H.atoms))
-    # print(len(SAS[0]))
-    # print(SAS)
-    # return
+    # Calculate SAS for each atom, this needs to be done before hydrogens are dropped
+    traj = mdtrajload(path_to_files + '/protein.mol2')
+    SAS = shrake_rupley(traj, mode='atom')
+    if len(SAS) > 1:
+        # Sanity check, I'm pretty sure this should never happen
+        raise Exception("Did not expext more than one list of SAS values")
+    SAS = [SAS[0][i] for i in indices]   
 
+    # Drop Hydrogens
     protein = protein_w_H.select_atoms("not type H")
     protein.ids = np.arange(0,len(protein.atoms))   # Reset ids to contiguous values
 
     trimmed = scipy.sparse.lil_matrix((len(protein.atoms.positions), len(protein.atoms.positions)), dtype='float')
     get_distance_matrix(protein.atoms.positions, trimmed, 7)
     trimmed = trimmed.tocsr()
-    # print(trimmed)
 
     # Feature Matrix
     feature_array = []  # This will contain all of the features for a given molecule
@@ -69,16 +73,14 @@ def process_system(filename):
             r = bins[1:]
             g = n/(pi_4 * r ** 2)
 
-            # Add feature vector with [residue level feats] [atom level feats] [rdf]
-            feature_array.append(np.concatenate((residue_properties.iloc[resname_dict[name]].values, atom_properties.iloc[atom_dict[element]].values, g)))                              # Add corresponding features to feature array
+            # Add feature vector with [residue level feats] [atom level feats] [rdf] [SAS]
+            feature_array.append(np.concatenate((residue_properties.iloc[resname_dict[name]].values, atom_properties.iloc[atom_dict[element]].values, g, SAS[atom.id])))                              # Add corresponding features to feature array
         except Exception as e:
             print(atom)
             failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while parsing {}.".format(name, path_to_files)])
             flag = True
             return
             # raise ValueError ("Value not included in dictionary \"{}\" while parsing {}.".format(name, path_to_files)) from e
-
-    # trimmed = trimmed.tocoo()   # done with csr format, we will save it as coo for pytorch # we no longer do this because we need the matrix in CSR format to index based on the entry. 
 
     if flag:
         return                                                                                   # This flag will skip creating the class matrix and will prevent the file from being saved
@@ -138,7 +140,7 @@ selection_str = "".join(["resname " + x + " or " for x in list(resname_dict.keys
 index = 1
 failed_list = []
 
-num_cores = multiprocessing.cpu_count()
+# num_cores = multiprocessing.cpu_count()
 
 inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
 
@@ -147,15 +149,16 @@ if not os.path.isdir('./data_atoms_w_atom_feats'):
 
 ##########################################
 # Comment me out to run just one file
-# if __name__ == "__main__":
-#     Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1752+2448:]))
+num_cores = 8
+if __name__ == "__main__":
+    Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1752+2448:]))
 
-# np.savez('./failed_list', np.array(failed_list))
+np.savez('./failed_list', np.array(failed_list))
 ##########################################
 
 ##########################################
 # Uncomment me to run just one file
-process_system('1iep_1') 
+# process_system('1iep_1') 
 ##########################################
 
 # Key Error 'Br' <--- some old error, means I need to add Br to the atom_dict but that also requires reparsing everything. 
