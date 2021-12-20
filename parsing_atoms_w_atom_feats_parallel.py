@@ -156,9 +156,20 @@ def process_system(filename):
 
     binding_site_lst = []
 
-    for atom in site.atoms:
-        x, y, z = atom.position                                                                       # Get the coordinates of each atom of the binding site
-        binding_site_lst.append(protein.select_atoms("point {} {} {} 0".format(x, y, z))[0].id)      # Select that atom in the whole protein
+    # Sometimes the site atoms are not found in the protein. This happens when they're a part of a nonstandard residues.
+    # For now, we'll skip them and keep a count of how many there are
+    try:
+        for atom in site.atoms:
+            x, y, z = atom.position                                                                       # Get the coordinates of each atom of the binding site
+            binding_site_lst.append(protein.select_atoms("point {} {} {} 0".format(x, y, z))[0].id)      # Select that atom in the whole protein
+    except Exception as e:
+        print("Binding site atom not found in filtered protein. Was it dropped? \n Filename:", str(path_to_files))
+        # Okay in theory this is bad and could cause a race condition but it's very unlikely because this case is rarely reached.
+        # In conjunction with the print statement I'm really not worried about it.
+        # Okay, after reading about GIL I think it's fine... 
+        global nonstandard_residue_skip 
+        nonstandard_residue_skip += 1 
+        return
 
     if binding_site_lst == []:
         print(site.atoms)
@@ -196,6 +207,7 @@ selection_str = "".join(["resname " + x + " or " for x in list(resname_dict.keys
 # total_files = len(os.listdir('./scPDB_raw_data'))
 index = 1
 failed_list = []
+nonstandard_residue_skip = 0
 
 # num_cores = multiprocessing.cpu_count()
 
@@ -204,19 +216,20 @@ inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
 if not os.path.isdir('./data_atoms_w_atom_feats'):
     os.makedirs('./data_atoms_w_atom_feats')
 
-##########################################
-# Comment me out to run just one file
-num_cores = 8
-if __name__ == "__main__":
-    Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1752+2448+64:]))
+try:
+    ##########################################
+    # Comment me out to run just one file
+    num_cores = 8
+    if __name__ == "__main__":
+        Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1500:]))
 
-np.savez('./failed_list', np.array(failed_list))
-##########################################
+    np.savez('./failed_list', np.array(failed_list))
+    ##########################################
 
-##########################################
-# Uncomment me to run just one file
-# process_system('1iep_1') 
-##########################################
-
-# Key Error 'Br' <--- some old error, means I need to add Br to the atom_dict but that also requires reparsing everything. 
-# For now, I chose to let the one file containing it go
+    ##########################################
+    # Uncomment me to run just one file
+    # process_system('1iep_1') 
+    ##########################################
+finally:
+    if nonstandard_residue_skip > 0:
+        print("Warning: Number of files skipped due to a nonstandard residue being a part of the site:", nonstandard_residue_skip)
