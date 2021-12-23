@@ -3,7 +3,7 @@
 #SBATCH -p gpuk80
 #SBATCH --gres=gpu:2
 #SBATCH --ntasks-per-node=4
-#SBATCH --time 3:00:00
+#SBATCH --time 5:00:00
 #SBATCH --nodes=1
 #SBATCH --job-name="scPDB GPU"
 #SBATCH --mail-user=strobelm@umd.edu
