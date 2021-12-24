@@ -9,7 +9,7 @@
 
 ## --- Uncomment for CPU ---
 #SBATCH -p shared 
-#SBATCH --ntasks-per-node=6
+#SBATCH --ntasks-per-node=4
 #SBATCH --time 4:00:00
 #SBATCH --nodes=1
 #SBATCH --job-name="scPDB CPU"
