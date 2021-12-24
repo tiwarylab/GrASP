@@ -221,7 +221,7 @@ try:
     # Comment me out to run just one file
     num_cores = 8
     if __name__ == "__main__":
-        Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[1500:]))
+        Parallel(n_jobs=num_cores)(delayed(process_system)(i,) for i in tqdm(inputs[:]))
 
     np.savez('./failed_list', np.array(failed_list))
     ##########################################
