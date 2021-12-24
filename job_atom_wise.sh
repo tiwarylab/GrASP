@@ -10,13 +10,13 @@
 #SBATCH --mail-type=ALL
 
 ## --- Uncomment for CPU ---
-#SBATCH -p shared 
-#SBATCH --ntasks-per-node=6
-#SBATCH --time 2:00:00
-#SBATCH --nodes=1
-#SBATCH --job-name="scPDB CPU"
-#SBATCH --mail-user=strobelm@umd.edu
-#SBATCH --mail-type=ALL
+##SBATCH -p shared 
+##SBATCH --ntasks-per-node=6
+##SBATCH --time 2:00:00
+##SBATCH --nodes=1
+##SBATCH --job-name="scPDB CPU"
+##SBATCH --mail-user=strobelm@umd.edu
+##SBATCH --mail-type=ALL
 
 
 ml anaconda
