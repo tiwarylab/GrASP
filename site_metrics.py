@@ -7,6 +7,10 @@ from scipy.optimize import linprog
 import os
 from tqdm import tqdm
 
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import matthews_corrcoef as mcc
+from sklearn.metrics import roc_curve, auc 
+
 def sort_clusters(cluster_ids, probs, labels):
     c_probs = []
     unique_ids = np.unique(cluster_ids)
@@ -152,50 +156,140 @@ def site_metrics(all_coords, predicted_probs, true_labels, threshold=.5, quantil
 
     return center_distances, volumetric_overlaps
 
+def compute_metrics_for_all(threshold = 0.5):
+    cent_dist_list = []
+    vol_overlap_list = []
+    no_prediction_count = 0
 
-# How the files were saved
-# np.save(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name, probs.detach().cpu().numpy())
-# np.save(prepend + '/test_metrics/test_labels/' + '_' + assembly_name, labels.detach().cpu().numpy())
+    for file in os.listdir(prepend + '/test_data_dir/mol2'):
+        assembly_name = file[:-5]
+        try:
+            trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
+            labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
+            # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
+            probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
 
-# model_name = "trained_model_1640072931.267488_epoch_49"
-model_name = "trained_model_1640067496.5729342_epoch_30"
-threshold = 0.5
+            cent_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs, labels, threshold=threshold)
+            if cent_dist == [] or vol_overlap_list == []: 
+                no_prediction_count += 1
+            cent_dist_list.append(cent_dist)
+            vol_overlap_list.append(vol_overlap)
+        except Exception as e:
+            print(assembly_name, flush=True)
+            raise e
 
-# Calculate Site Metrics
+    return cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels
+
+#######################################################################################
+
+model_name = "trained_model_1640072931.267488_epoch_49"
+# model_name = "trained_model_1640067496.5729342_epoch_30"
 prepend = str(os.getcwd())
 
-cent_dist_list = []
-vol_overlap_list = []
-no_prediction_count = 0
-
-for file in tqdm(os.listdir(prepend + '/test_data_dir/mol2')):
+# Get all predictions and labels   
+all_probs = []
+all_labels = []
+for file in os.listdir(prepend + '/test_data_dir/mol2'):
     assembly_name = file[:-5]
-    try:
-        trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
-        labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
-        probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
-        # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
+    labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
+    # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
+    probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
+    all_labels.append(labels)
+    all_probs.append(probs)
 
-        cent_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs, labels, threshold=threshold)
-        if cent_dist == [] or vol_overlap_list == []: 
-            no_prediction_count += 1
-        cent_dist_list.append(cent_dist)
-        vol_overlap_list.append(vol_overlap)
-    except Exception as e:
-        print(assembly_name, flush=True)
-        raise e
-    
+#######################################################################################
+# Compute roc, auc and optimal threshold
+binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
 
+fpr = dict()
+tpr = dict()
+thresholds = dict()
+roc_auc = dict()
+n_classes = 2
+
+for i in range(n_classes):
+    fpr[i], tpr[i], thresholds[i] = roc_curve(binarized_labels[:, i],all_probs[:,i])
+    roc_auc[i] = auc(fpr[i], tpr[i])
+
+# Compute micro-average ROC curve and ROC area
+fpr["micro"], tpr["micro"], _ = roc_curve(binarized_labels.ravel(), all_probs.ravel())
+roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+# First aggregate all false positive rates
+all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+
+# Then interpolate all ROC curves at this points
+mean_tpr = np.zeros_like(all_fpr)
+for i in range(n_classes):
+    mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+
+# Finally average it and compute AUC
+mean_tpr /= n_classes
+
+fpr["macro"] = all_fpr
+tpr["macro"] = mean_tpr
+roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+    os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
+
+# Find optimal threshold
+gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
+ix = np.argmax(gmeans)
+optimal_threshold = thresholds[1][ix]
+
+print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
+print("Micro Averaged AUC:", roc_auc["micro"])
+print("Macro Averaged AUC:", roc_auc["macro"])
+print("Negative Class AUC:", roc_auc[0])
+print("Positive Class AUC:", roc_auc[1])
+
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+#######################################################################################
+
+#######################################################################################
+# Compute Metrics for Standard 0.5 Threshold
+threshold = 0.5
+cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=0.5)
 cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]
 cleaned_cent_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in cent_dist_list]
 
+preds         = np.array([all_probs] > threshold).astype(int)    # Convert probabilities to prediction in 0 or 1
+accuracy      = accuracy_score(all_labels, preds)
+matthews_corr = mcc(all_labels, preds)
+
+print("-----------------------------------------------------------------------------------")
 print("Cutoff (Prediction Threshold):", threshold)
+print("-----------------------------------------------------------------------------------")
+print("Accuracy Score:", accuracy)
+print("Matthew's Correlation Coefficent:", matthews_corr)
+print("-----------------------------------------------------------------------------------")
 print("Number of systems with no predictions:", no_prediction_count)
 print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list))
 print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list))
+#######################################################################################
 
+#######################################################################################
+# Compute Metrics for Computed Optimal Theshold
+threshold = optimal_threshold
+cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=0.5)
+cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]
+cleaned_cent_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in cent_dist_list]
 
-# trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
-# center_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs.detach().cpu().numpy(), labels.detach().cpu().numpy())
-# print(center_dist)
-# print(vol_overlap)
+preds         = np.array([all_probs] > threshold).astype(int)    # Convert probabilities to prediction in 0 or 1
+accuracy      = accuracy_score(all_labels, preds)
+matthews_corr = mcc(all_labels, preds)
+
+print("-----------------------------------------------------------------------------------")
+print("Cutoff (Prediction Threshold):", threshold)
+print("-----------------------------------------------------------------------------------")
+print("Accuracy Score:", accuracy)
+print("Matthew's Correlation Coefficent:", matthews_corr)
+print("-----------------------------------------------------------------------------------")
+print("Number of systems with no predictions:", no_prediction_count)
+print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list))
+print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list))
+#######################################################################################

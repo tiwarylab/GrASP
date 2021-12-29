@@ -18,7 +18,7 @@ from sklearn.preprocessing import label_binarize
 from scipy import interp
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import matthews_corrcoef as mcc
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc 
 from torch.utils.tensorboard import SummaryWriter
 
 from KLIFS_dataset import KLIFSData
@@ -194,18 +194,16 @@ with torch.no_grad():
 
 all_probs  =  all_probs.detach().cpu().numpy()
 all_labels = all_labels.detach().cpu().numpy()
-# all_labels = label_binarize(all_labels.detach().cpu().numpy(), classes=[0,1])
 all_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
-print(all_probs.shape)
-print(all_labels.shape) 
 
 fpr = dict()
 tpr = dict()
+thresholds = dict()
 roc_auc = dict()
 n_classes = 2
 
 for i in range(n_classes):
-    fpr[i], tpr[i], _ = roc_curve(all_labels[:, i],all_probs[:,i])
+    fpr[i], tpr[i], thresholds[i] = roc_curve(all_labels[:, i],all_probs[:,i])
     roc_auc[i] = auc(fpr[i], tpr[i])
 
 # Compute micro-average ROC curve and ROC area
@@ -227,6 +225,10 @@ fpr["macro"] = all_fpr
 tpr["macro"] = mean_tpr
 roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "_roc_auc", roc_auc)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "_tpr", tpr)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "_fpr", fpr)
+if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+    os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
+
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
