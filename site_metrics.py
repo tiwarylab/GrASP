@@ -30,17 +30,28 @@ def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, **kwar
         # No positive predictions were made with specified cutoff
         return None, None, None
     bind_coords = all_coords[predicted_labels]
-    bw = estimate_bandwidth(bind_coords, quantile=quantile)
-    if bw == 0:
-        bw = None
-    ms_clustering = MeanShift(bandwidth=bw, **kwargs).fit(bind_coords)
-    cluster_ids = ms_clustering.labels_
-    
-    sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels)
+    if bind_coords.shape[0] != 1:
+        bw = estimate_bandwidth(bind_coords, quantile=quantile)
+        if bw == 0:
+            bw = 1e-17
+        try:
+            ms_clustering = MeanShift(bandwidth=bw, **kwargs).fit(bind_coords)
+        except Exception as e:
+            print(bind_coords, flush=True)
+            raise e
+        cluster_ids = ms_clustering.labels_
+        
+        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels)
+    else:
+        # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
+        # the clustering fails so we'll just call this one atom our best 'cluster'.
+        sorted_ids = [0]
 
     all_ids = -1*np.ones(predicted_labels.shape)
     all_ids[predicted_labels] = sorted_ids
-    
+
+    # print(sorted_ids)
+    # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
 def get_centroid(coords):
@@ -78,7 +89,7 @@ def volumetric_overlap(site_points1, site_points2):
     halfspaces = np.append(hull1.equations, hull2.equations, axis=0)
     center, radius = cheb_center(halfspaces)
     
-    if radius <= 0:
+    if radius <= 1e-5: # We use an epsilon here because cheb_center will return a value requiring more accruacy than we're using
         return 0
 
     half_inter = HalfspaceIntersection(halfspaces, center)
@@ -146,7 +157,8 @@ def site_metrics(all_coords, predicted_probs, true_labels, threshold=.5, quantil
 # np.save(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name, probs.detach().cpu().numpy())
 # np.save(prepend + '/test_metrics/test_labels/' + '_' + assembly_name, labels.detach().cpu().numpy())
 
-model_name = "trained_model_1640072931.267488_epoch_49"
+# model_name = "trained_model_1640072931.267488_epoch_49"
+model_name = "trained_model_1640067496.5729342_epoch_30"
 threshold = 0.5
 
 # Calculate Site Metrics
@@ -158,14 +170,20 @@ no_prediction_count = 0
 
 for file in tqdm(os.listdir(prepend + '/test_data_dir/mol2')):
     assembly_name = file[:-5]
-    trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
-    labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
-    probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
-    cent_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs, labels, threshold=threshold)
-    if cent_dist == [] or vol_overlap_list == []: 
-        no_prediction_count += 1
-    cent_dist_list.append(cent_dist)
-    vol_overlap_list.append(vol_overlap)
+    try:
+        trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
+        labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
+        probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
+        # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
+
+        cent_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs, labels, threshold=threshold)
+        if cent_dist == [] or vol_overlap_list == []: 
+            no_prediction_count += 1
+        cent_dist_list.append(cent_dist)
+        vol_overlap_list.append(vol_overlap)
+    except Exception as e:
+        print(assembly_name, flush=True)
+        raise e
     
 
 cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]

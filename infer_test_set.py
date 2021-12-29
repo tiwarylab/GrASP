@@ -26,7 +26,7 @@ from KLIFS_dataset import KLIFSData
 prepend = str(os.getcwd()) + "/trained_models/"
 
 ########################## Change Me To Change The Model ##########################
-model_name = "trained_model_1640072931.267488_epoch_49"
+model_name = "trained_model_1640067496.5729342_epoch_30"
 model_path = prepend + model_name
 ###################################################################################
 # Other Parameters
@@ -139,6 +139,11 @@ test_epoch_mcc = []
 all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
+if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
+    os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
+if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
+    os.makedirs(prepend + '/test_metrics/test_labels/')
+
 print("Begining Evaluation")
 model.eval()
 with torch.no_grad():
@@ -167,7 +172,7 @@ with torch.no_grad():
         # print("Test Batch Loss:", bl)
         # print("Test Batch Accu:", ba)
         # print("Test Batch MCC:", bm)
-        np.save(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name, probs.detach().cpu().numpy())
+        np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
         np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
