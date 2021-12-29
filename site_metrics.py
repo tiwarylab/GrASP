@@ -187,15 +187,15 @@ model_name = "trained_model_1640072931.267488_epoch_49"
 prepend = str(os.getcwd())
 
 # Get all predictions and labels   
-all_probs = []
-all_labels = []
+all_probs = np.array([])
+all_labels = np.array([])
 for file in os.listdir(prepend + '/test_data_dir/mol2'):
     assembly_name = file[:-5]
     labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
     # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
     probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
-    all_labels.append(labels)
-    all_probs.append(probs)
+    all_labels = np.concatenate((all_labels,labels))
+    all_probs = np.append(all_probs,probs)
 
 #######################################################################################
 # Compute roc, auc and optimal threshold
