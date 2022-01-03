@@ -168,7 +168,6 @@ def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False)
         all_probs = torch.Tensor([])
         all_labels = torch.Tensor([])
 
-
     for file in os.listdir(prepend + '/test_data_dir/mol2'):
         assembly_name = file[:-5]
         try:
@@ -226,7 +225,7 @@ prepend = str(os.getcwd())
 #     #     break
 # print("Done. {}".format(time.time()- start))
 
-num_closest = 3
+num_closest = 5
 
 #######################################################################################
 print("Calculating overlap and center distance metrics for 0.5 threshold.")
@@ -235,10 +234,11 @@ start = time.time()
 threshold = 0.5
 cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=True)
 
-indices = np.argsort(cent_dist_list)               # Indices sorted by distance from center 
+indices = [np.argsort(entry) for entry in cent_dist_list]          # Indices sorted by distance from center 
 
-cleaned_vol_overlap_list =  [entry[indices[x,i]] for x,entry in enumerate(vol_overlap_list) for i in range(min([len(entry), num_closest]))]
-cleaned_cent_dist_list =  [entry[indices[x,i]] for x,entry in enumerate(cent_dist_list) for i in range(min([len(entry), num_closest]))]
+
+cleaned_vol_overlap_list =  [entry[indices[x][i]] for x,entry in enumerate(vol_overlap_list) for i in range(min([len(entry), num_closest]))]
+cleaned_cent_dist_list =  [entry[indices[x][i]] for x,entry in enumerate(cent_dist_list) for i in range(min([len(entry), num_closest]))]
 print("Done. {}".format(time.time()- start))
 
 print("Generating predictions and calculating metrics.")
@@ -325,10 +325,10 @@ start = time.time()
 # Compute Metrics for Standard 0.5 Threshold
 threshold = optimal_threshold
 cent_dist_list, vol_overlap_list, no_prediction_count, _, _ = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
-indices = np.argsort(cent_dist_list)               # Indices sorted by distance from center 
+indices = [np.argsort(entry) for entry in cent_dist_list]          # Indices sorted by distance from center 
 
-cleaned_vol_overlap_list =  [entry[indices[x,i]] for x,entry in enumerate(vol_overlap_list) for i in range(min([len(entry), num_closest]))]
-cleaned_cent_dist_list =  [entry[indices[x,i]] for x,entry in enumerate(cent_dist_list) for i in range(min([len(entry), num_closest]))]
+cleaned_vol_overlap_list =  [entry[indices[x][i]] for x,entry in enumerate(vol_overlap_list) for i in range(min([len(entry), num_closest]))]
+cleaned_cent_dist_list =  [entry[indices[x][i]] for x,entry in enumerate(cent_dist_list) for i in range(min([len(entry), num_closest]))]
 print("Done. {}".format(time.time()- start))
 
 print("Generating predictions and calculating metrics.")
