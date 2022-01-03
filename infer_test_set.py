@@ -194,6 +194,15 @@ with torch.no_grad():
 
 all_probs  =  all_probs.detach().cpu().numpy()
 all_labels = all_labels.detach().cpu().numpy()
+
+if not os.path.isdir(prepend + '/test_metrics/all_probs/'):
+    os.makedirs(prepend + '/test_metrics/all_probs/')
+if not os.path.isdir(prepend + '/test_metrics/all_labels/'):
+    os.makedirs(prepend + '/test_metrics/all_labels/')
+
+np.savez(prepend + "/test_metrics/all_probs/" + model_name, all_probs)
+np.savez(prepend + "/test_metrics/all_labels/" + model_name, all_labels)
+
 all_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
 
 fpr = dict()
