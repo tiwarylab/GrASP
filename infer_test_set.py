@@ -2,17 +2,11 @@ import os
 import numpy as np
 from datetime import datetime
 import time
-import MDAnalysis as mda
 
-import torch
-import torch.nn as nn
+# import torch
 import torch.nn.functional as F
 
-from torch_geometric.nn import GATv2Conv
 from torch_geometric.loader import DataLoader
-from torch_geometric.data import Data, Dataset
-from torch_geometric.data import InMemoryDataset
-from torch_geometric.nn.norm import BatchNorm
 
 from sklearn.preprocessing import label_binarize
 from scipy import interp
@@ -20,13 +14,21 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import matthews_corrcoef as mcc
 from sklearn.metrics import roc_curve, auc 
 from torch.utils.tensorboard import SummaryWriter
+import torch
 
 from KLIFS_dataset import KLIFSData
+from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel
 
 prepend = str(os.getcwd()) + "/trained_models/"
 
+###################################################################################
+''' Some bits that are surrounded in comments like this can be used to temporarily
+    modify the code to use the training set.'''
+###################################################################################
+
+
 ########################## Change Me To Change The Model ##########################
-model_name = "trained_model_1640067496.5729342_epoch_30"
+model_name = "trained_model_1642111399.8650987/epoch_33"
 model_path = prepend + model_name
 ###################################################################################
 # Other Parameters
@@ -38,96 +40,18 @@ num_cpus = 4
 print("The model will be using the following device:", device)
 print("The model will be using {} cpus.".format(num_cpus))
 
-
-class GATModelv1(nn.Module):
-    def __init__(self, input_dim, output_dim=2):
-        # No need for bias in GAT Convs due to batch norms
-        super(GATModelv1, self).__init__()
-        self.preprocess1 = nn.Linear(input_dim, 128, bias=False)
-        self.BN0 = BatchNorm(128)
-        
-        self.GAT_1 = GATv2Conv(128, 8, heads=8, bias=False)
-        self.BN1 = BatchNorm(64)
-        
-        self.preprocess2 = nn.Linear(64, 48)
-        self.GAT_2 = GATv2Conv(48, 6, heads=8, bias=False)
-        self.BN2 = BatchNorm(48)
-
-        self.preprocess3 = nn.Linear(48, 32)
-        self.GAT_3 = GATv2Conv(32, 5, heads=5, bias=False)
-        self.BN3 = BatchNorm(25)
-
-        self.postprocess1 = nn.Linear(25, output_dim)
-
-        self.elu = torch.nn.ELU()
-        self.softmax = torch.nn.Softmax(dim=0)
-        
-    def forward(self, input):
-        x = self.BN0(self.elu(self.preprocess1(input.x)))
-        
-        x = self.BN1(self.GAT_1(x, input.edge_index))
-        
-        x = self.elu(self.preprocess2(x))
-        x = self.BN2(self.GAT_2(x,input.edge_index))
-
-        x = self.elu(self.preprocess3(x))
-        x = self.BN3(self.GAT_3(x,input.edge_index))
-        
-        x = self.postprocess1(x)
-        return x
-
-
-class GATModelv2(nn.Module):
-    def __init__(self, input_dim, output_dim=2):
-        # No need for bias in GAT Convs due to batch norms
-        super(GATModelv2, self).__init__()
-        self.preprocess1 = nn.Linear(input_dim, 64, bias=False)
-        self.BN0 = BatchNorm(64)
-        
-        self.GAT_1 = GATv2Conv(64, 8, heads=8, bias=False)
-        self.BN1 = BatchNorm(64)
-        
-        self.GAT_2 = GATv2Conv(64, 8, heads=8, bias=False)
-        self.BN2 = BatchNorm(64)
-
-        self.GAT_3 = GATv2Conv(64, 8, heads=8, bias=False)
-        self.BN3 = BatchNorm(64)
-
-        self.GAT_4 = GATv2Conv(64, 8, heads=8, bias=False)
-        self.BN4 = BatchNorm(64)
-
-        self.postprocess1 = nn.Linear(64, output_dim)
-
-        self.elu = torch.nn.ELU()
-        self.softmax = torch.nn.Softmax(dim=0)
-         
-    def forward(self, input):
-        x = self.BN0(self.preprocess1(input.x))
-        x = self.elu(x)
-        
-        block_1_out = self.BN1(self.GAT_1(x, input.edge_index))
-        block_1_out = self.elu(torch.add(block_1_out, x))
-
-        block_2_out = self.BN2(self.GAT_2(block_1_out,input.edge_index))
-        block_2_out = self.elu(torch.add(block_2_out, block_1_out))              # DenseNet style skip connection
-        
-        block_3_out = self.BN3(self.GAT_3(block_2_out,input.edge_index))
-        block_3_out = self.elu(torch.add(block_3_out, block_2_out))
-
-        block_4_out = self.BN4(self.GAT_4(block_3_out,input.edge_index))
-        block_4_out = self.elu(torch.add(block_4_out, block_3_out))
-
-        
-        x = self.postprocess1(block_4_out)
-        return x
-
-model = GATModelv2(input_dim=43, output_dim=2)
+# model = GATModelv2(input_dim=43, output_dim=2)
+model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
  
 prepend = str(os.getcwd())
 print("Initializing Test Set")
-data_set = KLIFSData(prepend + '/test_data_dir', num_cpus)
+#########################
+data_set = KLIFSData(prepend + '/test_data_dir', num_cpus, cutoff=5, force_process=True)
+data_set.process()
+# data_set = torch.utils.data.Subset(data_set, np.random.choice(len(data_set), size = 5000, replace=False))
+######################### data_set = KLIFSData(prepend + '/test_data_dir', num_cpus)
 # Sticking with batch size 1 because it makes it easier to track predictions
 test_dataloader =  DataLoader(data_set, batch_size = 1, shuffle=False, pin_memory=True, 
                               num_workers=num_cpus, persistent_workers=True)
@@ -139,6 +63,12 @@ test_epoch_mcc = []
 all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
+#########################
+# if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
+#     os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
+# if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
+#     os.makedirs(prepend + '/train_metrics/test_labels/')
+#########################
 if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
     os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
 if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
@@ -151,18 +81,20 @@ with torch.no_grad():
     test_batch_acc = 0.0
     test_batch_mcc = 0.0
     for batch in test_dataloader:
-        labels = batch.y
+        labels = batch.y.to(device)
         assembly_name = batch.name[0][:-4]
         # print(assembly_name)
 
         out = model.forward(batch.to(device))
         probs = F.softmax(out, dim=-1)
-        all_probs = torch.cat((all_probs, probs))
-        all_labels = torch.cat((all_labels, labels))
+        all_probs = torch.cat((all_probs, probs.detach().cpu()))
+        all_labels = torch.cat((all_labels, labels.detach().cpu()))
         loss = F.nll_loss(torch.log(probs), labels,reduction='sum')         # Cross Entropy
         preds = np.argmax(out.detach().cpu().numpy(), axis=1)
         bl = loss.detach().cpu().item()
 
+        labels = batch.y.detach().cpu()
+        
         ba = accuracy_score(labels, preds)
         bm = mcc(labels, preds)
 
@@ -172,8 +104,13 @@ with torch.no_grad():
         # print("Test Batch Loss:", bl)
         # print("Test Batch Accu:", ba)
         # print("Test Batch MCC:", bm)
+        #########################
+        # np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+        # np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        #########################
         np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
         np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
         # writer.add_scalar('Batch_Acc/MCC',  bm,  test_batch_num)
@@ -195,6 +132,16 @@ with torch.no_grad():
 all_probs  =  all_probs.detach().cpu().numpy()
 all_labels = all_labels.detach().cpu().numpy()
 
+
+#########################
+# if not os.path.isdir(prepend + '/train_metrics/all_probs/'):
+#     os.makedirs(prepend + '/train_metrics/all_probs/')
+# if not os.path.isdir(prepend + '/train_metrics/all_labels/'):
+#     os.makedirs(prepend + '/train_metrics/all_labels/')
+
+# np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
+# np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
+#########################
 if not os.path.isdir(prepend + '/test_metrics/all_probs/'):
     os.makedirs(prepend + '/test_metrics/all_probs/')
 if not os.path.isdir(prepend + '/test_metrics/all_labels/'):
@@ -233,6 +180,16 @@ mean_tpr /= n_classes
 fpr["macro"] = all_fpr
 tpr["macro"] = mean_tpr
 roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+#########################
+# if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
+#     os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
+
+# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
+# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
+# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+#########################
 
 if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
     os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)

@@ -3,9 +3,9 @@
 #SBATCH -p gpuk80
 #SBATCH --gres=gpu:2
 #SBATCH --ntasks-per-node=4
-#SBATCH --time 5:00:00
+#SBATCH --time 10:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name="scPDB GPU"
+#SBATCH --job-name="scPDB GPU add,max 5 Angstroms"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 
@@ -22,6 +22,6 @@
 ml anaconda
 ml cuda/10.2
 conda activate ~/pytorch_env
-python3 atom_wise_model.py 
+python3 train.py 
 
 

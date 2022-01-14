@@ -168,13 +168,20 @@ def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False)
         all_probs = torch.Tensor([])
         all_labels = torch.Tensor([])
 
-    for file in os.listdir(prepend + '/test_data_dir/mol2'):
-        assembly_name = file[:-5]
+    # for file in os.listdir(prepend + '/test_data_dir/mol2'):
+    #     assembly_name = file[:-5]
+    for file in os.listdir(prepend + '/train_metrics/test_labels/'):
+        assembly_name = file[:-4]
         try:
-            trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
-            labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
-            # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
-            probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
+            # trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
+            # labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
+            # # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
+            # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
+
+            trimmed_protein = mda.Universe(prepend + '/data_dir/mol2/' + assembly_name + '.mol2')
+            labels = np.load(prepend + '/train_metrics/test_labels/' + assembly_name + '.npy')
+            probs = np.load(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
+            # probs = np.load(prepend + '/train_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
 
             cent_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs, labels, threshold=threshold)
             if cent_dist == [] or vol_overlap_list == []: 
@@ -201,8 +208,8 @@ Next time infer_test_set.py is run we can get all_labels and all_probs from the 
 - prepend + "/test_metrics/all_probs/" + model_name
 - prepend + "/test_metrics/all_labels/" + model_name
 '''
-model_name = "trained_model_1640072931.267488_epoch_49"
-# model_name = "trained_model_1640067496.5729342_epoch_30"
+# model_name = "trained_model_1640072931.267488_epoch_49"
+model_name = "trained_model_1640067496.5729342_epoch_30"
 prepend = str(os.getcwd())
 
 # Get all predictions and labels   
@@ -225,126 +232,128 @@ prepend = str(os.getcwd())
 #     #     break
 # print("Done. {}".format(time.time()- start))
 
-num_closest = 5
+num_closest = 1
 
 #######################################################################################
 print("Calculating overlap and center distance metrics for 0.5 threshold.")
 start = time.time()
 # Compute Metrics for Standard 0.5 Threshold
-threshold = 0.5
-cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=True)
+threshold = 0.4
+# cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=True)
+cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
 
-indices = [np.argsort(entry) for entry in cent_dist_list]          # Indices sorted by distance from center 
 
+indices = [np.argsort(-1 * np.array(entry)) for entry in vol_overlap_list]          # Indices sorted by distance from center 
 
-cleaned_vol_overlap_list =  [entry[indices[x][i]] for x,entry in enumerate(vol_overlap_list) for i in range(min([len(entry), num_closest]))]
-cleaned_cent_dist_list =  [entry[indices[x][i]] for x,entry in enumerate(cent_dist_list) for i in range(min([len(entry), num_closest]))]
-print("Done. {}".format(time.time()- start))
-
-print("Generating predictions and calculating metrics.")
-start = time.time()
-preds         = np.array(all_probs) > threshold    # Convert probabilities to prediction in 0 or 1
-preds = preds.astype(int)[:,1]
-accuracy      = accuracy_score(all_labels, preds)
-matthews_corr = mcc(all_labels, preds)
-print("Done. {}".format(time.time()- start))
-
-print("-----------------------------------------------------------------------------------")
-print("Cutoff (Prediction Threshold):", threshold)
-print("-----------------------------------------------------------------------------------")
-print("Accuracy Score:", accuracy)
-print("Matthew's Correlation Coefficent:", matthews_corr)
-print("-----------------------------------------------------------------------------------")
-print("Number of systems with no predictions:", no_prediction_count)
-print("Average Distance From Center (Top", num_closest, "Closest):", np.nanmean(cleaned_cent_dist_list))
-print("Average Discretized Volume Overlap (Top", num_closest, "Closest):", np.nanmean(cleaned_vol_overlap_list))
-#######################################################################################
-
-#######################################################################################
-print("Calculating optimal cutoffs.")
-start = time.time()
-# all_probs  =  all_probs.numpy()
-# all_labels = all_labels.numpy()
-binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
-# Compute roc, auc and optimal threshold
-all_probs = np.array(all_probs, dtype=object)
-
-fpr = dict()
-tpr = dict()
-thresholds = dict()
-roc_auc = dict()
-n_classes = 2
-
-for i in range(n_classes):
-    fpr[i], tpr[i], thresholds[i] = roc_curve(binarized_labels[:, i],all_probs[:,i])
-    roc_auc[i] = auc(fpr[i], tpr[i])
-
-# Compute micro-average ROC curve and ROC area
-fpr["micro"], tpr["micro"], _ = roc_curve(binarized_labels.ravel(), all_probs.ravel())
-roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
-
-# First aggregate all false positive rates
-all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
-
-# Then interpolate all ROC curves at this points
-mean_tpr = np.zeros_like(all_fpr)
-for i in range(n_classes):
-    mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
-
-# Finally average it and compute AUC
-mean_tpr /= n_classes
-
-fpr["macro"] = all_fpr
-tpr["macro"] = mean_tpr
-roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
-
-if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
-    os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
-
-# Find optimal threshold
-gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
-ix = np.argmax(gmeans)
-optimal_threshold = thresholds[1][ix]
-
-print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
-print("Micro Averaged AUC:", roc_auc["micro"])
-print("Macro Averaged AUC:", roc_auc["macro"])
-print("Negative Class AUC:", roc_auc[0])
-print("Positive Class AUC:", roc_auc[1])
-
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
-print("Done. {}".format(time.time()- start))
-#######################################################################################
-
-#######################################################################################
-print("Calculating overlap and center distance metrics for optimal threshold.")
-start = time.time()
-# Compute Metrics for Standard 0.5 Threshold
-threshold = optimal_threshold
-cent_dist_list, vol_overlap_list, no_prediction_count, _, _ = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
-indices = [np.argsort(entry) for entry in cent_dist_list]          # Indices sorted by distance from center 
 
 cleaned_vol_overlap_list =  [entry[indices[x][i]] for x,entry in enumerate(vol_overlap_list) for i in range(min([len(entry), num_closest]))]
 cleaned_cent_dist_list =  [entry[indices[x][i]] for x,entry in enumerate(cent_dist_list) for i in range(min([len(entry), num_closest]))]
 print("Done. {}".format(time.time()- start))
 
-print("Generating predictions and calculating metrics.")
-start = time.time()
-preds         = np.array(all_probs) > threshold    # Convert probabilities to prediction in 0 or 1
-preds = preds.astype(int)[:,1]
-accuracy      = accuracy_score(all_labels, preds)
-matthews_corr = mcc(all_labels, preds)
-print("Done. {}".format(time.time()- start))
+# print("Generating predictions and calculating metrics.")
+# start = time.time()
+# preds         = np.array(all_probs) > threshold    # Convert probabilities to prediction in 0 or 1
+# preds = preds.astype(int)[:,1]
+# accuracy      = accuracy_score(all_labels, preds)
+# matthews_corr = mcc(all_labels, preds)
+# print("Done. {}".format(time.time()- start))
+
 print("-----------------------------------------------------------------------------------")
 print("Cutoff (Prediction Threshold):", threshold)
-print("-----------------------------------------------------------------------------------")
-print("Accuracy Score:", accuracy)
-print("Matthew's Correlation Coefficent:", matthews_corr)
+# print("-----------------------------------------------------------------------------------")
+# print("Accuracy Score:", accuracy)
+# print("Matthew's Correlation Coefficent:", matthews_corr)
 print("-----------------------------------------------------------------------------------")
 print("Number of systems with no predictions:", no_prediction_count)
-print("Average Distance From Center (Top", num_closest, "Closest):", np.nanmean(cleaned_cent_dist_list))
-print("Average Discretized Volume Overlap (Top", num_closest, "Closest):", np.nanmean(cleaned_vol_overlap_list))
+print("Average Distance From Center (Top", num_closest, "Best):", np.nanmean(cleaned_cent_dist_list))
+print("Average Discretized Volume Overlap (Top", num_closest, "Best):", np.nanmean(cleaned_vol_overlap_list))
 #######################################################################################
+
+# #######################################################################################
+# print("Calculating optimal cutoffs.")
+# start = time.time()
+# # all_probs  =  all_probs.numpy()
+# # all_labels = all_labels.numpy()
+# binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
+# # Compute roc, auc and optimal threshold
+# all_probs = np.array(all_probs, dtype=object)
+
+# fpr = dict()
+# tpr = dict()
+# thresholds = dict()
+# roc_auc = dict()
+# n_classes = 2
+
+# for i in range(n_classes):
+#     fpr[i], tpr[i], thresholds[i] = roc_curve(binarized_labels[:, i],all_probs[:,i])
+#     roc_auc[i] = auc(fpr[i], tpr[i])
+
+# # Compute micro-average ROC curve and ROC area
+# fpr["micro"], tpr["micro"], _ = roc_curve(binarized_labels.ravel(), all_probs.ravel())
+# roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+# # First aggregate all false positive rates
+# all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+
+# # Then interpolate all ROC curves at this points
+# mean_tpr = np.zeros_like(all_fpr)
+# for i in range(n_classes):
+#     mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+
+# # Finally average it and compute AUC
+# mean_tpr /= n_classes
+
+# fpr["macro"] = all_fpr
+# tpr["macro"] = mean_tpr
+# roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+# if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+#     os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
+
+# # Find optimal threshold
+# gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
+# ix = np.argmax(gmeans)
+# optimal_threshold = thresholds[1][ix]
+
+# print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
+# print("Micro Averaged AUC:", roc_auc["micro"])
+# print("Macro Averaged AUC:", roc_auc["macro"])
+# print("Negative Class AUC:", roc_auc[0])
+# print("Positive Class AUC:", roc_auc[1])
+
+# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
+# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
+# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+# print("Done. {}".format(time.time()- start))
+# #######################################################################################
+
+# #######################################################################################
+# print("Calculating overlap and center distance metrics for optimal threshold.")
+# start = time.time()
+# # Compute Metrics for Standard 0.5 Threshold
+# threshold = optimal_threshold
+# cent_dist_list, vol_overlap_list, no_prediction_count, _, _ = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
+# indices = [np.argsort(entry) for entry in cent_dist_list]          # Indices sorted by distance from center 
+
+# cleaned_vol_overlap_list =  [entry[indices[x][i]] for x,entry in enumerate(vol_overlap_list) for i in range(min([len(entry), num_closest]))]
+# cleaned_cent_dist_list =  [entry[indices[x][i]] for x,entry in enumerate(cent_dist_list) for i in range(min([len(entry), num_closest]))]
+# print("Done. {}".format(time.time()- start))
+
+# print("Generating predictions and calculating metrics.")
+# start = time.time()
+# preds         = np.array(all_probs) > threshold    # Convert probabilities to prediction in 0 or 1
+# preds = preds.astype(int)[:,1]
+# accuracy      = accuracy_score(all_labels, preds)
+# matthews_corr = mcc(all_labels, preds)
+# print("Done. {}".format(time.time()- start))
+# print("-----------------------------------------------------------------------------------")
+# print("Cutoff (Prediction Threshold):", threshold)
+# print("-----------------------------------------------------------------------------------")
+# print("Accuracy Score:", accuracy)
+# print("Matthew's Correlation Coefficent:", matthews_corr)
+# print("-----------------------------------------------------------------------------------")
+# print("Number of systems with no predictions:", no_prediction_count)
+# print("Average Distance From Center (Top", num_closest, "Closest):", np.nanmean(cleaned_cent_dist_list))
+# print("Average Discretized Volume Overlap (Top", num_closest, "Closest):", np.nanmean(cleaned_vol_overlap_list))
+# #######################################################################################

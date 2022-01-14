@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -p shared 
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=3
 #SBATCH --time 7:00:00
 #SBATCH --nodes=1
 #SBATCH --job-name="scPDB Metrics"
@@ -11,6 +11,6 @@
 ml anaconda
 ml cuda/10.2
 conda activate ~/pytorch_env
-python3 site_metrics_closest_5.py 
+python3 site_metrics_closest_n.py 
 
 
