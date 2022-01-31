@@ -164,18 +164,17 @@ def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False)
     vol_overlap_list = []
     no_prediction_count = 0
 
-    if aggregate_preds_and_labels:  #until we run infer_test_set again i'm including this funky thing so it goes a bit faster
-        all_probs = torch.Tensor([])
-        all_labels = torch.Tensor([])
+    # if aggregate_preds_and_labels:  #until we run infer_test_set again i'm including this funky thing so it goes a bit faster
+    #     all_probs = torch.Tensor([])
+    #     all_labels = torch.Tensor([])
 
-
-    for file in os.listdir(prepend + '/test_data_dir/mol2'):
+    for file in os.listdir(prepend + '/test_data_dir/mol2'): 
         assembly_name = file[:-5]
         try:
             trimmed_protein = mda.Universe(prepend + '/test_data_dir/mol2/' + assembly_name + '.mol2')
             labels = np.load(prepend + '/test_metrics/test_labels/' + assembly_name + '.npy')
-            # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
-            probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
+            probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name + '.npy')
+            # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
 
             cent_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs, labels, threshold=threshold)
             if cent_dist == [] or vol_overlap_list == []: 
@@ -183,16 +182,19 @@ def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False)
             cent_dist_list.append(cent_dist)
             vol_overlap_list.append(vol_overlap)
 
-            if aggregate_preds_and_labels:
-                all_probs = torch.cat((all_probs, torch.from_numpy(probs)))
-                all_labels = torch.cat((all_labels, torch.from_numpy(labels)))
+            # if aggregate_preds_and_labels:
+            #     all_probs = torch.cat((all_probs, torch.from_numpy(probs)))
+            #     all_labels = torch.cat((all_labels, torch.from_numpy(labels)))
 
         except Exception as e:
             print(assembly_name, flush=True)
             raise e
 
     if aggregate_preds_and_labels:
-        return cent_dist_list, vol_overlap_list, no_prediction_count, all_probs.numpy(), all_labels.numpy()
+        all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
+        all_labels = np.load(prepend + "/test_metrics/all_labels/" + model_name + ".npz")['arr_0']
+        return cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels
+   
 
     return cent_dist_list, vol_overlap_list, no_prediction_count, None, None
 
@@ -202,8 +204,9 @@ Next time infer_test_set.py is run we can get all_labels and all_probs from the 
 - prepend + "/test_metrics/all_probs/" + model_name
 - prepend + "/test_metrics/all_labels/" + model_name
 '''
-model_name = "trained_model_1640072931.267488_epoch_49"
+# model_name = "trained_model_1640072931.267488_epoch_49"
 # model_name = "trained_model_1640067496.5729342_epoch_30"
+model_name = "trained_model_1642111399.8650987/epoch_33"
 prepend = str(os.getcwd())
 
 # Get all predictions and labels   
@@ -257,64 +260,66 @@ print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list
 print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list))
 #######################################################################################
 
-# #######################################################################################
-# print("Calculating optimal cutoffs.")
-# start = time.time()
-# # all_probs  =  all_probs.numpy()
-# # all_labels = all_labels.numpy()
-# binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
-# # Compute roc, auc and optimal threshold
-# all_probs = np.array(all_probs, dtype=object)
+#######################################################################################
+all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
+all_labels = np.load(prepend + "/test_metrics/all_labels/" + model_name + ".npz")['arr_0']
+print("Calculating optimal cutoffs.")
+start = time.time()
+# all_probs  =  all_probs.numpy()
+# all_labels = all_labels.numpy()
+binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
+# Compute roc, auc and optimal threshold
+all_probs = np.array(all_probs, dtype=object)
 
-# fpr = dict()
-# tpr = dict()
-# thresholds = dict()
-# roc_auc = dict()
-# n_classes = 2
+fpr = dict()
+tpr = dict()
+thresholds = dict()
+roc_auc = dict()
+n_classes = 2
 
-# for i in range(n_classes):
-#     fpr[i], tpr[i], thresholds[i] = roc_curve(binarized_labels[:, i],all_probs[:,i])
-#     roc_auc[i] = auc(fpr[i], tpr[i])
+for i in range(n_classes):
+    fpr[i], tpr[i], thresholds[i] = roc_curve(binarized_labels[:, i],all_probs[:,i])
+    roc_auc[i] = auc(fpr[i], tpr[i])
 
-# # Compute micro-average ROC curve and ROC area
-# fpr["micro"], tpr["micro"], _ = roc_curve(binarized_labels.ravel(), all_probs.ravel())
-# roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+# Compute micro-average ROC curve and ROC area
+fpr["micro"], tpr["micro"], _ = roc_curve(binarized_labels.ravel(), all_probs.ravel())
+roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
 
-# # First aggregate all false positive rates
-# all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+# First aggregate all false positive rates
+all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
 
-# # Then interpolate all ROC curves at this points
-# mean_tpr = np.zeros_like(all_fpr)
-# for i in range(n_classes):
-#     mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+# Then interpolate all ROC curves at this points
+mean_tpr = np.zeros_like(all_fpr)
+for i in range(n_classes):
+    mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
 
-# # Finally average it and compute AUC
-# mean_tpr /= n_classes
+# Finally average it and compute AUC
+mean_tpr /= n_classes
 
-# fpr["macro"] = all_fpr
-# tpr["macro"] = mean_tpr
-# roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+fpr["macro"] = all_fpr
+tpr["macro"] = mean_tpr
+roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
-# if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
-#     os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
+if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+    os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
 
-# # Find optimal threshold
-# gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
-# ix = np.argmax(gmeans)
-# optimal_threshold = thresholds[1][ix]
+# Find optimal threshold
+gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
+ix = np.argmax(gmeans)
+optimal_threshold = thresholds[1][ix]
 
-# print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
-# print("Micro Averaged AUC:", roc_auc["micro"])
-# print("Macro Averaged AUC:", roc_auc["macro"])
-# print("Negative Class AUC:", roc_auc[0])
-# print("Positive Class AUC:", roc_auc[1])
+print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
+print("Micro Averaged AUC:", roc_auc["micro"])
+print("Macro Averaged AUC:", roc_auc["macro"])
+print("Negative Class AUC:", roc_auc[0])
+print("Positive Class AUC:", roc_auc[1])
 
-# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
-# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
-# np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
-# print("Done. {}".format(time.time()- start))
-# #######################################################################################
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
+np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+print("Done. {}".format(time.time()- start))
+#######################################################################################
 
 # #######################################################################################
 # print("Calculating overlap and center distance metrics for optimal threshold.")

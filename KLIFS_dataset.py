@@ -70,9 +70,10 @@ class KLIFSData(Dataset):
     def process(self):
         # print(len(self.raw_file_names), len(self.processed_file_names))
         # print(self.raw_paths)
-        if self.force_process or len(self.raw_file_names) != len(self.processed_file_names):
-            print("Processing Dataset")
-            Parallel(n_jobs=self.num_cpus)(delayed(self.process_helper)(self.processed_dir, raw_path,i,cutoff=self.cutoff) for i, raw_path in enumerate(self.raw_paths))
+        # self.force_process or
+        # if len(self.raw_file_names) != len(self.processed_file_names):
+        #     print("Processing Dataset")
+        Parallel(n_jobs=self.num_cpus)(delayed(self.process_helper)(self.processed_dir, raw_path,i,cutoff=self.cutoff) for i, raw_path in enumerate(self.raw_paths))
         print("Finished Dataset Processing")
 
     def get(self,idx):
@@ -80,10 +81,10 @@ class KLIFSData(Dataset):
         # Returns a data object that represents the graph. See the following link for more details:
         # https://pytorch-geometric.readthedocs.io/en/latest/modules/data.html#torch_geometric.data.Data
         try:
-            return torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx)))
+            return torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx))), self.raw_file_names[idx]
         except Exception as e:
             print("Failed Loading File {}/data_{}.pt".format(self.processed_dir,idx), flush=True)
             print(self.cutoff)
             self.process_helper(self.processed_dir, self.raw_paths[idx], idx, cutoff=self.cutoff)
-            return torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx)))
+            return torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx))), self.raw_file_names[idx]
     

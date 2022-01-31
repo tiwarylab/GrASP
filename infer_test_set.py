@@ -48,8 +48,8 @@ model.to(device)
 prepend = str(os.getcwd())
 print("Initializing Test Set")
 #########################
-data_set = KLIFSData(prepend + '/test_data_dir', num_cpus, cutoff=5, force_process=True)
-data_set.process()
+data_set = KLIFSData(prepend + '/test_data_dir', num_cpus, cutoff=5, force_process=False)
+# data_set.process()
 # data_set = torch.utils.data.Subset(data_set, np.random.choice(len(data_set), size = 5000, replace=False))
 ######################### data_set = KLIFSData(prepend + '/test_data_dir', num_cpus)
 # Sticking with batch size 1 because it makes it easier to track predictions
@@ -80,9 +80,9 @@ with torch.no_grad():
     test_batch_loss = 0.0
     test_batch_acc = 0.0
     test_batch_mcc = 0.0
-    for batch in test_dataloader:
+    for batch, name in test_dataloader:
         labels = batch.y.to(device)
-        assembly_name = batch.name[0][:-4]
+        assembly_name = name[0][:-4]
         # print(assembly_name)
 
         out = model.forward(batch.to(device))
@@ -142,10 +142,10 @@ all_labels = all_labels.detach().cpu().numpy()
 # np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
 # np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
 #########################
-if not os.path.isdir(prepend + '/test_metrics/all_probs/'):
-    os.makedirs(prepend + '/test_metrics/all_probs/')
-if not os.path.isdir(prepend + '/test_metrics/all_labels/'):
-    os.makedirs(prepend + '/test_metrics/all_labels/')
+if not os.path.isdir(prepend + '/test_metrics/all_probs/' + model_name):
+    os.makedirs(prepend + '/test_metrics/all_probs/' + model_name)
+if not os.path.isdir(prepend + '/test_metrics/all_labels/' + model_name):
+    os.makedirs(prepend + '/test_metrics/all_labels/' + model_name) 
 
 np.savez(prepend + "/test_metrics/all_probs/" + model_name, all_probs)
 np.savez(prepend + "/test_metrics/all_labels/" + model_name, all_labels)

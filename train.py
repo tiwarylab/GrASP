@@ -83,7 +83,7 @@ num_cpus = 4
 print("The model will be using the following device:", device)
 print("The model will be using {} cpus.".format(num_cpus))
 
-model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
+model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
 optimizer = optim.Adam(model.parameters(), lr = learning_rate)
 scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
@@ -92,7 +92,7 @@ print(torch_geometric.__version__)
 prepend = str(os.getcwd())
 print("Initializing Train Set")
 data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
-#data_set.process()
+# data_set.process()
 
 train_size = int(train_test_split*len(data_set))
 train_set, val_set = random_split(data_set, [train_size, len(data_set) - train_size], generator=torch.Generator().manual_seed(42))
@@ -129,9 +129,14 @@ for epoch in range(num_epochs):
     training_batch_acc = 0.0
     training_batch_mcc = 0.0
     training_batch_auc = 0.0
-    for batch in train_dataloader:
+    for batch, _  in train_dataloader:
 
         labels = batch.y
+        x_np = batch.x.numpy()
+        print(np.argwhere(np.isnan(x_np)))
+        assert not torch.any(torch.isnan(batch.x))
+        
+        raise NotImplementedError
 
         optimizer.zero_grad(set_to_none=True)
         out = model.forward(batch.to(device))
@@ -194,7 +199,7 @@ for epoch in range(num_epochs):
         val_batch_mcc = 0.0
         val_batch_auc = 0.0
 
-        for batch in val_dataloader:
+        for batch, _ in val_dataloader:
             labels = batch.y
 
             out = model.forward(batch.to(device))
