@@ -91,26 +91,15 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     feature_array = []  # This will contain all of the features for a given molecule
     flag = False
 
-    # RdKit Features
-    # rdkit_feat_start = time.time()
-    # t = time.time()
     try:
         rdkit_protein_w_H.UpdatePropertyCache(strict=False)
     except Exception as e:
         print("Failed to update property cache while processing", path_to_files)
         return
     acceptor_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Acceptor")]
-    # print(str(time.time() - t))
-    # t = time.time()
     donor_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Donor")]
-    # print(str(time.time() - t))
-    # t = time.time()
     hydrophobe_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Hydrophobe")]                # Seems to be the slow one, comparitively
-    # print(str(time.time() - t))
-    # t = time.time()
     lumped_hydrophobe_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="LumpedHydrophobe")]
-    # print(str(time.time() - t))
-    # print("Time to calculate rdkit feats:", str(time.time()-rdkit_feat_start))
 
 
     bins = np.arange(0,10)
@@ -160,8 +149,6 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
         except Exception as e:
             print("Error while feautrizing atom for file {}.".format(path_to_files), flush=True)
-            # failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while generating feature vector for {}.".format(name, path_to_files)])
-            # raise e
             return -2
             # raise ValueError ("Value not included in dictionary \"{}\" while generating feature vector for {}.".format(name, path_to_files)) from e
 
@@ -188,11 +175,6 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             binding_site_lst.append(protein.select_atoms("point {} {} {} 0".format(x, y, z))[0].id)      # Select that atom in the whole protein
     except Exception as e:
         print("Binding site atom not found in filtered protein. Was it dropped? \n Filename:", str(path_to_files))
-        # Okay in theory this is bad and could cause a race condition but it's very unlikely because this case is rarely reached.
-        # In conjunction with the print statement I'm really not worried about it.
-        # Okay, after reading about GIL I think it's fine... 
-        # global nonstandard_residue_skip 
-        # nonstandard_residue_skip += 1 
         return -1
 
     if binding_site_lst == []:
