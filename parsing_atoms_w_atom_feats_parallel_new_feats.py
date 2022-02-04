@@ -17,7 +17,6 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     from rdkit import Chem
     from rdkit.Chem import ChemicalFeatures
     from rdkit import RDConfig
-    from rdkit.Chem.rdPartialCharges import ComputeGasteigerCharges
 
     from mdtraj import shrake_rupley
     from mdtraj import load as mdtrajload
@@ -36,9 +35,11 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     try:
         protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
         rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
-        ComputeGasteigerCharges(rdkit_protein_w_H)
+        # rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False)
+
     except Exception as e: 
         print("Failed to compute charges for the following file due to a structure error. This file will be skipped:", path_to_files + '/protein.mol2', flush=True)
+        # raise e
         return
 
     res_names = protein_w_H.residues.resnames
@@ -93,7 +94,11 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     # RdKit Features
     # rdkit_feat_start = time.time()
     # t = time.time()
-    rdkit_protein_w_H.UpdatePropertyCache(strict=False)
+    try:
+        rdkit_protein_w_H.UpdatePropertyCache(strict=False)
+    except Exception as e:
+        print("Failed to update property cache while processing", path_to_files)
+        return
     acceptor_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Acceptor")]
     # print(str(time.time() - t))
     # t = time.time()
@@ -124,7 +129,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             rdkit_atom = rdkit_protein_w_H.GetAtomWithIdx(int(atom.index))
             
             num_bonds_w_heavy_atoms = [rdkit_atom.GetTotalDegree() - rdkit_atom.GetTotalNumHs(includeNeighbors=True)]
-            partial_charge = [rdkit_atom.GetDoubleProp('_GasteigerCharge')]
+            formal_charge = [rdkit_atom.GetFormalCharge]
             is_in_ring = [1,0] if rdkit_atom.IsInRing() else [0,1]
             is_aromatic = [1,0] if rdkit_atom.GetIsAromatic() else [0,1]
             num_radical_electrons = [rdkit_atom.GetNumRadicalElectrons()]
@@ -138,7 +143,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
 
             # try:
             assert not np.any(np.isnan(num_bonds_w_heavy_atoms))
-            assert not np.any(np.isnan(partial_charge))
+            # assert not np.any(np.isnan(formal_charge))
             assert not np.any(np.isnan(is_in_ring))
             assert not np.any(np.isnan(is_aromatic))
             assert not np.any(np.isnan(num_radical_electrons))
@@ -152,18 +157,14 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             #     raise AssertionError ("Failed to calculate value for " + str(path_to_files)) from e
 
             # Add feature vector with           [residue level feats, one-hot atom name, rdf SAS, ...          ]
-            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], num_bonds_w_heavy_atoms, partial_charge, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))                              # Add corresponding features to feature array
+            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
         except Exception as e:
-            raise e
             print("Error while feautrizing atom for file {}.".format(path_to_files), flush=True)
             # failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while generating feature vector for {}.".format(name, path_to_files)])
-            flag = True
             # raise e
             return -2
             # raise ValueError ("Value not included in dictionary \"{}\" while generating feature vector for {}.".format(name, path_to_files)) from e
 
-    if flag:
-        return                                                                                   # This flag will skip creating the class matrix and will prevent the file from being saved
 
     if trimmed.shape[0] != len(feature_array):  # Sanity Check
         raise ValueError ("Adjacency matrix shape ({}) did not match feature array shape ({}). {}".format(np.array(trimmed).shape, np.array(feature_array).shape, filename))
@@ -299,7 +300,7 @@ if not os.path.isdir('./data_atoms_w_atom_feats'):
 if True:
     ##########################################
     # Comment me out to run just one file
-    num_cores = 4#24
+    num_cores = 24
     
     from joblib.externals.loky import set_loky_pickler
     set_loky_pickler("dill")
