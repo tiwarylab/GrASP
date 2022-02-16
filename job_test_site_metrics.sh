@@ -12,7 +12,7 @@ ml anaconda
 ml cuda/10.2
 conda activate ~/pytorch_env
 ##python3 site_metrics_closest_n.py 
-# python3 site_metrics_closest_5.py 
+## python3 site_metrics_closest_5.py 
 python3 site_metrics.py 
 
 

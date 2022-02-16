@@ -1,11 +1,11 @@
 #!/bin/bash
 ## --- Uncomment for GPU ---
 #SBATCH -p gpuk80
-#SBATCH --gres=gpu:2
-#SBATCH --ntasks-per-node=4
+#SBATCH --gres gpu:4
+#SBATCH --ntasks-per-node=8
 #SBATCH --time 10:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name="scPDB GPU add,max 5 Angstroms"
+#SBATCH --job-name="scPDB GPU add,max 4 Angstroms"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 

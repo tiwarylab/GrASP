@@ -10,20 +10,21 @@ from torch_geometric.utils import from_scipy_sparse_matrix
 
 class KLIFSData(Dataset):
     def __init__(self, root, num_cpus, cutoff=4, force_process=False):
-        super().__init__(root, None, None)
         self.cutoff=cutoff
         self.force_process=force_process
         self.num_cpus = num_cpus
+        super().__init__(root, None, None)
+
         # self.proceesed_dir = processed_dir
         # self.processed_dir = "processed_KLIFS_Dataset/{}".format(mode)
 
     @property
     def raw_file_names(self):
-        return os.listdir(self.raw_dir)
+        return sorted(os.listdir(self.raw_dir))
     
     @property
     def processed_file_names(self):
-        return  os.listdir(self.processed_dir) #[filename for filename in self.processed_dir]
+        return sorted(os.listdir(self.processed_dir)) #[filename for filename in self.processed_dir]
     
     def len(self):
         return len(self.raw_file_names)
@@ -73,7 +74,7 @@ class KLIFSData(Dataset):
         # self.force_process or
         # if len(self.raw_file_names) != len(self.processed_file_names):
         #     print("Processing Dataset")
-        Parallel(n_jobs=self.num_cpus)(delayed(self.process_helper)(self.processed_dir, raw_path,i,cutoff=self.cutoff) for i, raw_path in enumerate(self.raw_paths))
+        Parallel(n_jobs=self.num_cpus)(delayed(self.process_helper)(self.processed_dir, raw_path,i,cutoff=self.cutoff) for i, raw_path in enumerate(sorted(self.raw_paths)))
         print("Finished Dataset Processing")
 
     def get(self,idx):

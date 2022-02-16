@@ -28,9 +28,33 @@ prepend = str(os.getcwd()) + "/trained_models/"
 
 
 ########################## Change Me To Change The Model ##########################
-model_name = "trained_model_1642111399.8650987/epoch_33"
+model_name = "trained_model_1644710425.1063097/epoch_25"
 model_path = prepend + model_name
 ###################################################################################
+
+def k_fold(dataset, path, fold_number):
+    val_names    = np.loadtxt(prepend + "/splits/test_ids_fold"  + str(fold_number), dtype='str')
+    train_names   = np.loadtxt(prepend + "/splits/train_ids_fold" + str(fold_number), dtype='str')
+    
+    train_indices, val_indices = [], []
+    
+    for idx, name in enumerate(dataset.raw_file_names):
+        if name[:4] in val_names: 
+            val_indices.append(idx)
+        if name[:4] in train_names:
+            train_indices.append(idx)
+
+    train_mask = torch.ones(len(dataset), dtype=torch.bool)
+    val_mask = torch.ones(len(dataset), dtype=torch.bool)
+    train_mask[val_indices] = 0
+    val_mask[train_mask] = 0
+    
+    # Temporary sanity check to make sure I got this right
+    assert train_mask.sum() > val_mask.sum()
+
+    return train_mask, val_mask
+
+
 # Other Parameters
 device = 'cpu'
 if torch.cuda.is_available():
@@ -41,20 +65,28 @@ print("The model will be using the following device:", device)
 print("The model will be using {} cpus.".format(num_cpus))
 
 # model = GATModelv2(input_dim=43, output_dim=2)
-model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
+# model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
+model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device) 
+
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
  
 prepend = str(os.getcwd())
 print("Initializing Test Set")
 #########################
-data_set = KLIFSData(prepend + '/test_data_dir', num_cpus, cutoff=5, force_process=False)
+data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=4)
+train_mask, val_mask = k_fold(data_set, prepend, 1)
+val_set     = data_set[val_mask]
+val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+
+#########################
+# data_set = KLIFSData(prepend + '/test_data_dir', num_cpus, cutoff=5, force_process=False)
 # data_set.process()
 # data_set = torch.utils.data.Subset(data_set, np.random.choice(len(data_set), size = 5000, replace=False))
 ######################### data_set = KLIFSData(prepend + '/test_data_dir', num_cpus)
 # Sticking with batch size 1 because it makes it easier to track predictions
-test_dataloader =  DataLoader(data_set, batch_size = 1, shuffle=False, pin_memory=True, 
-                              num_workers=num_cpus, persistent_workers=True)
+# test_dataloader =  DataLoader(data_set, batch_size = 1, shuffle=False, pin_memory=True, 
+#                               num_workers=num_cpus, persistent_workers=True)
 
 test_epoch_loss = []
 test_epoch_acc = []
@@ -64,15 +96,15 @@ all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
 #########################
-# if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
-#     os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
-# if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
-#     os.makedirs(prepend + '/train_metrics/test_labels/')
+if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
+    os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
+if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
+    os.makedirs(prepend + '/train_metrics/test_labels/')
 #########################
-if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
-    os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
-if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
-    os.makedirs(prepend + '/test_metrics/test_labels/')
+# if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
+#     os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
+# if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
+#     os.makedirs(prepend + '/test_metrics/test_labels/')
 
 print("Begining Evaluation")
 model.eval()
@@ -80,7 +112,9 @@ with torch.no_grad():
     test_batch_loss = 0.0
     test_batch_acc = 0.0
     test_batch_mcc = 0.0
-    for batch, name in test_dataloader:
+    # for batch, name in test_dataloader:
+    for batch, name in val_dataloader:
+        
         labels = batch.y.to(device)
         assembly_name = name[0][:-4]
         # print(assembly_name)
@@ -105,20 +139,23 @@ with torch.no_grad():
         # print("Test Batch Accu:", ba)
         # print("Test Batch MCC:", bm)
         #########################
-        # np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-        # np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+        np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         #########################
-        np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-        np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        # np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+        # np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
         # writer.add_scalar('Batch_Acc/MCC',  bm,  test_batch_num)
 
 
-    test_epoch_loss.append(test_batch_loss/len(test_dataloader))
-    test_epoch_acc.append(test_batch_acc/len(test_dataloader))
-    test_epoch_mcc.append(test_batch_mcc/len(test_dataloader))
+    # test_epoch_loss.append(test_batch_loss/len(test_dataloader))
+    # test_epoch_acc.append(test_batch_acc/len(test_dataloader))
+    # test_epoch_mcc.append(test_batch_mcc/len(test_dataloader))
+    test_epoch_loss.append(test_batch_loss/len(val_dataloader))
+    test_epoch_acc.append(test_batch_acc/len(val_dataloader))
+    test_epoch_mcc.append(test_batch_mcc/len(val_dataloader))
     print("Test Loss: {}".format(test_epoch_loss[-1]))
     print("Test Accu: {}".format(test_epoch_acc[-1]))
     print("Test MCC: {}".format(test_epoch_mcc[-1]))
