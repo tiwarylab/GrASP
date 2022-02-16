@@ -2,7 +2,7 @@ import numpy as np
 import MDAnalysis as mda
 from sklearn.cluster import MeanShift
 from sklearn.cluster import estimate_bandwidth
-from scipy.spatial import ConvexHull, HalfspaceIntersection
+from scipy.spatial import ConvexHull, HalfspaceIntersection, Delaunay
 from scipy.optimize import linprog
 import os
 from tqdm import tqdm
@@ -61,15 +61,32 @@ def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, **kwar
     # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
+def hull_center(hull):
+    hull_com = np.zeros(3)
+    tetras = Delaunay(hull.points[hull.vertices])
+
+    for i in range(len(tetras.simplices)):
+        tetra_verts = tetras.points[tetras.simplices][i]
+
+        a, b, c, d = tetra_verts
+        a, b, c = a - d, b - d, c - d
+        tetra_vol = np.abs(np.dot(a, np.cross(b, c))) / 6
+
+        tetra_com = np.mean(tetra_verts, axis=0)
+
+        hull_com += tetra_com * tetra_vol
+
+    hull_com = hull_com / hull.volume
+    return hull_com
+
 def get_centroid(coords):
     return np.mean(coords, axis=0)
 
-def center_dist(site_points1, site_points2):
-    centroid1 = get_centroid(site_points1)
-    centroid2 = get_centroid(site_points2)
-    distance = np.sqrt(np.sum((centroid1 - centroid2)**2))
+def center_to_ligand_dist(center, lig_coords):
+    distances = np.sqrt(np.sum((center - lig_coords)**2, axis=1))
+    shortest = np.min(distances)
     
-    return distance
+    return shortest
 
 def cheb_center(halfspaces):
     norm_vector = np.reshape(np.linalg.norm(halfspaces[:, :-1], axis=1),
@@ -89,10 +106,7 @@ def hull_jaccard(hull1, hull2, intersect_hull):
     union_vol = hull1.volume + hull2.volume - intersect_hull.volume
     return intersect_vol/union_vol
 
-def volumetric_overlap(site_points1, site_points2):
-    hull1 = ConvexHull(site_points1)
-    hull2 = ConvexHull(site_points2)
-    
+def volumetric_overlap(hull1, hull2):
     halfspaces = np.append(hull1.equations, hull2.equations, axis=0)
     center, radius = cheb_center(halfspaces)
     
@@ -106,13 +120,16 @@ def volumetric_overlap(site_points1, site_points2):
     
     return jaccard
 
-def site_metrics(all_coords, predicted_probs, true_labels, threshold=.5, quantile=.3, cluster_all=False):
+def site_metrics(prot_coords, lig_coords, predicted_probs, true_labels, threshold=.5, quantile=.3, cluster_all=False):
     """Cluster binding sites and calculate distance from true site center and volumetric overlap with true site 
 
     Parameters
     ----------
-    all_coords : numpy array
+    prot_coords : numpy array
         Protein atomic coordinates.
+        
+    lig_coords : numpy array
+        Ligand atomic coordinates.
 
     predicted_probs : numpy_array
         Class probabilities for not site in column 0 and site in column 1.
@@ -134,33 +151,50 @@ def site_metrics(all_coords, predicted_probs, true_labels, threshold=.5, quantil
     center_distances: list
         List of distances from predicted site center to true center. 
         Listed in descending order by predicted site probability.
+        
+    ligand_distances: list
+        List of closest distances from predicted site center to any ligand heavy atom. 
+        Listed in descending order by predicted site probability.
 
     volumentric_overlaps: list
         Jaccard similarity between predicted site convex hull and true site convex hull. 
         Listed in descending order by predicted site probability.
 
     """
-    bind_coords, sorted_ids, _ = cluster_atoms(all_coords, predicted_probs, threshold=threshold, quantile=quantile, cluster_all=cluster_all)
+    bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, quantile=quantile, cluster_all=cluster_all)
 
 
-    true_points = all_coords[true_labels==1]
+    true_points = prot_coords[true_labels==1]
 
     center_distances = []
+    ligand_distances = []
     volumetric_overlaps = []
+    
     for c_id in np.unique(sorted_ids)[::-1]:
         if c_id != None:
             if c_id >= 0:
                 predicted_points = bind_coords[sorted_ids == c_id]
-                center_distances.append(center_dist(predicted_points, true_points))
-                if len(predicted_points) < 4:  # You need four points to define a context whole so we'll say the overlap is 0
+                true_hull = ConvexHull(true_points)
+                true_center = hull_center(true_hull)
+                
+                if len(predicted_points) < 4:  # You need four points to define a convex hull so we'll say the overlap is 0
+                    predicted_center = get_centroid(predicted_points)
                     volumetric_overlaps.append(0) 
                 else:
-                    volumetric_overlaps.append(volumetric_overlap(predicted_points, true_points))
+                    predicted_hull = ConvexHull(predicted_points)
+                    predicted_center = hull_center(predicted_hull)
+                    volumetric_overlaps.append(volumetric_overlap(predicted_hull, true_hull))
+                 
+                center_dist = np.sqrt(np.sum((predicted_center - true_center)**2))
+                center_distances.append(center_dist)
+                
+                ligand_distances.append(center_to_ligand_dist(predicted_center, lig_coords))
 
-    return center_distances, volumetric_overlaps
+    return center_distances, ligand_distances, volumetric_overlaps
 
 def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False, path_to_mol2='/test_data_dir/mol2/', path_to_labels = '/test_metrics/'):
     cent_dist_list = []
+    lig_dist_list = []
     vol_overlap_list = []
     no_prediction_count = 0
 
@@ -177,11 +211,16 @@ def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False,
             labels = np.load(prepend + path_to_labels + 'test_labels/' + assembly_name + '.npy')
             probs = np.load(prepend + path_to_labels + 'test_probs/' + model_name + '/' + assembly_name + '.npy')
             # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
+            ligand = mda.Universe(prepend + path_to_mol2 + 'ligand.mol2')
+            ligand = ligand.select_atoms("not type H")
+            
 
-            cent_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, probs, labels, threshold=threshold)
-            if cent_dist == [] or vol_overlap_list == []: 
+
+            cent_dist, lig_dist, vol_overlap = site_metrics(trimmed_protein.atoms.positions, ligand.atoms.positions, probs, labels, threshold=threshold)
+            if cent_dist == [] or lig_dist == [] or vol_overlap_list == []: 
                 no_prediction_count += 1
             cent_dist_list.append(cent_dist)
+            lig_dist_list.append(lig_dist)
             vol_overlap_list.append(vol_overlap)
 
             # if aggregate_preds_and_labels:
@@ -198,7 +237,7 @@ def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False,
     #     return cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels
    
 
-    return cent_dist_list, vol_overlap_list, no_prediction_count, None, None
+    return cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count, None, None
 
 #######################################################################################
 '''
@@ -239,11 +278,12 @@ start = time.time()
 threshold = 0.5
 # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=True)
 # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
-cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False,path_to_mol2='/data_dir/mol2/',path_to_labels='/train_metrics/')
+cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False,path_to_mol2='/data_dir/mol2/',path_to_labels='/train_metrics/')
 
 
 cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]
 cleaned_cent_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in cent_dist_list]
+cleaned_lig_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in lig_dist_list]
 print("Done. {}".format(time.time()- start))
 
 # print("Generating predictions and calculating metrics.")
@@ -254,7 +294,7 @@ print("Done. {}".format(time.time()- start))
 # matthews_corr = mcc(all_labels, preds)
 # print("Done. {}".format(time.time()- start))
 
-np.savez(prepend + '/vol_overlap_cent_dist_val_set.npz', overlaps=vol_overlap_list, dist_lst=cent_dist_list)
+np.savez(prepend + '/vol_overlap_cent_dist_val_set.npz', overlaps=vol_overlap_list, dist_lst=cent_dist_list, lig_list=lig_dist_list)
 
 print("-----------------------------------------------------------------------------------")
 print("Cutoff (Prediction Threshold):", threshold)
@@ -264,6 +304,7 @@ print("Cutoff (Prediction Threshold):", threshold)
 print("-----------------------------------------------------------------------------------")
 print("Number of systems with no predictions:", no_prediction_count)
 print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list))
+print("Average Distance From Ligand (Top 1):", np.nanmean(cleaned_lig_dist_list))
 print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list))
 #######################################################################################
 
