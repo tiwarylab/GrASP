@@ -70,7 +70,7 @@ def hull_center(hull):
 
         a, b, c, d = tetra_verts
         a, b, c = a - d, b - d, c - d
-        tetra_vol = np.abs(np.dot(a, np.cross(b, c))) / 6
+        tetra_vol = np.abs(np.linalg.det([a, b, c])) / 6
 
         tetra_com = np.mean(tetra_verts, axis=0)
 
