@@ -106,7 +106,7 @@ num_cpus = 4
 print("The model will be using the following device:", device)
 print("The model will be using {} cpus.".format(num_cpus))
 
-model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
+model = Two_Track_JK_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
 optimizer = optim.Adam(model.parameters(), lr = learning_rate)
 scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 loss_fn = LabelSmoothingLoss(2, smoothing=0.2, weight=torch.FloatTensor([0.80,1.20]).to(device))
