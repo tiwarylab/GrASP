@@ -211,7 +211,7 @@ def compute_metrics_for_all(threshold = 0.5, aggregate_preds_and_labels = False,
             labels = np.load(prepend + path_to_labels + 'test_labels/' + assembly_name + '.npy')
             probs = np.load(prepend + path_to_labels + 'test_probs/' + model_name + '/' + assembly_name + '.npy')
             # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
-            ligand = mda.Universe(prepend + path_to_mol2 + 'ligand.mol2')
+            ligand = mda.Universe(prepend + "/scPDB_raw_data/" + assembly_name + '/ligand.mol2')
             ligand = ligand.select_atoms("not type H")
             
 
