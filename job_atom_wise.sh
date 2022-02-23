@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --time 10:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name="scPDB GPU add,max 4 Angstroms"
+#SBATCH --job-name="scPDB GPU GIN (mean), GIN (add)"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 

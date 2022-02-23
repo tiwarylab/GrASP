@@ -32,7 +32,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import Two_Track_GATModel
+from atom_wise_models import Two_Track_GATModel, Two_Track_GIN_GAT, Two_Track_GAT_GAT
 
 job_start_time = time.time()
 
@@ -102,20 +102,23 @@ device = 'cpu'
 if torch.cuda.is_available():
     device = 'cuda'
 # num_cpus = os.cpu_count() # Don't do this, it will see all of the CPU's on the cluster. 
-num_cpus = 4 
-print("The model will be using the following device:", device)
-print("The model will be using {} cpus.".format(num_cpus))
+num_cpus = 8
+print("The model will be using the following device:", device, flush=True)
+print("The model will be using {} cpus.".format(num_cpus), flush=True)
 
-model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
+# model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
+# model =   Two_Track_GIN_GAT(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device)
+model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add").to(device)
+
 optimizer = optim.Adam(model.parameters(), lr = learning_rate)
 scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 loss_fn = LabelSmoothingLoss(2, smoothing=0.2, weight=torch.FloatTensor([0.80,1.20]).to(device))
 
 
 prepend = str(os.getcwd())
-print("Initializing Train Set")
+print("Initializing Train Set", flush=True)
 data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
-data_set.process()
+# data_set.process()
 
 # Set to one temporarily to avoid doing full cv
 for cv_iteration in range(1):
@@ -125,7 +128,7 @@ for cv_iteration in range(1):
 
     # train_size = int(train_test_split*len(data_set))
     # train_set, val_set = random_split(data_set, [train_size, len(data_set) - train_size], generator=torch.Generator().manual_seed(42))
-    print("Initializing Data Loaders")
+    print("Initializing Data Loaders", flush=True)
     train_dataloader = DataLoader(train_set, batch_size=2, shuffle=True, pin_memory=True, num_workers=num_cpus)
     val_dataloader = DataLoader(val_set, batch_size=2, shuffle=True, pin_memory=True, num_workers=num_cpus)
 
@@ -151,7 +154,7 @@ for cv_iteration in range(1):
         # Training Set
         model.train()
         if (train_epoch_num==0):
-            print("Running {} batches per Epoch".format(len(train_dataloader)))
+            print("Running {} batches per Epoch".format(len(train_dataloader)), flush=True)
             epoch_start = time.time()
         training_batch_loss = 0.0
         training_batch_acc = 0.0
@@ -204,7 +207,7 @@ for cv_iteration in range(1):
         print("Training Epoch {} Loss: {}".format(epoch, training_epoch_loss[-1]))
         print("Training Epoch {} Accu: {}".format(epoch, training_epoch_acc[-1]))
         print("Training Epoch {} MCC: {}".format(epoch, training_epoch_mcc[-1]))
-        print("Training Epoch {} AUC: {}".format(epoch, training_epoch_auc[-1]))
+        print("Training Epoch {} AUC: {}".format(epoch, training_epoch_auc[-1]), flush=True)
         writer.add_scalar('Epoch_Loss/Train', training_epoch_loss[-1], train_epoch_num)
         writer.add_scalar('Epoch_ACC/Train',  training_epoch_acc[-1],  train_epoch_num)
         writer.add_scalar('Epoch_MCC/Train',  training_epoch_mcc[-1],  train_epoch_num)

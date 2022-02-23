@@ -32,7 +32,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import Two_Track_GATModel
+from atom_wise_models import Two_Track_JK_GATModel 
 
 job_start_time = time.time()
 
@@ -102,7 +102,7 @@ device = 'cpu'
 if torch.cuda.is_available():
     device = 'cuda'
 # num_cpus = os.cpu_count() # Don't do this, it will see all of the CPU's on the cluster. 
-num_cpus = 4 
+num_cpus = 8
 print("The model will be using the following device:", device)
 print("The model will be using {} cpus.".format(num_cpus))
 
@@ -115,7 +115,7 @@ loss_fn = LabelSmoothingLoss(2, smoothing=0.2, weight=torch.FloatTensor([0.80,1.
 prepend = str(os.getcwd())
 print("Initializing Train Set")
 data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
-data_set.process()
+# data_set.process()
 
 # Set to one temporarily to avoid doing full cv
 for cv_iteration in range(1):

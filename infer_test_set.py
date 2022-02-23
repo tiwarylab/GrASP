@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel
+from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel,Two_Track_JK_GATModel, Two_Track_GIN_GAT
 
 prepend = str(os.getcwd()) + "/trained_models/"
 
@@ -28,7 +28,7 @@ prepend = str(os.getcwd()) + "/trained_models/"
 
 
 ########################## Change Me To Change The Model ##########################
-model_name = "trained_model_1644710425.1063097/epoch_25"
+model_name = "trained_model_1645478750.6828046/epoch_28"
 model_path = prepend + model_name
 ###################################################################################
 
@@ -66,7 +66,7 @@ print("The model will be using {} cpus.".format(num_cpus))
 
 # model = GATModelv2(input_dim=43, output_dim=2)
 # model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device) 
+model = Two_Track_GIN_GAT(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
 
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
@@ -77,6 +77,7 @@ print("Initializing Test Set")
 data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=4)
 train_mask, val_mask = k_fold(data_set, prepend, 1)
 val_set     = data_set[val_mask]
+
 val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
 
 #########################
@@ -117,7 +118,6 @@ with torch.no_grad():
         
         labels = batch.y.to(device)
         assembly_name = name[0][:-4]
-        # print(assembly_name)
 
         out = model.forward(batch.to(device))
         probs = F.softmax(out, dim=-1)
@@ -148,7 +148,6 @@ with torch.no_grad():
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
         # writer.add_scalar('Batch_Acc/MCC',  bm,  test_batch_num)
-
 
     # test_epoch_loss.append(test_batch_loss/len(test_dataloader))
     # test_epoch_acc.append(test_batch_acc/len(test_dataloader))

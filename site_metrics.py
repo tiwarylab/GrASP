@@ -248,7 +248,10 @@ Next time infer_test_set.py is run we can get all_labels and all_probs from the 
 # model_name = "trained_model_1640072931.267488_epoch_49"
 # model_name = "trained_model_1640067496.5729342_epoch_30"
 # model_name = "trained_model_1642111399.8650987/epoch_33"
-model_name = "trained_model_1644710425.1063097/epoch_25"
+# model_name = "trained_model_1644710425.1063097/epoch_25"
+# model_name = "trained_model_1645166373.4874966/epoch_17" # 5 Angs JK
+# model_name = "trained_model_1645166379.4346104/epoch_18"  # 5 Angs no JK
+model_name = "trained_model_1645478750.6828046/epoch_28" # % Angs JK, Gat GIN Hybrid
 prepend = str(os.getcwd())
 
 # Get all predictions and labels   
@@ -272,10 +275,10 @@ prepend = str(os.getcwd())
 # print("Done. {}".format(time.time()- start))
 
 #######################################################################################
-print("Calculating overlap and center distance metrics for 0.5 threshold.")
+threshold = 0.4
+print("Calculating overlap and center distance metrics for "+str(threshold)+" threshold.", flush=True)
 start = time.time()
 # Compute Metrics for Standard 0.5 Threshold
-threshold = 0.5
 # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=True)
 # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
 cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False,path_to_mol2='/data_dir/mol2/',path_to_labels='/train_metrics/')
@@ -296,17 +299,91 @@ print("Done. {}".format(time.time()- start))
 
 np.savez(prepend + '/vol_overlap_cent_dist_val_set.npz', overlaps=vol_overlap_list, dist_lst=cent_dist_list, lig_list=lig_dist_list)
 
-print("-----------------------------------------------------------------------------------")
+print("-----------------------------------------------------------------------------------", flush=True)
 print("Cutoff (Prediction Threshold):", threshold)
 # print("-----------------------------------------------------------------------------------")
 # print("Accuracy Score:", accuracy)
 # print("Matthew's Correlation Coefficent:", matthews_corr)
-print("-----------------------------------------------------------------------------------")
-print("Number of systems with no predictions:", no_prediction_count)
-print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list))
-print("Average Distance From Ligand (Top 1):", np.nanmean(cleaned_lig_dist_list))
-print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list))
+print("-----------------------------------------------------------------------------------", flush=True)
+print("Number of systems with no predictions:", no_prediction_count, flush=True)
+print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list), flush=True)
+print("Average Distance From Ligand (Top 1):", np.nanmean(cleaned_lig_dist_list), flush=True)
+print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list), flush=True)
 #######################################################################################
+
+# #######################################################################################
+# print("Calculating overlap and center distance metrics for 0.45 threshold.", flush=True)
+# start = time.time()
+# # Compute Metrics for Standard 0.5 Threshold
+# threshold = 0.45
+# # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=True)
+# # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
+# cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False,path_to_mol2='/data_dir/mol2/',path_to_labels='/train_metrics/')
+
+
+# cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]
+# cleaned_cent_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in cent_dist_list]
+# cleaned_lig_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in lig_dist_list]
+# print("Done. {}".format(time.time()- start))
+
+# # print("Generating predictions and calculating metrics.")
+# # start = time.time()
+# # preds         = np.array(all_probs) > threshold    # Convert probabilities to prediction in 0 or 1
+# # preds = preds.astype(int)[:,1]
+# # accuracy      = accuracy_score(all_labels, preds)
+# # matthews_corr = mcc(all_labels, preds)
+# # print("Done. {}".format(time.time()- start))
+
+# np.savez(prepend + '/vol_overlap_cent_dist_val_set.npz', overlaps=vol_overlap_list, dist_lst=cent_dist_list, lig_list=lig_dist_list)
+
+# print("-----------------------------------------------------------------------------------", flush=True)
+# print("Cutoff (Prediction Threshold):", threshold)
+# # print("-----------------------------------------------------------------------------------")
+# # print("Accuracy Score:", accuracy)
+# # print("Matthew's Correlation Coefficent:", matthews_corr)
+# print("-----------------------------------------------------------------------------------", flush=True)
+# print("Number of systems with no predictions:", no_prediction_count, flush=True)
+# print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list), flush=True)
+# print("Average Distance From Ligand (Top 1):", np.nanmean(cleaned_lig_dist_list), flush=True)
+# print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list), flush=True)
+# #######################################################################################
+
+# #######################################################################################
+# print("Calculating overlap and center distance metrics for 0.4 threshold.", flush=True)
+# start = time.time()
+# # Compute Metrics for Standard 0.5 Threshold
+# threshold = 0.4
+# # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=True)
+# # cent_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False)
+# cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count, all_probs, all_labels = compute_metrics_for_all(threshold=threshold, aggregate_preds_and_labels=False,path_to_mol2='/data_dir/mol2/',path_to_labels='/train_metrics/')
+
+
+# cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]
+# cleaned_cent_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in cent_dist_list]
+# cleaned_lig_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in lig_dist_list]
+# print("Done. {}".format(time.time()- start))
+
+# # print("Generating predictions and calculating metrics.")
+# # start = time.time()
+# # preds         = np.array(all_probs) > threshold    # Convert probabilities to prediction in 0 or 1
+# # preds = preds.astype(int)[:,1]
+# # accuracy      = accuracy_score(all_labels, preds)
+# # matthews_corr = mcc(all_labels, preds)
+# # print("Done. {}".format(time.time()- start))
+
+# np.savez(prepend + '/vol_overlap_cent_dist_val_set.npz', overlaps=vol_overlap_list, dist_lst=cent_dist_list, lig_list=lig_dist_list)
+
+# print("-----------------------------------------------------------------------------------", flush=True)
+# print("Cutoff (Prediction Threshold):", threshold)
+# # print("-----------------------------------------------------------------------------------")
+# # print("Accuracy Score:", accuracy)
+# # print("Matthew's Correlation Coefficent:", matthews_corr)
+# print("-----------------------------------------------------------------------------------", flush=True)
+# print("Number of systems with no predictions:", no_prediction_count, flush=True)
+# print("Average Distance From Center (Top 1):", np.nanmean(cleaned_cent_dist_list), flush=True)
+# print("Average Distance From Ligand (Top 1):", np.nanmean(cleaned_lig_dist_list), flush=True)
+# print("Average Discretized Volume Overlap (Top 1):", np.nanmean(cleaned_vol_overlap_list), flush=True)
+# #######################################################################################
 
 #######################################################################################
 # all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
