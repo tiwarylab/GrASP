@@ -1,11 +1,8 @@
 import os
-from sqlite3 import DataError
 import numpy as np
-from joblib import Parallel, delayed
-from tqdm import tqdm
 
-def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str):
-    
+def process_system(filename):
+    # I really wish I didn't have to do this but the way some of these paackages pickle I have no other way. If you know a better alternative feel free to reach out
     import re
     import MDAnalysis as mda
     import numpy as np
@@ -26,6 +23,76 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     import warnings
     warnings.filterwarnings("ignore")
 
+    #                     [One hot encoding of residue name                           polar Y/N     Acidic,Basic,Neutral  Pos/Neg/Neutral Charge]
+    residue_dict = {'ALA':[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    'ARG':[0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     1,     0,      1,  0,  0], 
+                    'ASN':[0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1], 
+                    'ASP':[0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], 
+                    'CYS':[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  0,  1], 
+                    'GLN':[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1],                                           
+                    'GLU':[0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,0,    1,     0,     0,      0,  1,  0], 
+                    'GLY':[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    'HIS':[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     1,     0,      0,  0,  1], 
+                    "ILE":[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    "LEU":[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    "LYS":[0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     1,     0,      1,  0,  0], 
+                    "MET":[0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    "PHE":[0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    "PRO":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    "SER":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1], 
+                    "THR":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1], 
+                    "TRP":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
+                    "TYR":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  0,  1], 
+                    "VAL":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1],
+                    "C":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "G":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "A":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "U":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "I":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "DC": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # | < Pretty sure these are all acidic and negatively charged
+                    "DG": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "DA": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "DU": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "DT": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,   1,0,    1,     0,     0,      0,  1,  0], # |
+                    "DI": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,   1,0,    1,     0,     0,      0,  1,  0]  # |
+    }
+    hybridization_dict = {
+        "S":          [1,0,0,0,0,0,0], 
+        "SP":         [0,1,0,0,0,0,0], 
+        "SP2":        [0,0,1,0,0,0,0],
+        "SP3":        [0,0,0,1,0,0,0], 
+        "SP3D":       [0,0,0,0,1,0,0], 
+        "SP3D2":      [0,0,0,0,0,1,0], 
+        "OTHER":      [0,0,0,0,0,0,1],
+        "UNSPECIFIED":[0,0,0,0,0,0,0]
+    }
+
+    atom_dict = {'C': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                'N': [0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                'O': [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
+                'S': [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
+                'H': [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0],
+                'MG':[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0],
+                'Z': [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
+                'MN':[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+                'CA':[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
+                'FE':[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+                'P': [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
+                'CL':[0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
+                'F': [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
+                'I': [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
+                'Br':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    }
+
+    bond_type_dict = {
+        '1': [1,0,0,0,0,0],
+        '2': [0,1,0,0,0,0],
+        '3': [0,0,1,0,0,0],
+        'ar':[0,0,0,1,0,0],
+        'am':[0,0,0,0,1,0],
+        'un':[0,0,0,0,0,1]
+    }
+    selection_str = "".join(["resname " + x + " or " for x in list(residue_dict.keys())[:-1]]) + "resname " + str(list(residue_dict.keys())[-1])
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
     
     # Adjacency Matrix
@@ -118,7 +185,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             rdkit_atom = rdkit_protein_w_H.GetAtomWithIdx(int(atom.index))
             
             num_bonds_w_heavy_atoms = [rdkit_atom.GetTotalDegree() - rdkit_atom.GetTotalNumHs(includeNeighbors=True)]
-            formal_charge = [rdkit_atom.GetFormalCharge]
+            formal_charge = [rdkit_atom.GetFormalCharge()]
             is_in_ring = [1,0] if rdkit_atom.IsInRing() else [0,1]
             is_aromatic = [1,0] if rdkit_atom.GetIsAromatic() else [0,1]
             num_radical_electrons = [rdkit_atom.GetNumRadicalElectrons()]
@@ -132,7 +199,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
 
             # try:
             assert not np.any(np.isnan(num_bonds_w_heavy_atoms))
-            # assert not np.any(np.isnan(formal_charge))
+            assert not np.any(np.isnan(formal_charge))
             assert not np.any(np.isnan(is_in_ring))
             assert not np.any(np.isnan(is_aromatic))
             assert not np.any(np.isnan(num_radical_electrons))
@@ -146,7 +213,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             #     raise AssertionError ("Failed to calculate value for " + str(path_to_files)) from e
 
             # Add feature vector with           [residue level feats, one-hot atom name, rdf SAS, ...          ]
-            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
+            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
         except Exception as e:
             print("Error while feautrizing atom for file {}.".format(path_to_files), flush=True)
             return -2
@@ -194,92 +261,23 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     np.savez_compressed('./data_atoms_w_atom_feats/'+ filename, adj_matrix = trimmed, feature_matrix = feature_array, class_array = classes, edge_attributes = edge_attributes)
     protein.atoms.write('./mol2_atoms_w_atom_feats/'+ str(filename) +'.mol2',)
 
-#                     [One hot encoding of residue name                           polar Y/N     Acidic,Basic,Neutral  Pos/Neg/Neutral Charge]
-residue_dict = {'ALA':[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                'ARG':[0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     1,     0,      1,  0,  0], 
-                'ASN':[0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1], 
-                'ASP':[0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], 
-                'CYS':[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  0,  1], 
-                'GLN':[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1],                                           
-                'GLU':[0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,0,    1,     0,     0,      0,  1,  0], 
-                'GLY':[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                'HIS':[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     1,     0,      0,  0,  1], 
-                "ILE":[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                "LEU":[0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                "LYS":[0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     1,     0,      1,  0,  0], 
-                "MET":[0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                "PHE":[0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                "PRO":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                "SER":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1], 
-                "THR":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     0,     1,      0,  0,  1], 
-                "TRP":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
-                "TYR":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  0,  1], 
-                "VAL":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1],
-                "C":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "G":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "A":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "U":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "I":  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "DC": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # | < Pretty sure these are all acidic and negatively charged
-                "DG": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "DA": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "DU": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "DT": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,   1,0,    1,     0,     0,      0,  1,  0], # |
-                "DI": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,   1,0,    1,     0,     0,      0,  1,  0]  # |
-}
-hybridization_dict = {
-    "S":          [1,0,0,0,0,0,0], 
-    "SP":         [0,1,0,0,0,0,0], 
-    "SP2":        [0,0,1,0,0,0,0],
-    "SP3":        [0,0,0,1,0,0,0], 
-    "SP3D":       [0,0,0,0,1,0,0], 
-    "SP3D2":      [0,0,0,0,0,1,0], 
-    "OTHER":      [0,0,0,0,0,0,1],
-    "UNSPECIFIED":[0,0,0,0,0,0,0]
-}
-
-atom_dict = {'C': [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-             'N': [0,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
-             'O': [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
-             'S': [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
-             'H': [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0],
-             'MG':[0,0,0,0,0,1,0,0,0,0,0,0,0,0,0],
-             'Z': [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],
-             'MN':[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-             'CA':[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],
-             'FE':[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
-             'P': [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
-             'CL':[0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
-             'F': [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
-             'I': [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
-             'Br':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-}
-
-bond_type_dict = {
-    '1': [1,0,0,0,0,0],
-    '2': [0,1,0,0,0,0],
-    '3': [0,0,1,0,0,0],
-    'ar':[0,0,0,1,0,0],
-    'am':[0,0,0,0,1,0],
-    'un':[0,0,0,0,0,1]
-}
 
 
-selection_str = "".join(["resname " + x + " or " for x in list(residue_dict.keys())[:-1]]) + "resname " + str(list(residue_dict.keys())[-1])
-# print(selection_str)
-# total_files = len(os.listdir('./scPDB_raw_data'))
-index = 1
-# failed_list = []
 
-# num_cores = multiprocessing.cpu_count()
+# Should run when file is called but not imported
+if __name__ == "__main__":
+    from joblib import Parallel, delayed
+    from tqdm import tqdm
+    
+    # print(selection_str)
+    # total_files = len(os.listdir('./scPDB_raw_data'))
+    # index = 1 # I have no idea what this was for, got I hope we don't need it
+    # failed_list = []
 
-inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
+    inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
 
-if not os.path.isdir('./data_atoms_w_atom_feats'):
-    os.makedirs('./data_atoms_w_atom_feats')
-
-# try:
-if True:
+    if not os.path.isdir('./data_atoms_w_atom_feats'):
+        os.makedirs('./data_atoms_w_atom_feats')
     ##########################################
     # Comment me out to run just one file
     num_cores = 24
@@ -287,8 +285,8 @@ if True:
     from joblib.externals.loky import set_loky_pickler
     set_loky_pickler("dill")
     
-    if __name__ == "__main__":
-        r = Parallel(n_jobs=num_cores)(delayed(process_system)(i,residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str) for i in tqdm(inputs[:]))
+    r = Parallel(n_jobs=num_cores)(delayed(process_system)(x) for x in tqdm(inputs[:]))
+    # Parallel(n_jobs=2)(delayed(process_system)(x) for x in ['1iep_1','3eky_1'])
 
     # np.savez('./failed_list', np.array(failed_list))
     ##########################################
