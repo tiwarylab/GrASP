@@ -4,8 +4,7 @@ import numpy as np
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
-def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str,
-                    raw_path='./scPDB_raw_data/',input_save_location='./data_atoms_w_atom_feats/',mol2_save_location='./mol2_atoms_w_atom_feats/'):
+def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str):
     
     import re
     import MDAnalysis as mda
@@ -30,28 +29,17 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
     
     # Adjacency Matrix
-    path_to_files = raw_path + filename
+    path_to_files = './scPDB_raw_data/' + filename
     # filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
     
     try:
-        if path_to_files[-4:] == 'mol2':
-            protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
-            site = mda.Universe(path_to_files + '/site.mol2', format='mol2')
-            rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
-            traj = mdtrajload(path_to_files + '/protein.mol2')
-        elif path_to_files[-3:] == 'pdb':
-            protein_w_H = mda.Universe(path_to_files, format='pdb', guess_bonds=True)
-            site = ?
-            rdkit_protein_w_H = Chem.MolFromPDBFile(path_to_files, removeHs = False, sanitize=False)
-            Chem.GetSymmSSSR(rdkit_protein_w_H)
-            traj = mdtrajload(path_to_files)
-        else: 
-            raise IOError("Unknown file type for file: " + path_to_files + " Expected mol2 or pdb.")
+        protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
+        rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
         # rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False)
 
     except Exception as e: 
-        # print("Failed to compute charges for the following file due to a structure error. This file will be skipped:", path_to_files + '/protein.mol2', flush=True)
-        raise e
+        print("Failed to compute charges for the following file due to a structure error. This file will be skipped:", path_to_files + '/protein.mol2', flush=True)
+        # raise e
         return
 
     res_names = protein_w_H.residues.resnames
@@ -62,6 +50,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
 
     # Calculate SAS for each atom, this needs to be done before hydrogens are dropped
     try:
+        traj = mdtrajload(path_to_files + '/protein.mol2')
         SAS = shrake_rupley(traj, mode='atom')
         if len(SAS) > 1:
             # Sanity check, I'm pretty sure this should never happen
@@ -129,7 +118,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             rdkit_atom = rdkit_protein_w_H.GetAtomWithIdx(int(atom.index))
             
             num_bonds_w_heavy_atoms = [rdkit_atom.GetTotalDegree() - rdkit_atom.GetTotalNumHs(includeNeighbors=True)]
-            formal_charge = [rdkit_atom.GetFormalCharge()]
+            formal_charge = [rdkit_atom.GetFormalCharge]
             is_in_ring = [1,0] if rdkit_atom.IsInRing() else [0,1]
             is_aromatic = [1,0] if rdkit_atom.GetIsAromatic() else [0,1]
             num_radical_electrons = [rdkit_atom.GetNumRadicalElectrons()]
@@ -157,7 +146,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
             #     raise AssertionError ("Failed to calculate value for " + str(path_to_files)) from e
 
             # Add feature vector with           [residue level feats, one-hot atom name, rdf SAS, ...          ]
-            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
+            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
         except Exception as e:
             print("Error while feautrizing atom for file {}.".format(path_to_files), flush=True)
             return -2
@@ -168,6 +157,7 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
         raise ValueError ("Adjacency matrix shape ({}) did not match feature array shape ({}). {}".format(np.array(trimmed).shape, np.array(feature_array).shape, filename))
 
     # Classes
+    site = mda.Universe(path_to_files + '/site.mol2', format='mol2')
     res_names = site.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
     site.residues.resnames = new_names
@@ -201,8 +191,8 @@ def process_system(filename,residue_dict,hybridization_dict,atom_dict,bond_type_
     # Creating edge_attributes dictionary. Only holds bond types, weights are stored in trimmed
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
 
-    np.savez_compressed(input_save_location+ filename, adj_matrix = trimmed, feature_matrix = feature_array, class_array = classes, edge_attributes = edge_attributes)
-    protein.atoms.write(mol2_save_location+ str(filename) +'.mol2',)
+    np.savez_compressed('./data_atoms_w_atom_feats/'+ filename, adj_matrix = trimmed, feature_matrix = feature_array, class_array = classes, edge_attributes = edge_attributes)
+    protein.atoms.write('./mol2_atoms_w_atom_feats/'+ str(filename) +'.mol2',)
 
 #                     [One hot encoding of residue name                           polar Y/N     Acidic,Basic,Neutral  Pos/Neg/Neutral Charge]
 residue_dict = {'ALA':[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
@@ -279,57 +269,39 @@ selection_str = "".join(["resname " + x + " or " for x in list(residue_dict.keys
 # print(selection_str)
 # total_files = len(os.listdir('./scPDB_raw_data'))
 index = 1
-failed_list = []
+# failed_list = []
 
 # num_cores = multiprocessing.cpu_count()
 
+inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
+
+if not os.path.isdir('./data_atoms_w_atom_feats'):
+    os.makedirs('./data_atoms_w_atom_feats')
+
 # try:
 if True:
-    # ##########################################
-    # # Comment me out to run just one file
-
-    # inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
-
-    # if not os.path.isdir('./data_atoms_w_atom_feats'):
-    #     os.makedirs('./data_atoms_w_atom_feats')
-    # num_cores = 24
-    
-    # from joblib.externals.loky import set_loky_pickler
-    # set_loky_pickler("dill")
-    
-    # if __name__ == "__main__":
-    #     r = Parallel(n_jobs=num_cores)(delayed(process_system)(i,residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str) for i in tqdm(inputs[:]))
-
-    # np.savez('./failed_list', np.array(failed_list))
-    # ##########################################
-
     ##########################################
-    # Uncomment to run test set
-    inputs = [filename for filename in sorted(list(os.listdir('./benchmark_data_dir/unprocessed_pdb')))]
-
-    if not os.path.isdir('./benchmark_data_dir/raw/'):
-        os.makedirs('./benchmark_data_dir/raw/')
-    
-    num_cores = 1
+    # Comment me out to run just one file
+    num_cores = 24
     
     from joblib.externals.loky import set_loky_pickler
     set_loky_pickler("dill")
     
     if __name__ == "__main__":
-        r = Parallel(n_jobs=num_cores)(delayed(process_system)(i,residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str,raw_path='./benchmark_data_dir/unprocessed_pdb/',input_save_location='./benchmark_data_dir/raw/',mol2_save_location='./benchmark_data_dir/mol2/') for i in tqdm(inputs[:]))
+        r = Parallel(n_jobs=num_cores)(delayed(process_system)(i,residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str) for i in tqdm(inputs[:]))
 
-    np.savez('./failed_list', np.array(failed_list))
+    # np.savez('./failed_list', np.array(failed_list))
     ##########################################
 
     ##########################################
     # Uncomment me to run just one file
-    # import time
+    import time
     # print("Starting")
     # start = time.time()
     # process_system('1iep_1',residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str) 
     # print("Finished. Total Time:", str(time.time() - start)) 
     ##########################################
 # finally:
-    res, i = zip(*r)
-    if res.count(-1) > 0:
-        print("Warning: Number of files skipped due to a nonstandard residue being a part of the site:", res.count(-1))
+#     res, i = zip(*r)
+#     if res.count(-1) > 0:
+#         print("Warning: Number of files skipped due to a nonstandard residue being a part of the site:", res.count(-1))
