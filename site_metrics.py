@@ -165,6 +165,8 @@ def site_metrics(prot_coords, lig_coords, predicted_probs, true_labels, threshol
 
 
     true_points = prot_coords[true_labels==1]
+    true_hull = ConvexHull(true_points)
+    true_center = hull_center(true_hull)
 
     center_distances = []
     ligand_distances = []
@@ -174,8 +176,6 @@ def site_metrics(prot_coords, lig_coords, predicted_probs, true_labels, threshol
         if c_id != None:
             if c_id >= 0:
                 predicted_points = bind_coords[sorted_ids == c_id]
-                true_hull = ConvexHull(true_points)
-                true_center = hull_center(true_hull)
                 
                 if len(predicted_points) < 4:  # You need four points to define a convex hull so we'll say the overlap is 0
                     predicted_center = get_centroid(predicted_points)
