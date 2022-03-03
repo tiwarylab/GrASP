@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-def process_system(filename):
+def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # I really wish I didn't have to do this but the way some of these paackages pickle I have no other way. If you know a better alternative feel free to reach out
     import re
     import MDAnalysis as mda
@@ -96,7 +96,8 @@ def process_system(filename):
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
     
     # Adjacency Matrix
-    path_to_files = './scPDB_raw_data/' + filename
+    path_to_files = path_to_protein_mol2_files
+    structure_name = path_to_protein_mol2_files.split('/')[-1]
     # filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
     
     try:
@@ -106,6 +107,7 @@ def process_system(filename):
 
     except Exception as e: 
         print("Failed to compute charges for the following file due to a structure error. This file will be skipped:", path_to_files + '/protein.mol2', flush=True)
+        raise e
         # raise e
         return
 
@@ -156,7 +158,6 @@ def process_system(filename):
 
     # Feature Matrix
     feature_array = []  # This will contain all of the features for a given molecule
-    flag = False
 
     try:
         rdkit_protein_w_H.UpdatePropertyCache(strict=False)
@@ -197,7 +198,6 @@ def process_system(filename):
             hydrophobe = [1,0] if atom.index in hydrophobe_indices else [0,1]
             lumped_hydrophobe = [1,0] if atom.index in lumped_hydrophobe_indices else [0,1]
 
-            # try:
             assert not np.any(np.isnan(num_bonds_w_heavy_atoms))
             assert not np.any(np.isnan(formal_charge))
             assert not np.any(np.isnan(is_in_ring))
@@ -209,8 +209,6 @@ def process_system(filename):
             assert not np.any(np.isnan(donor))
             assert not np.any(np.isnan(hydrophobe))
             assert not np.any(np.isnan(lumped_hydrophobe))
-            # except Exception as e:
-            #     raise AssertionError ("Failed to calculate value for " + str(path_to_files)) from e
 
             # Add feature vector with           [residue level feats, one-hot atom name, rdf SAS, ...          ]
             feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
@@ -221,7 +219,7 @@ def process_system(filename):
 
 
     if trimmed.shape[0] != len(feature_array):  # Sanity Check
-        raise ValueError ("Adjacency matrix shape ({}) did not match feature array shape ({}). {}".format(np.array(trimmed).shape, np.array(feature_array).shape, filename))
+        raise ValueError ("Adjacency matrix shape ({}) did not match feature array shape ({}). {}".format(np.array(trimmed).shape, np.array(feature_array).shape, structure_name))
 
     # Classes
     site = mda.Universe(path_to_files + '/site.mol2', format='mol2')
@@ -258,10 +256,10 @@ def process_system(filename):
     # Creating edge_attributes dictionary. Only holds bond types, weights are stored in trimmed
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
 
-    np.savez_compressed('./data_atoms_w_atom_feats/'+ filename, adj_matrix = trimmed, feature_matrix = feature_array, class_array = classes, edge_attributes = edge_attributes)
-    protein.atoms.write('./mol2_atoms_w_atom_feats/'+ str(filename) +'.mol2',)
+    np.savez_compressed(save_directory + '/raw/' + structure_name, adj_matrix = trimmed, feature_matrix = feature_array, class_array = classes, edge_attributes = edge_attributes)
+    protein.atoms.write(save_directory + '/mol2/' + str(structure_name) +'.mol2')
 
-
+    return None
 
 
 # Should run when file is called but not imported
@@ -274,10 +272,10 @@ if __name__ == "__main__":
     # index = 1 # I have no idea what this was for, got I hope we don't need it
     # failed_list = []
 
-    inputs = [filename for filename in sorted(list(os.listdir('./scPDB_raw_data')))]
+    inputs = ['./scPDB_raw_data' + struct_name for struct_name in sorted(list(os.listdir('./scPDB_raw_data')))]
 
-    if not os.path.isdir('./data_atoms_w_atom_feats'):
-        os.makedirs('./data_atoms_w_atom_feats')
+    if not os.path.isdir('./data_dir'):
+        os.makedirs('./data_dir')
     ##########################################
     # Comment me out to run just one file
     num_cores = 24
@@ -285,7 +283,7 @@ if __name__ == "__main__":
     from joblib.externals.loky import set_loky_pickler
     set_loky_pickler("dill")
     
-    r = Parallel(n_jobs=num_cores)(delayed(process_system)(x) for x in tqdm(inputs[:]))
+    r = Parallel(n_jobs=num_cores)(delayed(process_system)(x, save_directory='./data_dir') for x in tqdm(inputs[:]))
     # Parallel(n_jobs=2)(delayed(process_system)(x) for x in ['1iep_1','3eky_1'])
 
     # np.savez('./failed_list', np.array(failed_list))

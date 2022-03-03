@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel,Two_Track_JK_GATModel, Two_Track_GIN_GAT
+from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel,Two_Track_JK_GATModel, Two_Track_GIN_GAT,Two_Track_GIN_GAT_No_Added_Concat
 
 prepend = str(os.getcwd()) + "/trained_models/"
 
@@ -66,7 +66,7 @@ print("The model will be using {} cpus.".format(num_cpus))
 
 # model = GATModelv2(input_dim=43, output_dim=2)
 # model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-model = Two_Track_GIN_GAT(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
+model = Two_Track_GIN_GAT_No_Added_Concat(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
 
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
@@ -74,11 +74,17 @@ model.to(device)
 prepend = str(os.getcwd())
 print("Initializing Test Set")
 #########################
-data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=4)
-train_mask, val_mask = k_fold(data_set, prepend, 1)
-val_set     = data_set[val_mask]
+# data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
+# train_mask, val_mask = k_fold(data_set, prepend, 1)
+# val_set     = data_set[val_mask]
 
-val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+# val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+
+data_set = KLIFSData(prepend + '/benchmark_data_dir', num_cpus, cutoff=5)
+data_set.process()
+val_dataloader = DataLoader(data_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+
+
 
 #########################
 # data_set = KLIFSData(prepend + '/test_data_dir', num_cpus, cutoff=5, force_process=False)
@@ -97,15 +103,15 @@ all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
 #########################
-if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
-    os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
-if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
-    os.makedirs(prepend + '/train_metrics/test_labels/')
+# if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
+#     os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
+# if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
+#     os.makedirs(prepend + '/train_metrics/test_labels/')
 #########################
-# if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
-#     os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
-# if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
-#     os.makedirs(prepend + '/test_metrics/test_labels/')
+if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
+    os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
+if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
+    os.makedirs(prepend + '/test_metrics/test_labels/')
 
 print("Begining Evaluation")
 model.eval()
@@ -139,11 +145,11 @@ with torch.no_grad():
         # print("Test Batch Accu:", ba)
         # print("Test Batch MCC:", bm)
         #########################
-        np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-        np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        # np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+        # np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         #########################
-        # np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-        # np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+        np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
