@@ -1,12 +1,13 @@
 import os
 import numpy as np
+import pyximport; pyximport.install()
+
 
 def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # I really wish I didn't have to do this but the way some of these paackages pickle I have no other way. If you know a better alternative feel free to reach out
     import re
     import MDAnalysis as mda
     import numpy as np
-    import os
     from pathlib import Path
     import scipy
     from fast_distance_computation import get_distance_matrix
@@ -17,7 +18,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
     from mdtraj import shrake_rupley
     from mdtraj import load as mdtrajload
-    import mdtraj as md
     from collections import defaultdict
 
     import warnings

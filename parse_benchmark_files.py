@@ -1,12 +1,12 @@
 from parsing_atoms_w_atom_feats_parallel_new_feats import process_system
 import MDAnalysis as mda
 import os
-from openbabel import openbabel
+import openbabel
 
 def label_protein_site(bound_structure, structure_name, out_directory):
     output_path = out_directory + '/ready_for_mol2_conversion/' + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
-    print(bound_structure)
+    # print(bound_structure)
     protein = mda.Universe(bound_structure,format='PDB')
     bound_structure = protein.select_atoms("protein")
     ligand_structure = protein.select_atoms("not protein")

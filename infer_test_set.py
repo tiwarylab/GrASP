@@ -28,7 +28,7 @@ prepend = str(os.getcwd()) + "/trained_models/"
 
 
 ########################## Change Me To Change The Model ##########################
-model_name = "trained_model_1645478750.6828046/epoch_28"
+model_name = "trained_model_1646263201.0032232/epoch_28"
 model_path = prepend + model_name
 ###################################################################################
 
@@ -66,7 +66,7 @@ print("The model will be using {} cpus.".format(num_cpus))
 
 # model = GATModelv2(input_dim=43, output_dim=2)
 # model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-model = Two_Track_GIN_GAT_No_Added_Concat(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
+model = Two_Track_GIN_GAT(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
 
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
@@ -74,15 +74,15 @@ model.to(device)
 prepend = str(os.getcwd())
 print("Initializing Test Set")
 #########################
-# data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
-# train_mask, val_mask = k_fold(data_set, prepend, 1)
-# val_set     = data_set[val_mask]
+data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
+train_mask, val_mask = k_fold(data_set, prepend, 0) # <--- was the first fold, should have been 0
+val_set     = data_set[val_mask]
 
-# val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
 
-data_set = KLIFSData(prepend + '/benchmark_data_dir', num_cpus, cutoff=5)
-data_set.process()
-val_dataloader = DataLoader(data_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+#data_set = KLIFSData(prepend + '/benchmark_data_dir', num_cpus, cutoff=5)
+#data_set.process()
+#val_dataloader = DataLoader(data_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
 
 
 
@@ -103,15 +103,15 @@ all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
 #########################
-# if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
-#     os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
-# if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
-#     os.makedirs(prepend + '/train_metrics/test_labels/')
+if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
+     os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
+if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
+     os.makedirs(prepend + '/train_metrics/test_labels/')
 #########################
-if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
-    os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
-if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
-    os.makedirs(prepend + '/test_metrics/test_labels/')
+#if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
+#    os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
+#if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
+ #   os.makedirs(prepend + '/test_metrics/test_labels/')
 
 print("Begining Evaluation")
 model.eval()
@@ -145,11 +145,11 @@ with torch.no_grad():
         # print("Test Batch Accu:", ba)
         # print("Test Batch MCC:", bm)
         #########################
-        # np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-        # np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+        np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         #########################
-        np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-        np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+#        np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+ #       np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
@@ -176,21 +176,21 @@ all_labels = all_labels.detach().cpu().numpy()
 
 
 #########################
-# if not os.path.isdir(prepend + '/train_metrics/all_probs/'):
-#     os.makedirs(prepend + '/train_metrics/all_probs/')
-# if not os.path.isdir(prepend + '/train_metrics/all_labels/'):
-#     os.makedirs(prepend + '/train_metrics/all_labels/')
+if not os.path.isdir(prepend + '/train_metrics/all_probs/'):
+    os.makedirs(prepend + '/train_metrics/all_probs/')
+if not os.path.isdir(prepend + '/train_metrics/all_labels/'):
+    os.makedirs(prepend + '/train_metrics/all_labels/')
 
-# np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
-# np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
+np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
+np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
 #########################
-if not os.path.isdir(prepend + '/test_metrics/all_probs/' + model_name):
-    os.makedirs(prepend + '/test_metrics/all_probs/' + model_name)
-if not os.path.isdir(prepend + '/test_metrics/all_labels/' + model_name):
-    os.makedirs(prepend + '/test_metrics/all_labels/' + model_name) 
+#if not os.path.isdir(prepend + '/test_metrics/all_probs/' + model_name):
+#    os.makedirs(prepend + '/test_metrics/all_probs/' + model_name)
+#if not os.path.isdir(prepend + '/test_metrics/all_labels/' + model_name):
+#    os.makedirs(prepend + '/test_metrics/all_labels/' + model_name) 
 
-np.savez(prepend + "/test_metrics/all_probs/" + model_name, all_probs)
-np.savez(prepend + "/test_metrics/all_labels/" + model_name, all_labels)
+#np.savez(prepend + "/test_metrics/all_probs/" + model_name, all_probs)
+#np.savez(prepend + "/test_metrics/all_labels/" + model_name, all_labels)
 
 all_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
 
@@ -224,19 +224,19 @@ tpr["macro"] = mean_tpr
 roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
 #########################
-# if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
-#     os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
+if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
+    os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
 
-# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
-# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
-# np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
+np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
+np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
 #########################
 
-if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
-    os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
+#if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+ #   os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
 
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
-np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
+#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
+#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)

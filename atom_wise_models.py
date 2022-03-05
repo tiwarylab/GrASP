@@ -484,6 +484,7 @@ class Two_Track_GIN_GAT(nn.Module):
         self.right_GAT_4 = GINConv(MLP(3, 64, 64, 64), aggr=GIN_aggr)
         self.right_BN4 = BatchNorm(64)
 
+        self.post_BN = BatchNorm(576)
         self.postprocess1 = nn.Linear(576, 256)
         self.postprocess2 = nn.Linear(256, 128)
         self.postprocess3 = nn.Linear(128, 64)
@@ -526,7 +527,9 @@ class Two_Track_GIN_GAT(nn.Module):
         right_block_4_out = self.right_GAT_4(right_block_3_out,input.edge_index)
         right_block_4_out = self.elu(self.right_BN4(torch.add(right_block_4_out, right_block_3_out)))
         
-        combined = torch.cat((left_block_4_out,right_block_4_out,left_block_3_out,right_block_3_out,left_block_2_out,right_block_2_out,left_block_1_out,right_block_1_out, x), dim=-1)
+        combined = torch.cat((left_block_4_out,right_block_4_out,left_block_3_out,right_block_3_out,left_block_2_out,right_block_2_out,left_block_1_out,right_block_1_out,x), dim=-1)
+
+        combined = self.post_BN(combined)
         
         x = self.elu(self.postprocess1(combined))
         x = self.elu(self.postprocess2(x))
@@ -572,8 +575,8 @@ class Two_Track_GIN_GAT_Extra_BN(nn.Module):
         self.right_GAT_4 = GINConv(MLP(3, 64, 64, 64), aggr=GIN_aggr)
         self.right_BN4 = BatchNorm(64)
 
-        self.post_BN = BatchNorm(576)
-        self.postprocess1 = nn.Linear(576, 256)
+        self.post_BN = BatchNorm(512)
+        self.postprocess1 = nn.Linear(512, 256)
         self.postprocess2 = nn.Linear(256, 128)
         self.postprocess3 = nn.Linear(128, 64)
         self.postprocess4 = nn.Linear(64, 32)
@@ -615,7 +618,7 @@ class Two_Track_GIN_GAT_Extra_BN(nn.Module):
         right_block_4_out = self.right_GAT_4(right_block_3_out,input.edge_index)
         right_block_4_out = self.elu(self.right_BN4(torch.add(right_block_4_out, right_block_3_out)))
         
-        combined = self.post_BN(torch.cat((left_block_4_out,right_block_4_out,left_block_3_out,right_block_3_out,left_block_2_out,right_block_2_out,left_block_1_out,right_block_1_out, x), dim=-1))
+        combined = self.post_BN(torch.cat((left_block_4_out,right_block_4_out,left_block_3_out,right_block_3_out,left_block_2_out,right_block_2_out,left_block_1_out,right_block_1_out), dim=-1))
         
         x = self.elu(self.postprocess1(combined))
         x = self.elu(self.postprocess2(x))
