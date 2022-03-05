@@ -38,7 +38,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import Two_Track_GATModel, Two_Track_GIN_GAT, Two_Track_GAT_GAT, Two_Track_GIN_GAT_Extra_BN
+from atom_wise_models import Two_Track_GATModel, Two_Track_GIN_GAT, Two_Track_GAT_GAT, Two_Track_GIN_GAT_Extra_BN, Two_Track_GIN_GAT_fixed_bn
 
 job_start_time = time.time()
 
@@ -113,7 +113,7 @@ print("The model will be using the following device:", device, flush=True)
 print("The model will be using {} cpus.".format(num_cpus), flush=True)
 
 # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-model =   Two_Track_GIN_GAT(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device)
+model =   Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device)
 # model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add").to(device)
 
 optimizer = optim.Adam(model.parameters(), lr = learning_rate)

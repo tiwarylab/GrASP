@@ -176,10 +176,10 @@ all_labels = all_labels.detach().cpu().numpy()
 
 
 #########################
-if not os.path.isdir(prepend + '/train_metrics/all_probs/'):
-    os.makedirs(prepend + '/train_metrics/all_probs/')
-if not os.path.isdir(prepend + '/train_metrics/all_labels/'):
-    os.makedirs(prepend + '/train_metrics/all_labels/')
+if not os.path.isdir(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2]):
+    os.makedirs(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2])
+if not os.path.isdir(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2]):
+    os.makedirs(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2])
 
 np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
 np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
