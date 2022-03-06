@@ -5,7 +5,7 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --time 10:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name="scPDB Test Inference max,mean, 5 Angstom"
+#SBATCH --job-name="scPDB Validation Inference, Fixed BN"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 

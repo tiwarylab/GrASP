@@ -30,6 +30,9 @@ prepend = str(os.getcwd()) + "/trained_models/"
 ########################## Change Me To Change The Model ##########################
 model_name = "trained_model_1646465759.4020877/epoch_29"
 model_path = prepend + model_name
+set_to_use = 'val'
+set_to_use = 'test'
+
 ###################################################################################
 
 def k_fold(dataset, path, fold_number):
@@ -74,15 +77,18 @@ model.to(device)
 prepend = str(os.getcwd())
 print("Initializing Test Set")
 #########################
-data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
-train_mask, val_mask = k_fold(data_set, prepend, 0) # <--- was the first fold, should have been 0
-val_set     = data_set[val_mask]
+if set_to_use == 'val':
+    data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
+    train_mask, val_mask = k_fold(data_set, prepend, 0) # <--- was the first fold, should have been 0
+    val_set     = data_set[val_mask]
 
-val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
-
-#data_set = KLIFSData(prepend + '/benchmark_data_dir', num_cpus, cutoff=5)
-#data_set.process()
-#val_dataloader = DataLoader(data_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+    val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+elif set_to_use -- 'test':
+    data_set = KLIFSData(prepend + '/benchmark_data_dir', num_cpus, cutoff=5)
+    data_set.process()
+    val_dataloader = DataLoader(data_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
+else:
+    raise ValueError("Expected 'val' or 'test' as set_to_use but got:", str(set_to_use))
 
 
 
@@ -103,15 +109,17 @@ all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
 #########################
-if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
-     os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
-if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
-     os.makedirs(prepend + '/train_metrics/test_labels/')
+if set_to_use == 'val':
+    if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
+        os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
+    if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
+        os.makedirs(prepend + '/train_metrics/test_labels/')
 #########################
-#if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
-#    os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
-#if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
- #   os.makedirs(prepend + '/test_metrics/test_labels/')
+if set_to_use == 'test':    
+    if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
+       os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
+    if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
+      os.makedirs(prepend + '/test_metrics/test_labels/')
 
 print("Begining Evaluation")
 model.eval()
