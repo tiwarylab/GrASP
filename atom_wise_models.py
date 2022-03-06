@@ -443,7 +443,7 @@ class Two_Track_GIN_GAT_No_Added_Concat(nn.Module):
         x = self.elu(self.postprocess1(combined))
         x = self.elu(self.postprocess2(x))
         x = self.elu(self.postprocess3(x))
-        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess4(x)) 
         x = self.elu(self.postprocess5(x))
         x = self.postprocess6(x)
 

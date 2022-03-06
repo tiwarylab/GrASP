@@ -235,7 +235,7 @@ def compute_metrics_for_all(threshold = 0.5, path_to_mol2='/test_data_dir/mol2/'
 # model_name = "trained_model_1645478750.6828046/epoch_28"      # 5 Angs JK, Gat GIN Hybrid
 model_name = "trained_model_1646263201.0032232/epoch_28"        # Added skip con from preprocessing to postprocessing. Added BN before postproccessing
 prepend = str(os.getcwd())
-cutoffs = [0.5, 0.45, 0.4]
+threshold_lst = [0.5, 0.45, 0.4]
 compute_optimal = True
 
 #######################################################################################
@@ -306,12 +306,12 @@ if compute_optimal:
     np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
     np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
     print("Done. {}".format(time.time()- start))
-    thresholds.append(optimal_threshold)
+    threshold_lst.append(optimal_threshold)
     
 #######################################################################################
 
 #######################################################################################
-for threshold in thresholds:
+for threshold in threshold_lst:
     print("Calculating overlap and center distance metrics for "+str(threshold)+" threshold.", flush=True)
     start = time.time()
     cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count = compute_metrics_for_all(threshold=threshold,path_to_mol2='/data_dir/mol2/',path_to_labels='/train_metrics/')

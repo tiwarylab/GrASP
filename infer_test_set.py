@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel,Two_Track_JK_GATModel, Two_Track_GIN_GAT,Two_Track_GIN_GAT_No_Added_Concat
+from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel,Two_Track_JK_GATModel, Two_Track_GIN_GAT,Two_Track_GIN_GAT_No_Added_Concat, Two_Track_GIN_GAT_fixed_bn
 
 prepend = str(os.getcwd()) + "/trained_models/"
 
@@ -28,7 +28,7 @@ prepend = str(os.getcwd()) + "/trained_models/"
 
 
 ########################## Change Me To Change The Model ##########################
-model_name = "trained_model_1646263201.0032232/epoch_28"
+model_name = "trained_model_1646465759.4020877/epoch_29"
 model_path = prepend + model_name
 ###################################################################################
 
@@ -66,7 +66,7 @@ print("The model will be using {} cpus.".format(num_cpus))
 
 # model = GATModelv2(input_dim=43, output_dim=2)
 # model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-model = Two_Track_GIN_GAT(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
+model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
 
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
