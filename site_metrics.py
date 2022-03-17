@@ -207,7 +207,7 @@ def compute_metrics_for_all(threshold = 0.5, path_to_mol2='/test_data_dir/mol2/'
             labels = np.load(prepend + path_to_labels + 'test_labels/' + assembly_name + '.npy')
             probs = np.load(prepend + path_to_labels + 'test_probs/' + model_name + '/' + assembly_name + '.npy')
             # probs = np.load(prepend + '/test_metrics/test_probs/' + model_name + '_' + assembly_name + '.npy')
-            ligand = mda.Universe(prepend + "/scPDB_raw_data/" + assembly_name + '/ligand.mol2')
+            ligand = mda.Universe(prepend + "/data_dir/unprocessed_scPDB_mol2/" + assembly_name + '/ligand.mol2')
             ligand = ligand.select_atoms("not type H")
             
 
@@ -233,7 +233,10 @@ def compute_metrics_for_all(threshold = 0.5, path_to_mol2='/test_data_dir/mol2/'
 # model_name = "trained_model_1645166373.4874966/epoch_17"      # 5 Angs JK
 # model_name = "trained_model_1645166379.4346104/epoch_18"      # 5 Angs no JK
 # model_name = "trained_model_1645478750.6828046/epoch_28"      # 5 Angs JK, Gat GIN Hybrid
-model_name = "trained_model_1646263201.0032232/epoch_28"        # Added skip con from preprocessing to postprocessing. Added BN before postproccessing
+# model_name = "trained_model_1646263201.0032232/epoch_28"        # Added skip con from preprocessing to postprocessing. Added BN before postproccessing
+# model_name = "trained_model_1646775694.0918303/epoch_49"
+model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
+# model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
 prepend = str(os.getcwd())
 threshold_lst = [0.5, 0.45, 0.4]
 compute_optimal = True
@@ -314,14 +317,14 @@ if compute_optimal:
 for threshold in threshold_lst:
     print("Calculating overlap and center distance metrics for "+str(threshold)+" threshold.", flush=True)
     start = time.time()
-    cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count = compute_metrics_for_all(threshold=threshold,path_to_mol2='/data_dir/mol2/',path_to_labels='/train_metrics/')
+    cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count = compute_metrics_for_all(threshold=threshold,path_to_mol2='/data_dir/mol2_scPDB/',path_to_labels='/train_metrics/')
 
     cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]
     cleaned_cent_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in cent_dist_list]
     cleaned_lig_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in lig_dist_list]
     print("Done. {}".format(time.time()- start))
 
-    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}.npz'.format(threshold), overlaps=vol_overlap_list, dist_lst=cent_dist_list, lig_list=lig_dist_list)
+    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), overlaps=vol_overlap_list, dist_lst=cent_dist_list, lig_list=lig_dist_list)
 
     print("-----------------------------------------------------------------------------------", flush=True)
     print("Cutoff (Prediction Threshold):", threshold)

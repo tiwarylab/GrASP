@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import GATModelv1, GATModelv2, Two_Track_GATModel,Two_Track_JK_GATModel, Two_Track_GIN_GAT,Two_Track_GIN_GAT_No_Added_Concat, Two_Track_GIN_GAT_fixed_bn
+from atom_wise_models import Two_Track_GIN_GAT_fixed_bn,Two_Track_GIN_GAT_Noisy_Nodes
 
 prepend = str(os.getcwd()) + "/trained_models/"
 
@@ -28,10 +28,15 @@ prepend = str(os.getcwd()) + "/trained_models/"
 
 
 ########################## Change Me To Change The Model ##########################
-model_name = "trained_model_1646465759.4020877/epoch_29"
+# model_name = "trained_model_1646775694.0918303/epoch_49" # Standard Model
+# model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
+model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
 model_path = prepend + model_name
 set_to_use = 'val'
-set_to_use = 'test'
+# set_to_use = 'test'
+
+model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
+# model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
 
 ###################################################################################
 
@@ -69,21 +74,22 @@ print("The model will be using {} cpus.".format(num_cpus))
 
 # model = GATModelv2(input_dim=43, output_dim=2)
 # model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device) 
 
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
  
 prepend = str(os.getcwd())
-print("Initializing Test Set")
 #########################
 if set_to_use == 'val':
+    print("Initializing Validation Set")
     data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
+    # data_set.process()
     train_mask, val_mask = k_fold(data_set, prepend, 0) # <--- was the first fold, should have been 0
     val_set     = data_set[val_mask]
 
     val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
-elif set_to_use -- 'test':
+elif set_to_use == 'test':
+    print("Initializing Test Set")    
     data_set = KLIFSData(prepend + '/benchmark_data_dir', num_cpus, cutoff=5)
     data_set.process()
     val_dataloader = DataLoader(data_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
@@ -131,16 +137,16 @@ with torch.no_grad():
     for batch, name in val_dataloader:
         
         labels = batch.y.to(device)
-        assembly_name = name[0][:-4]
+        assembly_name = name[0][:-4]  
 
-        out = model.forward(batch.to(device))
-        probs = F.softmax(out, dim=-1)
+        out, _ = model.forward(batch.to(device))
+        probs = F.softmax(out, dim=-1) 
         all_probs = torch.cat((all_probs, probs.detach().cpu()))
         all_labels = torch.cat((all_labels, labels.detach().cpu()))
         loss = F.nll_loss(torch.log(probs), labels,reduction='sum')         # Cross Entropy
-        preds = np.argmax(out.detach().cpu().numpy(), axis=1)
+        preds = np.argmax(out.detach().cpu().numpy(), axis=1) # [1 if x[1] > prediction_threshold else 0 for x in probs]
         bl = loss.detach().cpu().item()
-
+        
         labels = batch.y.detach().cpu()
         
         ba = accuracy_score(labels, preds)
@@ -153,11 +159,13 @@ with torch.no_grad():
         # print("Test Batch Accu:", ba)
         # print("Test Batch MCC:", bm)
         #########################
-        np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-        np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        if set_to_use == 'val':
+            np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+            np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         #########################
-#        np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
- #       np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        if set_to_use == 'test':
+            np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
+            np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
         
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
@@ -169,9 +177,9 @@ with torch.no_grad():
     test_epoch_loss.append(test_batch_loss/len(val_dataloader))
     test_epoch_acc.append(test_batch_acc/len(val_dataloader))
     test_epoch_mcc.append(test_batch_mcc/len(val_dataloader))
-    print("Test Loss: {}".format(test_epoch_loss[-1]))
-    print("Test Accu: {}".format(test_epoch_acc[-1]))
-    print("Test MCC: {}".format(test_epoch_mcc[-1]))
+    print("Loss: {}".format(test_epoch_loss[-1]))
+    print("Accu: {}".format(test_epoch_acc[-1]))
+    print("MCC:  {}".format(test_epoch_mcc[-1]))
     # writer.add_scalar('Epoch_Loss/test', test_epoch_loss[-1], test_epoch_num)
     # writer.add_scalar('Epoch_Acc/test',  test_epoch_acc[-1],  test_epoch_num)
     # writer.add_scalar('Epoch_Acc/MCC',  test_epoch_mcc[-1],  test_epoch_num)
@@ -184,21 +192,23 @@ all_labels = all_labels.detach().cpu().numpy()
 
 
 #########################
-if not os.path.isdir(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2]):
-    os.makedirs(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2])
-if not os.path.isdir(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2]):
-    os.makedirs(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2])
+if set_to_use == 'val':
+    if not os.path.isdir(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2]):
+        os.makedirs(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2])
+    if not os.path.isdir(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2]):
+        os.makedirs(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2])
 
-np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
-np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
+    np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
+    np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
 #########################
-#if not os.path.isdir(prepend + '/test_metrics/all_probs/' + model_name):
-#    os.makedirs(prepend + '/test_metrics/all_probs/' + model_name)
-#if not os.path.isdir(prepend + '/test_metrics/all_labels/' + model_name):
-#    os.makedirs(prepend + '/test_metrics/all_labels/' + model_name) 
+if set_to_use == 'test':
+    if not os.path.isdir(prepend + '/test_metrics/all_probs/' + model_name):
+       os.makedirs(prepend + '/test_metrics/all_probs/' + model_name)
+    if not os.path.isdir(prepend + '/test_metrics/all_labels/' + model_name):
+       os.makedirs(prepend + '/test_metrics/all_labels/' + model_name) 
 
-#np.savez(prepend + "/test_metrics/all_probs/" + model_name, all_probs)
-#np.savez(prepend + "/test_metrics/all_labels/" + model_name, all_labels)
+    np.savez(prepend + "/test_metrics/all_probs/" + model_name, all_probs)
+    np.savez(prepend + "/test_metrics/all_labels/" + model_name, all_labels)
 
 all_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
 
@@ -232,19 +242,20 @@ tpr["macro"] = mean_tpr
 roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
 #########################
-if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
-    os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
+if set_to_use == 'val':
+    if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
+        os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
 
-np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
-np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
-np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
 #########################
+if set_to_use == 'test':
+    if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+      os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
 
-#if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
- #   os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
-
-#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
-#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
-#np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)

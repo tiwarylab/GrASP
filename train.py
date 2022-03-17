@@ -20,12 +20,12 @@ import torch.optim as optim
 from torch.utils.data import random_split
 
 from torch_geometric.nn import GATv2Conv
-from torch_geometric.loader import DataLoader, NeighborLoader
+from torch_geometric.loader import DataLoader, NeighborLoader 
 from torch_geometric.data import Data, Dataset
 from torch_geometric.nn.norm import BatchNorm
 from torch_geometric.utils import dropout_adj, from_scipy_sparse_matrix
 import torch_geometric
-
+ 
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import matthews_corrcoef as mcc
@@ -37,8 +37,8 @@ import time
 from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
-from KLIFS_dataset import KLIFSData
-from atom_wise_models import Two_Track_GATModel, Two_Track_GIN_GAT, Two_Track_GAT_GAT, Two_Track_GIN_GAT_Extra_BN, Two_Track_GIN_GAT_fixed_bn
+from KLIFS_dataset import KLIFSData, KLIFSData_noisy_nodes
+from atom_wise_models import  Two_Track_GIN_GAT_fixed_bn
 
 job_start_time = time.time()
 
@@ -113,12 +113,14 @@ print("The model will be using the following device:", device, flush=True)
 print("The model will be using {} cpus.".format(num_cpus), flush=True)
 
 # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-model =   Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add").to(device)
+model =   Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="max", GIN_aggr="add").to(device)
 # model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add").to(device)
 
 optimizer = optim.Adam(model.parameters(), lr = learning_rate)
-scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
-loss_fn = LabelSmoothingLoss(2, smoothing=0.2, weight=torch.FloatTensor([0.80,1.20]).to(device))
+scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
+loss_weight = [0.8,1.2]
+print("Loss Weighting:", str(loss_weight))
+loss_fn = LabelSmoothingLoss(2, smoothing=0.2, weight=torch.FloatTensor(loss_weight).to(device))
 
 
 prepend = str(os.getcwd())

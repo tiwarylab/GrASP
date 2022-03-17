@@ -1,4 +1,7 @@
+from ast import Not
 import os
+from re import I
+from sqlite3 import DataError
 import numpy as np
 import pyximport; pyximport.install()
 
@@ -19,9 +22,12 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     from mdtraj import shrake_rupley
     from mdtraj import load as mdtrajload
     from collections import defaultdict
+    import concurrent.futures
+    import signal
 
-    import warnings
-    warnings.filterwarnings("ignore")
+
+    # import warnings
+    # warnings.filterwarnings("ignore")
 
     #                     [One hot encoding of residue name                           polar Y/N     Acidic,Basic,Neutral  Pos/Neg/Neutral Charge]
     residue_dict = {'ALA':[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
@@ -99,7 +105,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     path_to_files = path_to_protein_mol2_files
     structure_name = path_to_protein_mol2_files.split('/')[-1]
     # filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
-    
+    print('1.0')
     try:
         protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
         rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
@@ -116,25 +122,46 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     protein_w_H.residues.resnames = new_names
     
     protein_w_H = protein_w_H.select_atoms(selection_str)
-
+    print('2.0', flush=True)
     # Calculate SAS for each atom, this needs to be done before hydrogens are dropped
+    
+    def graceful_handler(signal, frame):
+        print(signal)
+        raise IOError
+    
     try:
+        import atexit
+        def handler():
+            raise NotImplementedError
+        atexit.register(handler)
         traj = mdtrajload(path_to_files + '/protein.mol2')
+        signal.signal(signal.SIGINT, graceful_handler)
+        signal.signal(signal.SIGTERM, graceful_handler)
+        
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            print("Entering Exectuer")
+            future = executor.submit(shrake_rupley, traj, mode='atom')
+            return_value = future.result()
+            print(return_value)
+                
+        print("FINISHED", flush=True)
+        raise NotImplementedError
+
         SAS = shrake_rupley(traj, mode='atom')
         if len(SAS) > 1:
             # Sanity check, I'm pretty sure this should never happen
             raise Exception("Did not expect more than one list of SAS values")   
         # SAS_org = SAS
-        SAS = SAS[0]
     except KeyError as e:
         print("Value not included in dictionary \"{}\" while calculating SASA {}.".format(e, path_to_files))
         # failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while calculating SASA {}.".format(e, path_to_files)])
         return
+    except  SystemExit:
+        raise NotImplementedError
 
     mapping = defaultdict(lambda: -1)                           # A mapping from atom indices to position in SAS
     for i in range(len(protein_w_H.atoms)):
         mapping[protein_w_H.atoms.indices[i]] = i
-
 
     # Add SAS from hydrogen to bonded atom, create number of bonded hydrogens feature
     num_bonded_H = np.zeros(traj.n_atoms)
@@ -146,7 +173,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         # be a very rare occasion as must things other than solvents are not droppped.
         local_SAS = np.array([SAS[atom_idx[1]]  for atom_idx in atom.bonds.indices])    
         SAS[atom.index] = np.sum(local_SAS * is_bonded_to_H)       # Only take the values from hydrogens
-
     # Drop Hydrogens
     protein_w_H.ids = np.arange(0, len(protein_w_H.atoms))
     protein = protein_w_H.select_atoms("not type H")
@@ -193,7 +219,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             mass = [rdkit_atom.GetMass()]
             hybridization = hybridization_dict[str(rdkit_atom.GetHybridization())]
             
-            acceptor = [1,0] if atom.index in acceptor_indices else [0,1]
+            acceptor = [1,0] if atom.index in acceptor_indices else [0,1] 
             donor = [1,0] if atom.index in donor_indices else [0,1]
             hydrophobe = [1,0] if atom.index in hydrophobe_indices else [0,1]
             lumped_hydrophobe = [1,0] if atom.index in lumped_hydrophobe_indices else [0,1]
@@ -207,7 +233,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             assert not np.any(np.isnan(hybridization))
             assert not np.any(np.isnan(acceptor))
             assert not np.any(np.isnan(donor))
-            assert not np.any(np.isnan(hydrophobe))
+            assert not np.any(np.isnan(hydrophobe)) 
             assert not np.any(np.isnan(lumped_hydrophobe))
 
             # Add feature vector with           [residue level feats, one-hot atom name, rdf SAS, ...          ]
@@ -234,13 +260,14 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
     # Sometimes the site atoms are not found in the protein. This happens when they're a part of a nonstandard residues.
     # For now, we'll skip them and keep a count of how many there are
-    try:
-        for atom in site.atoms:
+    for atom in site.atoms:
+        try:
             x, y, z = atom.position                                                                       # Get the coordinates of each atom of the binding site
-            binding_site_lst.append(protein.select_atoms("point {} {} {} 0".format(x, y, z))[0].id)      # Select that atom in the whole protein
-    except Exception as e:
-        print("Binding site atom not found in filtered protein. Was it dropped? \n Filename:", str(path_to_files))
-        return -1
+            binding_site_lst.append(protein.select_atoms("point {} {} {} 0.1".format(x, y, z))[0].id)      # Select that atom in the whole protein
+        except Exception as e:
+            print(atom)
+            print("Binding site atom not found in filtered protein. Was it dropped? \n Filename:", str(path_to_files))
+            # return -1
 
     if binding_site_lst == []:
         print(site.atoms)
@@ -263,30 +290,30 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
 
 # Should run when file is called but not imported
-if __name__ == "__main__":
-    from joblib import Parallel, delayed
-    from tqdm import tqdm
+# if __name__ == "__main__":
+#     from joblib import Parallel, delayed
+#     from tqdm import tqdm
     
-    # print(selection_str)
-    # total_files = len(os.listdir('./scPDB_raw_data'))
-    # index = 1 # I have no idea what this was for, got I hope we don't need it
-    # failed_list = []
+#     # print(selection_str)
+#     # total_files = len(os.listdir('./scPDB_raw_data'))
+#     # index = 1 # I have no idea what this was for, got I hope we don't need it
+#     # failed_list = []
 
-    inputs = ['./scPDB_raw_data' + struct_name for struct_name in sorted(list(os.listdir('./scPDB_raw_data')))]
+#     inputs = ['./scPDB_raw_data' + struct_name for struct_name in sorted(list(os.listdir('./scPDB_raw_data')))]
 
-    if not os.path.isdir('./data_dir'):
-        os.makedirs('./data_dir')
-    ##########################################
-    # Comment me out to run just one file
-    num_cores = 24
+#     if not os.path.isdir('./data_dir'):
+#         os.makedirs('./data_dir')
+#     ##########################################
+#     # Comment me out to run just one file
+#     num_cores = 24
     
-    from joblib.externals.loky import set_loky_pickler
-    set_loky_pickler("dill")
+#     from joblib.externals.loky import set_loky_pickler
+#     set_loky_pickler("dill")
     
-    r = Parallel(n_jobs=num_cores)(delayed(process_system)(x, save_directory='./data_dir') for x in tqdm(inputs[:]))
-    # Parallel(n_jobs=2)(delayed(process_system)(x) for x in ['1iep_1','3eky_1'])
+#     r = Parallel(n_jobs=num_cores)(delayed(process_system)(x, save_directory='./data_dir') for x in tqdm(inputs[:]))
+#     # Parallel(n_jobs=2)(delayed(process_system)(x) for x in ['1iep_1','3eky_1'])
 
-    # np.savez('./failed_list', np.array(failed_list))
+#     # np.savez('./failed_list', np.array(failed_list))
     ##########################################
 
     ##########################################
@@ -301,3 +328,7 @@ if __name__ == "__main__":
 #     res, i = zip(*r)
 #     if res.count(-1) > 0:
 #         print("Warning: Number of files skipped due to a nonstandard residue being a part of the site:", res.count(-1))
+
+if __name__ == "_main__":
+    structure_name = '1ds7_2'
+    process_system('./data_dir/unprocessed_mol2/' + structure_name, save_directory='./data_dir')
