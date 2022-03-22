@@ -257,6 +257,789 @@ class Two_Track_GIN_GAT_Noisy_Nodes(nn.Module):
 
         return x, rcon_output
 
+
+class Two_Track_GIN_GAT_Edge_Feat(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Two_Track_GIN_GAT_Edge_Feat, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        # Left Track
+        self.left_GAT_1 = GATv2Conv(64, 8, heads=8, edge_dim=6, bias=False, dropout=drop_prob, aggr=GAT_aggr)
+        self.left_BN1 = BatchNorm(64, track_running_stats=False)
+
+        self.left_GAT_2 = GATv2Conv(64, 8, heads=8, edge_dim=6, bias=False, dropout=drop_prob, aggr=GAT_aggr)
+        self.left_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.left_GAT_3 = GATv2Conv(64, 8, heads=8, edge_dim=6, bias=False, dropout=drop_prob, aggr=GAT_aggr)
+        self.left_BN3 = BatchNorm(64, track_running_stats=False)
+
+        self.left_GAT_4 = GATv2Conv(64, 8, heads=8, edge_dim=6, bias=False, dropout=drop_prob, aggr=GAT_aggr)
+        self.left_BN4 = BatchNorm(64, track_running_stats=False)
+
+        # Right Track
+        self.right_GAT_1 = GINConv(MLP(3, 64, 64, 64), aggr=GIN_aggr)
+        self.right_BN1 = BatchNorm(64, track_running_stats=False)
+
+        self.right_GAT_2 = GINConv(MLP(3, 64, 64, 64), aggr=GIN_aggr)
+        self.right_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.right_GAT_3 = GINConv(MLP(3, 64, 64, 64), aggr=GIN_aggr)
+        self.right_BN3 = BatchNorm(64, track_running_stats=False)
+
+        self.right_GAT_4 = GINConv(MLP(3, 64, 64, 64), aggr=GIN_aggr)
+        self.right_BN4 = BatchNorm(64, track_running_stats=False)
+
+        self.post_BN = BatchNorm(576, track_running_stats=False)
+        self.postprocess1 = nn.Linear(576, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(128, 96)
+        self.rcon2 = nn.Linear(96, 96)
+        self.rcon3 = nn.Linear(96, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        # Left Track
+        left_block_1_out = self.left_GAT_1(x, input.edge_index, input.edge_attr)
+        left_block_1_out = self.elu(self.left_BN1(torch.add(left_block_1_out, x)))
+
+        left_block_2_out = self.left_GAT_2(left_block_1_out,input.edge_index, input.edge_attr)
+        left_block_2_out = self.elu(self.left_BN2(torch.add(left_block_2_out, left_block_1_out)))              # Resnet style skip connection
+
+        left_block_3_out = self.left_GAT_3(left_block_2_out,input.edge_index, input.edge_attr)
+        left_block_3_out = self.elu(self.left_BN3(torch.add(left_block_3_out, left_block_2_out)))
+
+        left_block_4_out = self.left_GAT_4(left_block_3_out,input.edge_index, input.edge_attr)
+        left_block_4_out = self.elu(self.left_BN4(torch.add(left_block_4_out, left_block_3_out)))
+
+        # Right Track
+        right_block_1_out = self.right_GAT_1(x, input.edge_index)
+        right_block_1_out = self.elu(self.right_BN1(torch.add(right_block_1_out, x)))
+
+        right_block_2_out = self.right_GAT_2(right_block_1_out,input.edge_index)
+        right_block_2_out = self.elu(self.right_BN2(torch.add(right_block_2_out, right_block_1_out)))              # Resnet style skip connection
+
+        right_block_3_out = self.right_GAT_3(right_block_2_out,input.edge_index)
+        right_block_3_out = self.elu(self.right_BN3(torch.add(right_block_3_out, right_block_2_out)))
+
+        right_block_4_out = self.right_GAT_4(right_block_3_out,input.edge_index)
+        right_block_4_out = self.elu(self.right_BN4(torch.add(right_block_4_out, right_block_3_out)))
+
+        combined = torch.cat((left_block_4_out,right_block_4_out,left_block_3_out,right_block_3_out,left_block_2_out,right_block_2_out,left_block_1_out,right_block_1_out,x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = torch.cat((left_block_4_out, right_block_4_out), dim=-1)
+        rcon_output = self.elu(self.rcon1(rcon_output))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+class Hybrid_Add_Block(nn.Module):
+    def __init__(self, input_dim, output_dim, GAT_heads, edge_dim, MLP_dim, drop_prob=.01, GAT_aggr="mean", GIN_aggr="add"):
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_Add_Block, self).__init__()
+        self.GAT = GATv2Conv(input_dim, int(output_dim/GAT_heads), heads=GAT_heads, edge_dim=edge_dim, bias=False, dropout=drop_prob, aggr=GAT_aggr)
+        self.GIN = GINConv(MLP(3, input_dim, MLP_dim, output_dim), aggr=GIN_aggr)
+        self.BN1 = BatchNorm(output_dim, track_running_stats=False)
+        self.BN2 = BatchNorm(output_dim, track_running_stats=False)
+        self.elu = torch.nn.ELU()
+
+    def forward(self, x, edge_index, edge_attr):
+        GAT_out = self.GAT(x, edge_index, edge_attr)
+        GIN_out = self.GIN(x, edge_index)
+        add_out = self.BN1(torch.add(GAT_out, GIN_out))
+        block_out = self.elu(self.BN2(torch.add(add_out, x)))
+
+        return block_out
+        
+
+class Hybrid_Add_Model(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_Add_Model, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Add_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block2 = Hybrid_Add_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block3 = Hybrid_Add_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block4 = Hybrid_Add_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+
+        self.post_BN = BatchNorm(320, track_running_stats=False)
+        self.postprocess1 = nn.Linear(320, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block2_out = self.block2(block1_out, input.edge_index, input.edge_attr)
+        block3_out = self.block3(block2_out, input.edge_index, input.edge_attr)
+        block4_out = self.block4(block3_out, input.edge_index, input.edge_attr)
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block4_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+
+class Hybrid_Cat_Block(nn.Module):
+    def __init__(self, input_dim, output_dim, GAT_heads, edge_dim, MLP_dim, drop_prob=.01, GAT_aggr="mean", GIN_aggr="add"):
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_Cat_Block, self).__init__()
+        GNN_out_dim = int(output_dim/2)
+        self.GAT = GATv2Conv(input_dim, int(GNN_out_dim/GAT_heads), heads=GAT_heads, edge_dim=edge_dim, bias=False, dropout=drop_prob, aggr=GAT_aggr)
+        self.GIN = GINConv(MLP(3, input_dim, MLP_dim, GNN_out_dim), aggr=GIN_aggr)
+        self.BN1 = BatchNorm(output_dim, track_running_stats=False)
+        self.BN2 = BatchNorm(output_dim, track_running_stats=False)
+        self.elu = torch.nn.ELU()
+
+    def forward(self, x, edge_index, edge_attr):
+        GAT_out = self.GAT(x, edge_index, edge_attr)
+        GIN_out = self.GIN(x, edge_index)
+        cat_out = self.BN1(torch.cat((GAT_out, GIN_out), dim=-1))
+        block_out = self.elu(self.BN2(torch.add(cat_out, x)))
+
+        return block_out
+        
+
+class Hybrid_Cat_Model(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_Cat_Model, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block2 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block3 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block4 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+
+        self.post_BN = BatchNorm(320, track_running_stats=False)
+        self.postprocess1 = nn.Linear(320, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block2_out = self.block2(block1_out, input.edge_index, input.edge_attr)
+        block3_out = self.block3(block2_out, input.edge_index, input.edge_attr)
+        block4_out = self.block4(block3_out, input.edge_index, input.edge_attr)
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block4_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+class Hybrid_1g8(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_1g8, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block2 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block3 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block4 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block5 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block6 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block7 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block8 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+
+        self.post_BN = BatchNorm(576, track_running_stats=False)
+        self.postprocess1 = nn.Linear(576, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block2_out = self.block2(block1_out, input.edge_index, input.edge_attr)
+        block3_out = self.block3(block2_out, input.edge_index, input.edge_attr)
+        block4_out = self.block4(block3_out, input.edge_index, input.edge_attr)
+        block5_out = self.block5(block4_out, input.edge_index, input.edge_attr)
+        block6_out = self.block6(block5_out, input.edge_index, input.edge_attr)
+        block7_out = self.block7(block6_out, input.edge_index, input.edge_attr)
+        block8_out = self.block8(block7_out, input.edge_index, input.edge_attr)
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,
+         block5_out, block6_out, block7_out, block8_out, x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block8_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+class Hybrid_2g4(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_2g4, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block2 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block3 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block4 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+
+        self.post_BN = BatchNorm(576, track_running_stats=False)
+        self.postprocess1 = nn.Linear(576, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        # Group 1
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block2_out = self.block2(block1_out, input.edge_index, input.edge_attr)
+        block3_out = self.block3(block2_out, input.edge_index, input.edge_attr)
+        block4_out = self.block4(block3_out, input.edge_index, input.edge_attr)
+        # Group 2
+        block5_out = self.block1(block4_out, input.edge_index, input.edge_attr)
+        block6_out = self.block2(block5_out, input.edge_index, input.edge_attr)
+        block7_out = self.block3(block6_out, input.edge_index, input.edge_attr)
+        block8_out = self.block4(block7_out, input.edge_index, input.edge_attr)
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,
+         block5_out, block6_out, block7_out, block8_out, x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block8_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+class Hybrid_4g2(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_4g2, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block2 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        
+        self.post_BN = BatchNorm(576, track_running_stats=False)
+        self.postprocess1 = nn.Linear(576, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        # Group 1
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block2_out = self.block2(block1_out, input.edge_index, input.edge_attr)
+        # Group 2
+        block3_out = self.block1(block2_out, input.edge_index, input.edge_attr)
+        block4_out = self.block2(block3_out, input.edge_index, input.edge_attr)
+        # Group 3
+        block5_out = self.block1(block4_out, input.edge_index, input.edge_attr)
+        block6_out = self.block2(block5_out, input.edge_index, input.edge_attr)
+        # Group 4
+        block7_out = self.block1(block6_out, input.edge_index, input.edge_attr)
+        block8_out = self.block2(block7_out, input.edge_index, input.edge_attr)
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,
+         block5_out, block6_out, block7_out, block8_out, x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block8_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+class Hybrid_8g1(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_8g1, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        
+        self.post_BN = BatchNorm(576, track_running_stats=False)
+        self.postprocess1 = nn.Linear(576, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block2_out = self.block1(block1_out, input.edge_index, input.edge_attr)
+        block3_out = self.block1(block2_out, input.edge_index, input.edge_attr)
+        block4_out = self.block1(block3_out, input.edge_index, input.edge_attr)
+        block5_out = self.block1(block4_out, input.edge_index, input.edge_attr)
+        block6_out = self.block1(block5_out, input.edge_index, input.edge_attr)
+        block7_out = self.block1(block6_out, input.edge_index, input.edge_attr)
+        block8_out = self.block1(block7_out, input.edge_index, input.edge_attr)
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,
+         block5_out, block6_out, block7_out, block8_out, x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block8_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+class Hybrid_Block(nn.Module):
+    def __init__(self, input_dim, output_dim, GAT_heads, edge_dim, MLP_dim, drop_prob=.01, GAT_aggr="mean", GIN_aggr="add"):
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_Block, self).__init__()
+        GNN_out_dim = int(output_dim/2)
+        self.GAT = GATv2Conv(input_dim, int(GNN_out_dim/GAT_heads), heads=GAT_heads, edge_dim=edge_dim, bias=False, dropout=drop_prob, aggr=GAT_aggr)
+        self.GIN = GINConv(MLP(3, input_dim, MLP_dim, GNN_out_dim), aggr=GIN_aggr)
+        self.BN = BatchNorm(output_dim, track_running_stats=False)
+
+    def forward(self, x, edge_index, edge_attr):
+        GAT_out = self.GAT(x, edge_index, edge_attr)
+        GIN_out = self.GIN(x, edge_index)
+        block_out = self.BN(torch.cat((GAT_out, GIN_out), dim=-1))
+    
+        return block_out
+        
+
+class Hybrid_GRU(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_GRU, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+        self.pre_BN3 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.BN1 = BatchNorm(64, track_running_stats=False)
+        self.block2 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.BN2 = BatchNorm(64, track_running_stats=False)
+        self.block3 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.BN3 = BatchNorm(64, track_running_stats=False)
+        self.block4 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.BN4 = BatchNorm(64, track_running_stats=False)
+
+        self.post_BN = BatchNorm(320, track_running_stats=False)
+        self.postprocess1 = nn.Linear(320, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.GRU = torch.nn.GRU(64,64)
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+        x, _ = self.GRU(torch.unsqueeze(x, 0))
+        x = self.elu(self.pre_BN3(torch.squeeze(x, 0)))
+
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block1_out, _ = self.GRU(torch.unsqueeze(block1_out, 0), torch.unsqueeze(x, 0))
+        block1_out = self.elu(self.BN1(torch.squeeze(block1_out, 0)))
+
+        block2_out = self.block2(block1_out, input.edge_index, input.edge_attr)
+        block2_out, _ = self.GRU(torch.unsqueeze(block2_out, 0), torch.unsqueeze(block1_out, 0))
+        block2_out = self.elu(self.BN2(torch.squeeze(block2_out, 0)))
+
+        block3_out = self.block3(block2_out, input.edge_index, input.edge_attr)
+        block3_out, _ = self.GRU(torch.unsqueeze(block3_out, 0), torch.unsqueeze(block2_out, 0))
+        block3_out = self.elu(self.BN3(torch.squeeze(block3_out, 0)))
+
+        block4_out = self.block4(block3_out, input.edge_index, input.edge_attr)
+        block4_out, _ = self.GRU(torch.unsqueeze(block4_out, 0), torch.unsqueeze(block3_out, 0))
+        block4_out = self.elu(self.BN4(torch.squeeze(block4_out, 0)))
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block4_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
+class Hybrid_GRU_Unique(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+        self.noise_variance = noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_GRU_Unique, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+        self.GRU0 = torch.nn.GRU(64,64)
+        self.pre_BN3 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.GRU1 = torch.nn.GRU(64,64)
+        self.BN1 = BatchNorm(64, track_running_stats=False)
+        
+        self.block2 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.GRU2 = torch.nn.GRU(64,64)
+        self.BN2 = BatchNorm(64, track_running_stats=False)
+        
+        self.block3 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.GRU3 = torch.nn.GRU(64,64)
+        self.BN3 = BatchNorm(64, track_running_stats=False)
+        
+        self.block4 = Hybrid_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.GRU4 = torch.nn.GRU(64,64)
+        self.BN4 = BatchNorm(64, track_running_stats=False)
+
+        self.post_BN = BatchNorm(320, track_running_stats=False)
+        self.postprocess1 = nn.Linear(320, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x = input.x
+        if self.training:
+            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+        x, _ = self.GRU0(torch.unsqueeze(x, 0))
+        x = self.elu(self.pre_BN3(torch.squeeze(x, 0)))
+
+        block1_out = self.block1(x, input.edge_index, input.edge_attr)
+        block1_out, _ = self.GRU1(torch.unsqueeze(block1_out, 0), torch.unsqueeze(x, 0))
+        block1_out = self.elu(self.BN1(torch.squeeze(block1_out, 0)))
+
+        block2_out = self.block2(block1_out, input.edge_index, input.edge_attr)
+        block2_out, _ = self.GRU2(torch.unsqueeze(block2_out, 0), torch.unsqueeze(block1_out, 0))
+        block2_out = self.elu(self.BN2(torch.squeeze(block2_out, 0)))
+
+        block3_out = self.block3(block2_out, input.edge_index, input.edge_attr)
+        block3_out, _ = self.GRU3(torch.unsqueeze(block3_out, 0), torch.unsqueeze(block2_out, 0))
+        block3_out = self.elu(self.BN3(torch.squeeze(block3_out, 0)))
+
+        block4_out = self.block4(block3_out, input.edge_index, input.edge_attr)
+        block4_out, _ = self.GRU4(torch.unsqueeze(block4_out, 0), torch.unsqueeze(block3_out, 0))
+        block4_out = self.elu(self.BN4(torch.squeeze(block4_out, 0)))
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block4_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
+
 # class Two_Track_GIN_GAT_No_Added_Concat(nn.Module):
 #     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add"):
 #         # No need for bias in GAT Convs due to batch norms
@@ -523,8 +1306,8 @@ class Two_Track_GIN_GAT_Noisy_Nodes(nn.Module):
 #         x = self.elu(self.postprocess5(x))
 #         x = self.postprocess6(x)
 
-        return x
-    
+#        return x  
+
 # class Two_Track_GAT_GAT(nn.Module):
 #     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add"):
 #         # No need for bias in GAT Convs due to batch norms
