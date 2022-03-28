@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from KLIFS_dataset import KLIFSData
-from atom_wise_models import Two_Track_GIN_GAT_fixed_bn,Two_Track_GIN_GAT_Noisy_Nodes
+from atom_wise_models import Two_Track_GIN_GAT_fixed_bn,Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8
 
 prepend = str(os.getcwd()) + "/trained_models/"
 
@@ -30,12 +30,14 @@ prepend = str(os.getcwd()) + "/trained_models/"
 ########################## Change Me To Change The Model ##########################
 # model_name = "trained_model_1646775694.0918303/epoch_49" # Standard Model
 # model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
-model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
+# model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
+model_name = "/trained_model_hybrid_1g8/epoch_18"
 model_path = prepend + model_name
 set_to_use = 'val'
 # set_to_use = 'test'
 
-model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
+# model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
+model = Hybrid_1g8(input_dim=88)
 # model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
 
 ###################################################################################

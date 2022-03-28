@@ -22,12 +22,9 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     from mdtraj import shrake_rupley
     from mdtraj import load as mdtrajload
     from collections import defaultdict
-    import concurrent.futures
-    import signal
-
 
     # import warnings
-    # warnings.filterwarnings("ignore")
+    # warnings.filterwarnings("ignore") 
 
     #                     [One hot encoding of residue name                           polar Y/N     Acidic,Basic,Neutral  Pos/Neg/Neutral Charge]
     residue_dict = {'ALA':[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
@@ -90,13 +87,14 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
                 'Br':[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
     }
 
+    # Leaving an extra bit to denote self loops
     bond_type_dict = {
-        '1': [1,0,0,0,0,0],
-        '2': [0,1,0,0,0,0],
-        '3': [0,0,1,0,0,0],
-        'ar':[0,0,0,1,0,0],
-        'am':[0,0,0,0,1,0],
-        'un':[0,0,0,0,0,1]
+        '1': [1,0,0,0,0,0,0],
+        '2': [0,1,0,0,0,0,0],
+        '3': [0,0,1,0,0,0,0],
+        'ar':[0,0,0,1,0,0,0],
+        'am':[0,0,0,0,1,0,0],
+        'un':[0,0,0,0,0,1,0]
     }
     selection_str = "".join(["resname " + x + " or " for x in list(residue_dict.keys())[:-1]]) + "resname " + str(list(residue_dict.keys())[-1])
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
@@ -104,8 +102,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # Adjacency Matrix
     path_to_files = path_to_protein_mol2_files
     structure_name = path_to_protein_mol2_files.split('/')[-1]
-    # filename_lst = [filename for filename in os.listdir(path_to_files) if 'site' in filename or 'protein' in filename]
-    print('1.0')
     try:
         protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
         rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
@@ -113,51 +109,26 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
     except Exception as e: 
         print("Failed to compute charges for the following file due to a structure error. This file will be skipped:", path_to_files + '/protein.mol2', flush=True)
-        raise e
-        # raise e
         return
-
     res_names = protein_w_H.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
     protein_w_H.residues.resnames = new_names
     
     protein_w_H = protein_w_H.select_atoms(selection_str)
-    print('2.0', flush=True)
     # Calculate SAS for each atom, this needs to be done before hydrogens are dropped
-    
-    def graceful_handler(signal, frame):
-        print(signal)
-        raise IOError
-    
     try:
-        import atexit
-        def handler():
-            raise NotImplementedError
-        atexit.register(handler)
         traj = mdtrajload(path_to_files + '/protein.mol2')
-        signal.signal(signal.SIGINT, graceful_handler)
-        signal.signal(signal.SIGTERM, graceful_handler)
-        
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            print("Entering Exectuer")
-            future = executor.submit(shrake_rupley, traj, mode='atom')
-            return_value = future.result()
-            print(return_value)
-                
-        print("FINISHED", flush=True)
-        raise NotImplementedError
-
         SAS = shrake_rupley(traj, mode='atom')
         if len(SAS) > 1:
             # Sanity check, I'm pretty sure this should never happen
             raise Exception("Did not expect more than one list of SAS values")   
         # SAS_org = SAS
+        SAS = SAS[0]
     except KeyError as e:
         print("Value not included in dictionary \"{}\" while calculating SASA {}.".format(e, path_to_files))
         # failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while calculating SASA {}.".format(e, path_to_files)])
         return
-    except  SystemExit:
-        raise NotImplementedError
+
 
     mapping = defaultdict(lambda: -1)                           # A mapping from atom indices to position in SAS
     for i in range(len(protein_w_H.atoms)):

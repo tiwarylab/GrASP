@@ -235,8 +235,9 @@ def compute_metrics_for_all(threshold = 0.5, path_to_mol2='/test_data_dir/mol2/'
 # model_name = "trained_model_1645478750.6828046/epoch_28"      # 5 Angs JK, Gat GIN Hybrid
 # model_name = "trained_model_1646263201.0032232/epoch_28"        # Added skip con from preprocessing to postprocessing. Added BN before postproccessing
 # model_name = "trained_model_1646775694.0918303/epoch_49"
-model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
+# model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
 # model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
+model_name = "/trained_model_hybrid_1g8/epoch_18"
 prepend = str(os.getcwd())
 threshold_lst = [0.5, 0.45, 0.4]
 compute_optimal = True

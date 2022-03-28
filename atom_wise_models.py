@@ -621,6 +621,91 @@ class Hybrid_1g8(nn.Module):
         rcon_output = self.rcon3(rcon_output)
 
         return x, rcon_output
+    
+class Hybrid_1g8_noisy(nn.Module):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", node_noise_variance=0.02, edge_noise_variance=0.02):
+        self.node_noise_variance = node_noise_variance
+        self.edge_noise_variance = edge_noise_variance
+        # No need for bias in GAT Convs due to batch norms
+        super(Hybrid_1g8_noisy, self).__init__()
+        self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
+
+        self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
+        self.pre_BN1 = BatchNorm(72, track_running_stats=False)
+        self.preprocess2 = nn.Linear(72, 64, bias=False)
+        self.pre_BN2 = BatchNorm(64, track_running_stats=False)
+
+        self.block1 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block2 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block3 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block4 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block5 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block6 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block7 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+        self.block8 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=6, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr)
+
+        self.post_BN = BatchNorm(576, track_running_stats=False)
+        self.postprocess1 = nn.Linear(576, 256)
+        self.postprocess2 = nn.Linear(256, 128)
+        self.postprocess3 = nn.Linear(128, 64)
+        self.postprocess4 = nn.Linear(64, 32)
+        self.postprocess5 = nn.Linear(32, 16)
+        self.postprocess6 = nn.Linear(16, output_dim)
+        
+        self.elu = torch.nn.ELU()
+        self.softmax = torch.nn.Softmax(dim=0)
+
+	# Regression head for reconstruction
+        self.rcon1 = nn.Linear(64, 64)
+        self.rcon2 = nn.Linear(64, 64)
+        self.rcon3 = nn.Linear(64, input_dim)
+
+    def forward(self, input):
+        x =         input.x
+        edge_attr = input.edge_attr
+        if self.training:
+            x += (x.std(dim=0)*self.node_noise_variance)*torch.randn_like(x)
+            edge_attr += (edge_attr.std(dim=0)*self.edge_noise_variance)*torch.randn_like(edge_attr)
+            '''
+            This is maybe a little odd, unlike the features, which get renormalized after adding noise, I'm not doing that for the edges.
+            My thought process here is that this is more akin to 'flipping' one hot encodings in aggregate, than renormalizing them would be.add()
+            '''
+            
+
+        x = self.BN0(x)
+
+        x = self.pre_BN1(self.preprocess1(x))
+        x = self.elu(x)
+        x = self.pre_BN2(self.preprocess2(x))
+        x = self.elu(x)
+
+        block1_out = self.block1(x, input.edge_index, edge_attr)
+        block2_out = self.block2(block1_out, input.edge_index, edge_attr)
+        block3_out = self.block3(block2_out, input.edge_index, edge_attr)
+        block4_out = self.block4(block3_out, input.edge_index, edge_attr)
+        block5_out = self.block5(block4_out, input.edge_index, edge_attr)
+        block6_out = self.block6(block5_out, input.edge_index, edge_attr)
+        block7_out = self.block7(block6_out, input.edge_index, edge_attr)
+        block8_out = self.block8(block7_out, input.edge_index, edge_attr)
+
+        combined = torch.cat((block1_out, block2_out, block3_out, block4_out,
+         block5_out, block6_out, block7_out, block8_out, x), dim=-1)
+
+        combined = self.post_BN(combined)
+
+        x = self.elu(self.postprocess1(combined))
+        x = self.elu(self.postprocess2(x))
+        x = self.elu(self.postprocess3(x))
+        x = self.elu(self.postprocess4(x))
+        x = self.elu(self.postprocess5(x))
+        x = self.postprocess6(x)
+
+	# Regression Head for Reconstruction Loss
+        rcon_output = self.elu(self.rcon1(block8_out))
+        rcon_output = self.elu(self.rcon2(rcon_output))
+        rcon_output = self.rcon3(rcon_output)
+
+        return x, rcon_output
 
 class Hybrid_2g4(nn.Module):
     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):

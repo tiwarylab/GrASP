@@ -1,10 +1,15 @@
-from parsing_atoms_w_atom_feats_parallel_new_feats import process_system
+from parsing_regular import process_system
 import MDAnalysis as mda
 import os
 import sys
 import shutil
 import openbabel
 from tqdm import tqdm
+import re
+
+allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL', 'C', 'G', 'A', 'U', 'I', 'DC', 'DG', 'DA', 'DU', 'DT', 'DI']
+selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)[:-1]]) + "resname " + str(allowed_residues[-1])
+
 
 def label_protein_site(bound_structure, structure_name, out_directory):
     output_path = out_directory + '/ready_for_mol2_conversion/' + structure_name
@@ -62,48 +67,56 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
         mol.AddHydrogens()
 
     obConversion.WriteFile(mol, output_mol2_path)
+    
+    # Use MDA to remove clean file
+    univ = mda.Universe(output_mol2_path)
+    res_names = univ.residues.resnames
+    new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
+    univ.residues.resnames = new_names  
+    univ = univ.select_atoms(selection_str)
+    mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
+    
     return None
 
-def rebond_mol2(i, infile, structure_name, outfile, addH=False):
+def rebond_mol2(i,infile, structure_name, outfile, addH=False):
     obConversion = openbabel.OBConversion()
     obConversion.SetInAndOutFormats("mol2", "pdb")
 
     mol = openbabel.OBMol()
     obConversion.ReadFile(mol, infile)
     mol.DeleteHydrogens()
+    mol.StripSalts(4)
     obConversion.WriteFile(mol, 'temp{}.pdb'.format(i))
     pdb2mol2('temp{}.pdb'.format(i), structure_name, outfile, addH=addH)
+
+    # Delete mol2 file
     os.remove('temp{}.pdb'.format(i))
     return None
  
 
-def process_train(i, file):
+def process_train(i, file, output_dir):
     print("Processing", file, flush=True)
     try:
         prepend = os.getcwd()
         structure_name = file
         #label_protein_site(prepend + '/data_dir/unprocessed_mol2/' + file, structure_name, out_directory=prepend +'/data_dir')
-        path_to_pdb = prepend +'/data_dir/unprocessed_scPDB_mol2/'+structure_name +"/"
+        path_to_pdb = prepend +'/' + output_dir + '/unprocessed_scPDB_mol2/'+structure_name +"/"
         # for file_name in os.listdir(path_to_pdb):
         #     # if 'protein' not in file_name:
         #     #     # Do not add hydrogens to sites, they will not be used for labeling and moreover will  mess up comparison between 'ground truth' and predictions
         #     #     #pdb2mol2(path_to_pdb+file_name, structure_name,prepend+'/data_dir',addH=False) 
         #     # else:
-        rebond_mol2(i,path_to_pdb+'protein.mol2',structure_name,prepend+'/data_dir', addH=True)
-        if not os.path.isdir(prepend+'/data_dir/unprocessed_mol2/'+structure_name): 
-            os.makedirs(prepend+'/data_dir/unprocessed_mol2/'+structure_name)
-        shutil.copyfile(path_to_pdb+'site.mol2', prepend+'/data_dir/unprocessed_mol2/'+structure_name+'/site.mol2')
+        rebond_mol2(i,path_to_pdb+'protein.mol2',structure_name,prepend+'/' + output_dir, addH=True)
+        if not os.path.isdir(prepend+'/' + output_dir + '/unprocessed_mol2/'+structure_name): 
+            os.makedirs(prepend+'/' + output_dir + '/unprocessed_mol2/'+structure_name)
+        shutil.copyfile(path_to_pdb+'site.mol2', prepend+'/' + output_dir + '/unprocessed_mol2/'+structure_name+'/site.mol2')
         # print("processing system")
-        process_system('./data_dir/unprocessed_mol2/' + structure_name, save_directory='./data_dir')
+        process_system('./' + output_dir + '/unprocessed_mol2/' + structure_name, save_directory='./' + output_dir)
         # break
     except AssertionError as e: 
         print("Failed to find ligand in", file)
     except Exception as e:
         print(e)
-    finally:
-        # I'm not sure what is happening, it seems like OpenBabel is killing the process if there is an issue in the mol2 files. 
-        # I'm going to try this in order to see if we can preven it from killing all of the processes 
-        return None
         
 # import threading, time, random
 # def process_train_helper(i, file):
@@ -128,11 +141,11 @@ def process_val(file):
         # break
     except AssertionError as e:
         print("Failed to find ligand in", file)
-    except Exception as e:
+    except Exception as e:  
         print(e)
 
 if __name__ == "__main__":   
-    num_cores = 1
+    num_cores = 24
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
@@ -147,9 +160,16 @@ if __name__ == "__main__":
         Parallel(n_jobs=num_cores)(delayed(process_train)(filename) for filename in enumerate(pdb_files))
             
     elif str(sys.argv[1]) == "train":
+        print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
-        # Parallel(n_jobs=1)(delayed(process_train)(i, filename) for i, filename in enumerate(tqdm(mol2_files[1800+360+380+250:]))) 
-        for i, filename in enumerate(mol2_files[1800+360+380+250:]):
-            process_train(i,filename)
+        Parallel(n_jobs=num_cores)(delayed(process_train)(i, filename, 'regular_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
+        # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
+        #     process_train(i,filename, 'regular_data_dir')
+    elif str(sys.argv[1]) == "train_hetro":
+        print("Parsing the heterogeneous train set")
+        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/hetro_data_dir/unprocessed_scPDB_mol2')))]
+        Parallel(n_jobs=num_cores)(delayed(process_train)(i, filename, 'hetro_data_dir') for i, filename in enumerate(tqdm(mol2_files[10000:]))) 
+        # for i, filename in enumerate(mol2_files[:]):
+        #     process_train(i,filename, 'hetro_data_dir')
     else:
-        print("Expected first argument to be 'test' or 'train' instead got " + str(sys.argv[1]))
+        print("Expected first argument to be 'test', 'train', or 'train_hetro' instead got " + str(sys.argv[1]))

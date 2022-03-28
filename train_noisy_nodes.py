@@ -39,7 +39,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from KLIFS_dataset import KLIFSData, KLIFSData_noisy_nodes
-from atom_wise_models import  Two_Track_GIN_GAT_fixed_bn, Two_Track_GIN_GAT_Noisy_Nodes
+from atom_wise_models import  Two_Track_GIN_GAT_fixed_bn, Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8_noisy
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
@@ -97,15 +97,14 @@ def k_fold(dataset, path, fold_number):
 
 
    
-def main(noise_variance):
+def main(node_noise_variance, edge_noise_variance):
     # Hyperparameters
     num_hops = 2
-    num_epochs = 50
+    num_epochs = 25
     batch_size = 10
     sample_size = 20
     learning_rate = 0.005
     train_test_split = .9
-    noise_variance = noise_variance
 
     # Other Parameters
     device = 'cpu'
@@ -117,7 +116,7 @@ def main(noise_variance):
     print("The model will be using {} cpus.".format(num_cpus), flush=True)
 
     # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-    model =   Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="max", GIN_aggr="add", noise_variance=noise_variance).to(device)
+    model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance).to(device)
     # model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add").to(device)
 
     optimizer = optim.Adam(model.parameters(), lr = learning_rate)
@@ -178,7 +177,7 @@ def main(noise_variance):
                 unperturbed_x = batch.x.clone().detach().to(device)
                 # batch.x += (0.02**0.5)*torch.randn_like(batch.x)
                 labels = batch.y
-                x_np = batch.x.numpy()
+                # x_np = batch.x.numpy()
 
                 optimizer.zero_grad(set_to_none=True)
                 out, out_recon = model.forward(batch.to(device))
@@ -289,12 +288,13 @@ def main(noise_variance):
         writer.close()
 
 if __name__ == "__main__":
-    noise_variance = sys.argv[1]
+    node_noise_variance, edge_noise_variance = sys.argv[1], sys.argv[2]
     try:
-        noise_variance = float(noise_variance)
+        node_noise_variance = float(node_noise_variance)
+        edge_noise_variance = float(edge_noise_variance)
     except ValueError:
-        print("Expected first argument (noise added during training) to be a float, instead got:", str(sys.argv[1]))
+        print("Expected arguments (noise added during training) to be a float, instead got:", str(sys.argv[1]), str(sys.argv[2]))
         sys.exit()
-    print("Training with added gaussian noise with variance", str(sys.argv[1]), "and mean 0.")
+    print("Training with noise with variance", str(sys.argv[1]), "and mean 0 added to nodes and noise with variance", str(sys.argv[2]), "and mean 0 added to edges.")
     
-    main(noise_variance)
+    main(node_noise_variance, edge_noise_variance) 
