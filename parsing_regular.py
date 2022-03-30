@@ -208,7 +208,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             assert not np.any(np.isnan(lumped_hydrophobe))
 
             # Add feature vector with           [residue level feats, one-hot atom name, rdf SAS, ...          ]
-            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge                            # Add corresponding features to feature array
+            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
         except Exception as e:
             print("Error while feautrizing atom for file {}.".format(path_to_files), flush=True)
             return -2

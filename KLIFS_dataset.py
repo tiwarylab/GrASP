@@ -49,7 +49,7 @@ class KLIFSData(Dataset):
         adj_matrix.eliminate_zeros()
         # Build a graph from the sparse adjacency matrix
         G = nx.convert_matrix.from_scipy_sparse_matrix(adj_matrix)
-        nx.set_edge_attributes(G, [0,0,0,0,0], "edge_type")         # Set all edge types to 'null' one-hot
+        nx.set_edge_attributes(G, [0,0,0,0,0,1,0], "bond_type")         # Set all edge types to 'null' one-hot
         nx.set_edge_attributes(G, arr['edge_attributes'].item())           # Set all edge types to value in file
     
         # Calculate degree values
@@ -60,7 +60,7 @@ class KLIFSData(Dataset):
         edge_index, _ = from_scipy_sparse_matrix(adj_matrix)
         # print("0.5")
         # edge_attr to represents the edge weights 
-        edge_attr = torch.FloatTensor([[(cutoff - G[edge[0].item()][edge[1].item()]['weight'])/4] + G[edge[0].item()][edge[1].item()]['edge_type'] for edge in edge_index.T])          
+        edge_attr = torch.FloatTensor([[(cutoff - G[edge[0].item()][edge[1].item()]['weight'])/cutoff] + G[edge[0].item()][edge[1].item()]['bond_type'] for edge in edge_index.T])          
         
         # Convert Labels from one-hot to 1D target
         y = torch.LongTensor([0 if label[0] == 1 else 1 for label in arr['class_array']] )
@@ -132,8 +132,9 @@ class KLIFSData_Hetro(Dataset):
         adj_matrix.eliminate_zeros()
         # Build a graph from the sparse adjacency matrix
         G = nx.convert_matrix.from_scipy_sparse_matrix(adj_matrix)
-        nx.set_edge_attributes(G, [0,0,0,0,0], "edge_type")         # Set all edge types to 'null' one-hot
+        nx.set_edge_attributes(G, [0,0,0,0,0,1,0], "bond_type")         # Set all edge types to 'null' one-hot
         nx.set_edge_attributes(G, arr['edge_attributes'].item())           # Set all edge types to value in file
+    
     
         # Calculate degree values
         degrees = np.array([list(dict(G.degree()).values())]).T
@@ -142,11 +143,11 @@ class KLIFSData_Hetro(Dataset):
         # edge_index = torch.LongTensor([[int(line.split()[0]), int(line.split()[1])] for line in nx.generate_edgelist(G, data=False)]).T
         edge_index, _ = from_scipy_sparse_matrix(adj_matrix)
         # edge_attr to represents the edge weights 
-        edge_attr = torch.FloatTensor([[(cutoff - G[edge[0].item()][edge[1].item()]['weight'])/cutoff] + G[edge[0].item()][edge[1].item()]['edge_type'] for edge in edge_index.T])          
+        edge_attr = torch.FloatTensor([[(cutoff - G[edge[0].item()][edge[1].item()]['weight'])/cutoff] + G[edge[0].item()][edge[1].item()]['bond_type'] for edge in edge_index.T])          
         
         # Get bond only attributes
-        bond_edge_attr  = torch.FloatTensor([[(cutoff - G[edge[0].item()][edge[1].item()]['weight'])/cutoff] + G[edge[0].item()][edge[1].item()]['edge_type']  for edge in edge_index.T if G[edge[0].item()][edge[1].item()]['edge_type'][-2] != 1])
-        bond_edge_index = torch.FloatTensor([[edge[0], edge[1]] for edge in edge_index.T if G[edge[0].item()][edge[1].item()]['edge_type'][-2] != 1])
+        bond_edge_attr  = torch.FloatTensor([[(cutoff - G[edge[0].item()][edge[1].item()]['weight'])/cutoff] + G[edge[0].item()][edge[1].item()]['bond_type']  for edge in edge_index.T if G[edge[0].item()][edge[1].item()]['bond_type'][-2] != 1])
+        bond_edge_index = torch.FloatTensor([[edge[0], edge[1]] for edge in edge_index.T if G[edge[0].item()][edge[1].item()]['bond_type'][-2] != 1])
         
         to_save = HeteroData()
         to_save['atom'].x                                 = torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1))
