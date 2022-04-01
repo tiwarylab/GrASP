@@ -1,4 +1,5 @@
 from parsing_regular import process_system
+from parsing_trimmed import process_trimmed
 import MDAnalysis as mda
 import os
 import sys
@@ -17,6 +18,7 @@ def label_protein_site(bound_structure, structure_name, out_directory):
     # print(bound_structure)
     protein = mda.Universe(bound_structure,format='PDB')
     bound_structure = protein.select_atoms("protein")
+    bound_structure.select_atoms(selection_str)
     ligand_structure = protein.select_atoms("not protein")
     
     assert len(bound_structure.atoms) > 0
@@ -41,10 +43,21 @@ def label_protein_site(bound_structure, structure_name, out_directory):
     bound_site.write(output_path + '/site.pdb')
 
     # Write bound site of reach ligand to mol2
-    for idx, segment in enumerate(bound_site.segments):
-        resid_list = segment.residues.resids
-        seg_selection_str = "".join(["resid " + str(x) + " or " for x in resid_list[:-1]] + ["resid " + str(resid_list[-1])])
-        site = bound_structure.select_atoms(seg_selection_str)
+    for idx, segment in enumerate(ligand_structure.segments):
+        site_resid_list = []
+        for atom in ligand_structure.segments[idx].atoms:
+            x,y,z = atom.position
+            site_resid_list += (list(bound_structure.select_atoms("point {} {} {} 6.5".format(x, y, z)).resids))
+            
+        site_resid_list = list(set(site_resid_list))
+            
+        site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
+
+        site = bound_structure.select_atoms(site_selection_str)
+        
+        # resid_list = segment.residues.resids
+        # seg_selection_str = "".join(["resid " + str(x) + " or " for x in resid_list[:-1]] + ["resid " + str(resid_list[-1])])
+        # site = bound_structure.select_atoms(seg_selection_str)
         site.write(output_path + '/site_for_ligand_{}.pdb'.format(idx))
     return None
 
@@ -72,11 +85,25 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
     univ = mda.Universe(output_mol2_path)
     res_names = univ.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
-    univ.residues.resnames = new_names  
+    univ.residues.resnames = new_names
     univ = univ.select_atoms(selection_str)
     mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
+
     
-    return None
+# def mol22mol2(infile, structure_name, out_directory, addH=True, out_name="protein"):
+#     output_path = out_directory + '/unprocessed_mol2/' + structure_name
+#     if not os.path.isdir(output_path): os.makedirs(output_path)
+    
+#     obConversion = openbabel.OBConversion()
+#     obConversion.SetInAndOutFormats("mol2", "mol2")
+
+#     mol = openbabel.OBMol()
+#     obConversion.ReadFile(mol, infile)
+#     mol.DeleteHydrogens()
+#     if addH:
+#         mol.CorrectForPH()
+#         mol.AddHydrogens()
+#     obConversion.WriteFile(mol, output_mol2_path)
 
 def rebond_mol2(i,infile, structure_name, outfile, addH=False):
     obConversion = openbabel.OBConversion()
@@ -94,7 +121,7 @@ def rebond_mol2(i,infile, structure_name, outfile, addH=False):
     return None
  
 
-def process_train(i, file, output_dir):
+def process_train_openbabel(i, file, output_dir):
     print("Processing", file, flush=True)
     try:
         prepend = os.getcwd()
@@ -106,7 +133,11 @@ def process_train(i, file, output_dir):
         #     #     # Do not add hydrogens to sites, they will not be used for labeling and moreover will  mess up comparison between 'ground truth' and predictions
         #     #     #pdb2mol2(path_to_pdb+file_name, structure_name,prepend+'/data_dir',addH=False) 
         #     # else:
-        rebond_mol2(i,path_to_pdb+'protein.mol2',structure_name,prepend+'/' + output_dir, addH=True)
+        
+        
+        # rebond_mol2(i,path_to_pdb+'protein.mol2',structure_name,prepend+'/' + output_dir, addH=True)
+        
+        mol22mol2(path_to_pdb+"protein.mol2", structure_name, prepend+output_dir,addH=True, out_name='protein')
         if not os.path.isdir(prepend+'/' + output_dir + '/unprocessed_mol2/'+structure_name): 
             os.makedirs(prepend+'/' + output_dir + '/unprocessed_mol2/'+structure_name)
         shutil.copyfile(path_to_pdb+'site.mol2', prepend+'/' + output_dir + '/unprocessed_mol2/'+structure_name+'/site.mol2')
@@ -117,6 +148,25 @@ def process_train(i, file, output_dir):
         print("Failed to find ligand in", file)
     except Exception as e:
         print(e)
+        
+def process_train_classic(i, structure_name, output_dir):
+    # print("Processing", structure_name, flush=True)
+    try:
+        process_system('./' + output_dir + '/unprocessed_scPDB_mol2/' + structure_name, save_directory='./' + output_dir)
+    except AssertionError as e: 
+        print("Failed to find ligand in", structure_name)
+    except Exception as e:
+        print(e)
+        
+def process_train_trimmed(i, structure_name, output_dir):
+    # print("Processing", structure_name, flush=True)
+    try:
+        process_trimmed('./' + output_dir + '/unprocessed_scPDB_mol2/' + structure_name, save_directory='./' + output_dir)
+    except AssertionError as e: 
+        print("Failed to find ligand in", structure_name)
+    except Exception as e:
+        # print(e)
+        raise(e)
         
 # import threading, time, random
 # def process_train_helper(i, file):
@@ -149,26 +199,32 @@ if __name__ == "__main__":
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
-
-    # set_loky_pickler("dill")
-    ######
-    ######  TODO: RESET THE CORES GENIUS
-    ######
  
-    if str(sys.argv[1]) == "test":
+    if str(sys.argv[1]) == "val":
         pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/benchmark_data_dir/unprocessed_pdb')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train)(filename) for filename in enumerate(pdb_files))
-            
-    elif str(sys.argv[1]) == "train":
+        Parallel(n_jobs=num_cores)(delayed(process_val)(filename) for _, filename in enumerate(tqdm(pdb_files)))
+    elif str(sys.argv[1]) == "train_openbabel":
         print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train)(i, filename, 'regular_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
+        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'regular_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
+        # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
+        #     process_train(i,filename, 'regular_data_dir')
+    elif str(sys.argv[1]) == "train_classic":
+        print("Parsing the standard train set")
+        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
+        Parallel(n_jobs=num_cores)(delayed(process_train_classic)(i, filename, 'data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
+        # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
+        #     process_train(i,filename, 'regular_data_dir')
+    elif str(sys.argv[1]) == "train_trimmed":
+        print("Parsing the standard train set")
+        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
+        Parallel(n_jobs=num_cores)(delayed(process_train_trimmed)(i, filename, 'regular_data_dir') for i, filename in enumerate(tqdm(mol2_files[4000:])))               # POINTS TO SAME DIR AS OPEN BABEL TO SAVE SPACE BE CAREFUL
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
     elif str(sys.argv[1]) == "train_hetro":
         print("Parsing the heterogeneous train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/hetro_data_dir/unprocessed_scPDB_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train)(i, filename, 'hetro_data_dir') for i, filename in enumerate(tqdm(mol2_files[10000:]))) 
+        Parallel(n_jobs=num_cores)(delayed(process_train_classic)(i, filename, 'hetro_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
         # for i, filename in enumerate(mol2_files[:]):
         #     process_train(i,filename, 'hetro_data_dir')
     else:
