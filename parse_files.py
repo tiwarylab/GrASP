@@ -47,6 +47,7 @@ def label_protein_site(bound_structure, structure_name, out_directory):
 
     # Write bound site of reach ligand to mol2
     for idx, segment in enumerate(ligand_structure.segments):
+        segment.atoms.write(output_path + '/ligand_{}.pdb'.format(idx))
         site_resid_list = []
         for atom in ligand_structure.segments[idx].atoms:
             x,y,z = atom.position
@@ -97,9 +98,9 @@ def label_sites_given_ligands(path_to_mol2):
     site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
     protein.select_atoms(site_selection_str).atoms.write(os.path.join(path_to_mol2,"site.mol2"))
 
-def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein'):
+def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
     # print("Starting")
-    output_path = out_directory + structure_name
+    output_path = out_directory + '/unprocessed_mol2/' + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
     
     obConversion = openbabel.OBConversion()
@@ -117,14 +118,14 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
 
     obConversion.WriteFile(mol, output_mol2_path)
     
-    # Use MDA to remove clean file
-    univ = mda.Universe(output_mol2_path)
-    res_names = univ.residues.resnames
-    new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
-    univ.residues.resnames = new_names
-    univ = univ.select_atoms(selection_str)
-    # mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
-    univ.atoms.write(output_mol2_path)
+    if cleanup:
+        # Use MDA to remove clean file
+        univ = mda.Universe(output_mol2_path)
+        res_names = univ.residues.resnames
+        new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
+        univ.residues.resnames = new_names
+        univ = univ.select_atoms(selection_str)
+        mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
 
     
 # def mol22mol2(infile, structure_name, out_directory, addH=True, out_name="protein"):
@@ -295,7 +296,7 @@ def process_val(file, data_dir="benchmark_data_dir"):
         for file_name in os.listdir(path_to_pdb):
             if 'protein' not in file_name:
                 # Do not add hydrogens to sites, they will not be used for labeling and moreover will  mess up comparison between 'ground truth' and predictions
-                pdb2mol2(path_to_pdb+file_name, structure_name,prepend+'/'+data_dir+'',addH=False, out_name=file_name.split('/')[-1][:-4]) 
+                pdb2mol2(path_to_pdb+file_name, structure_name,prepend+'/'+data_dir+'',addH=False, out_name=file_name.split('/')[-1][:-4], cleanup=False) 
             else:
                 pdb2mol2(path_to_pdb+file_name, structure_name,prepend+'/'+data_dir+'', out_name='protein')
         # print("processing system")
