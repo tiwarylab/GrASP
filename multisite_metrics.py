@@ -177,16 +177,16 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
 
     Returns
     -------
-    DCC_lig: list
+    DCC_lig: numpy array
         List of distances from predicted site center to ligand center of mass. 
     
-    DCC_site: list
+    DCC_site: numpy array
         List of distances from predicted site center to true center. 
         
-    DCA: list
+    DCA: numpy array
         List of closest distances from predicted site center to any ligand heavy atom. 
 
-    volumentric_overlaps: list
+    volumentric_overlaps: numpy array
         Jaccard similarity between predicted site convex hull and true site convex hull. 
 
     """
@@ -222,29 +222,30 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
                     predicted_hull_list.append(ConvexHull(predicted_points))
                     predicted_center_list.append(hull_center(predicted_hull))
     if len(predicted_center_list) > 0:            
-        center_dist_matrix = np.zeros([len(true_center_list), len(predicted_center_list)]) # changed from [_, len(ligand_center_list)]
-        for index, x in np.ndenumerate(center_dist_matrix):
+        DCC_lig_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
+        DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
+        DCA_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
+        for index, x in np.ndenumerate(DCC_lig_matrix):
             true_ind, pred_ind = index
             ligand_center = ligand_center_list[true_ind]
+            lig_coords = lig_coord_list[true_ind]
+            site_center = true_center_list[true_ind]
             predicted_center = predicted_center_list[pred_ind]
-            center_dist_matrix[index] = np.sqrt(np.sum((predicted_center - ligand_center)**2))
+
+            DCC_lig_matrix[index] = np.sqrt(np.sum((predicted_center - ligand_center)**2))
+            DCC_site_matrix[index] = np.sqrt(np.sum((predicted_center - site_center)**2))
+            DCA_matrix[index] = DCA_dist(predicted_center, lig_coords)
                   
-        print(center_dist_matrix)
-        closest_predictions = np.argmin(center_dist_matrix, axis=1)
+        print(DCC_lig_matrix)
+        closest_predictions = np.argmin(DCC_site_matrix, axis=1)
         site_pairs = np.column_stack([np.arange(len(closest_predictions)), closest_predictions])
+
+        DCC_lig = np.min(DCC_lig_matrix, axis=1)
+        DCC_site = np.min(DCC_site_matrix, axis=1)
+        DCA = np.min(DCA_matrix, axis=1)
                                     
         for pair in site_pairs:
             true_ind, pred_ind = pair
-            # DCC_lig.append(center_dist_matrix[pair]) change to:
-            DCC_lig.append(center_dist_matrix[true_ind][pred_ind])
-            
-            true_center = true_center_list[true_ind]
-            predicted_center = predicted_center_list[pred_ind]
-            DCC_site.append(np.sqrt(np.sum((predicted_center - true_center)**2)))
-                                    
-            lig_coords = lig_coord_list[true_ind]
-            DCA.append(DCA_dist(predicted_center, lig_coords))
-
             true_hull = true_hull_list[true_ind]
             predicted_hull = predicted_hull_list[pred_ind]                    
             if predicted_hull != None: 
@@ -252,8 +253,19 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
             elif true_hull == None:
                 raise ValueError ("There were < 3 atoms in your true site label. The indicates that the associated ligand is not burried.")
             else:
-                volumetric_overlaps.append([])   
-    return DCC_lig, DCC_site, DCA, volumetric_overlaps
+                volumetric_overlaps.append(np.nan)   
+        volumetric_overlaps = np.array(volumentric_overlaps)
+
+        return DCC_lig, DCC_site, DCA, volumetric_overlaps
+
+    else:
+        nan_arr =  np.empty(len(true_center_list))
+        nan_arr[:] = np.nan
+
+        return nan_arr, nan_arr, nan_arr, nan_arr
+
+
+    
 
 def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_data_dir/mol2/', path_to_labels = '/test_metrics/'):
     DCC_lig_list = []
