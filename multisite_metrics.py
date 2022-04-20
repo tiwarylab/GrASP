@@ -326,16 +326,18 @@ threshold_lst = [0.4, 0.45, 0.5]
 compute_optimal = True
 top_n_plus=2
 
+set_to_use = "chen" #"chen"|"val"
+
 #######################################################################################
 if compute_optimal:
-    all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
-    all_labels = np.load(prepend + "/test_metrics/all_labels/" + model_name + ".npz")['arr_0']
-    # all_probs  = np.load(prepend + "/train_metrics/all_probs/" + model_name + ".npz")['arr_0']
-    # all_labels = np.load(prepend + "/train_metrics/all_labels/" + model_name + ".npz")['arr_0']
-    print("Calculating optimal cutoffs.")
+    if set_to_use == "chen":
+        all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
+        all_labels = np.load(prepend + "/test_metrics/all_labels/" + model_name + ".npz")['arr_0']
+    elif set_to_use == "val":
+        all_probs  = np.load(prepend + "/train_metrics/all_probs/" + model_name + ".npz")['arr_0']
+        all_labels = np.load(prepend + "/train_metrics/all_labels/" + model_name + ".npz")['arr_0']
     start = time.time()
-    # all_probs  =  all_probs.numpy()
-    # all_labels = all_labels.numpy()
+
     binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
     # Compute roc, auc and optimal threshold
     all_probs = np.array(all_probs, dtype=object)
@@ -369,10 +371,12 @@ if compute_optimal:
     tpr["macro"] = mean_tpr
     roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
-    if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
-        os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
-    # if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
-    #      os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
+    if set_to_use =="chen":
+        if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+            os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
+    elif set_to_use == "val":
+        if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
+            os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
 
     # Find optimal threshold
     gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
@@ -385,14 +389,16 @@ if compute_optimal:
     print("Negative Class AUC:", roc_auc[0])
     print("Positive Class AUC:", roc_auc[1])
 
+if set_to_use == "chen":
     np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
     np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
     np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
     np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
-    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
-    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
-    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+elif set_to_use == "val":  
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
+    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
     print("Done. {}".format(time.time()- start))
     threshold_lst.insert(0, optimal_threshold)
     
@@ -412,8 +418,9 @@ for threshold in threshold_lst:
     cleaned_DCA =  [entry[0] if len(entry) > 0 else np.nan for entry in DCA]
     cleaned_volumentric_overlaps =  [entry[0] if len(entry) > 0 else np.nan for entry in volumentric_overlaps]
     print("Done. {}".format(time.time()- start))
-
-    # np.savez(prepend + '/train_epoch_46_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumentric_overlaps = cleaned_volumentric_overlaps)
+if set_to_use == "chen":
+    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumentric_overlaps = cleaned_volumentric_overlaps)
+elif set_to_use == "val":
     np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumentric_overlaps = cleaned_volumentric_overlaps)
 
     print("-----------------------------------------------------------------------------------", flush=True)
