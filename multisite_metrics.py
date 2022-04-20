@@ -418,9 +418,9 @@ for threshold in threshold_lst:
     cleaned_DCA =  [entry[0] if len(entry) > 0 else np.nan for entry in DCA]
     cleaned_volumentric_overlaps =  [entry[0] if len(entry) > 0 else np.nan for entry in volumentric_overlaps]
     print("Done. {}".format(time.time()- start))
-if set_to_use == "chen":
+if set_to_use == "val":
     np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumentric_overlaps = cleaned_volumentric_overlaps)
-elif set_to_use == "val":
+elif set_to_use == "chen":
     np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumentric_overlaps = cleaned_volumentric_overlaps)
 
     print("-----------------------------------------------------------------------------------", flush=True)
