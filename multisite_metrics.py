@@ -225,9 +225,6 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         center_dist_matrix = np.zeros([len(true_center_list), len(predicted_center_list)]) # changed from [_, len(ligand_center_list)]
         for index, x in np.ndenumerate(center_dist_matrix):
             true_ind, pred_ind = index
-            print(true_ind, pred_ind)
-            print("Predicted Center List:\n", predicted_center_list)
-            print("Ligand Center List:\n",ligand_center_list)
             ligand_center = ligand_center_list[true_ind]
             predicted_center = predicted_center_list[pred_ind]
             center_dist_matrix[index] = np.sqrt(np.sum((predicted_center - ligand_center)**2))
@@ -235,11 +232,11 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         print(center_dist_matrix)
         closest_predictions = np.argmin(center_dist_matrix, axis=1)
         site_pairs = np.column_stack([np.arange(len(closest_predictions)), closest_predictions])
-        # print("Site site_pairs)
                                     
         for pair in site_pairs:
             true_ind, pred_ind = pair
-            DCC_lig.append(center_dist_matrix[pair])
+            # DCC_lig.append(center_dist_matrix[pair]) change to:
+            DCC_lig.append(center_dist_matrix[true_ind][pred_ind])
             
             true_center = true_center_list[true_ind]
             predicted_center = predicted_center_list[pred_ind]
@@ -249,9 +246,13 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
             DCA.append(DCA_dist(predicted_center, lig_coords))
 
             true_hull = true_hull_list[true_ind]
-            predicted_hull = predicted_hull_list[pred_ind]                      
-            volumetric_overlaps.append(volumetric_overlap(predicted_hull, true_hull))     
-    # print( DCC_lig, DCC_site, DCA, volumetric_overlaps)
+            predicted_hull = predicted_hull_list[pred_ind]                    
+            if predicted_hull != None: 
+                volumetric_overlaps.append(volumetric_overlap(predicted_hull, true_hull))
+            elif true_hull == None:
+                raise ValueError ("There were < 3 atoms in your true site label. The indicates that the associated ligand is not burried.")
+            else:
+                volumetric_overlaps.append([])   
     return DCC_lig, DCC_site, DCA, volumetric_overlaps
 
 def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_data_dir/mol2/', path_to_labels = '/test_metrics/'):
@@ -297,7 +298,8 @@ def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_d
         except Exception as e:
             print(assembly_name, flush=True)
             raise e
-    return DCC_lig, DCC_site, DCA, volumentric_overlaps, no_prediction_count
+        
+    return DCC_lig_list, DCC_site_list, DCA_list, volumentric_overlaps_list, no_prediction_count
 
 #######################################################################################
 # model_name = "trained_model_1640072931.267488_epoch_49"
