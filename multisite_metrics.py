@@ -423,22 +423,19 @@ for threshold in threshold_lst:
     for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
         print(x)
 
-    cleaned_DCC_lig =  [entry[0] if len(entry) > 0 else np.nan for entry in DCC_lig]
-    cleaned_DCC_site =  [entry[0] if len(entry) > 0 else np.nan for entry in DCC_site]
-    cleaned_DCA =  [entry[0] if len(entry) > 0 else np.nan for entry in DCA]
-    cleaned_volumetric_overlaps =  [entry[0] if len(entry) > 0 else np.nan for entry in volumetric_overlaps]
     print("Done. {}".format(time.time()- start))
 if set_to_use == "val":
-    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumetric_overlaps = cleaned_volumetric_overlaps)
+    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
 elif set_to_use == "chen":
-    np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumetric_overlaps = cleaned_volumetric_overlaps)
+    np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
 
     print("-----------------------------------------------------------------------------------", flush=True)
     print("Cutoff (Prediction Threshold):", threshold)
     print("n (for top n):", top_n_plus)
     print("-----------------------------------------------------------------------------------", flush=True)
     print("Number of systems with no predictions:", no_prediction_count, flush=True)
-    print("Average Distance From Center:", np.nanmean(cleaned_DCC_lig), flush=True)
-    print("Average Distance From Ligand:", np.nanmean(cleaned_DCC_site), flush=True)
-    print("Average Discretized Volume Overlap:", np.nanmean(cleaned_DCA), flush=True)
+    #print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
+    #print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
+    #print("Average DCA:", np.nanmean(DCA), flush=True)
+    #print("Average VO:", np.nanmean(volumetric_overlaps), flush=True)
 #######################################################################################
