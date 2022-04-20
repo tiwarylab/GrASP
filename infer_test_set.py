@@ -46,8 +46,8 @@ model_name= "trained_model_1650260810.482072/epoch_46"   # After site relabeling
 model = Hybrid_1g12(input_dim = 88)
 
 model_path = prepend + model_name
-set_to_use = 'val'      # Currently using the OB and relabeling dataset
-# set_to_use = 'test'
+# set_to_use = 'val'      # Currently using the OB and relabeling dataset
+set_to_use = 'test'
 
 # model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
 # model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
