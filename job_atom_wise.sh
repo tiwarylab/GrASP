@@ -3,9 +3,9 @@
 #SBATCH -p gpuk80
 #SBATCH --gres gpu:4
 #SBATCH --ntasks-per-node=8
-#SBATCH --time 5:00:00
+#SBATCH --time 48:00:00
 #SBATCH --nodes=1
-#SBATCH --job-name="scPDB GPU"
+#SBATCH --job-name="scPDB GPU Null Self Edges, Open Babel"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 

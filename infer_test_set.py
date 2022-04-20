@@ -16,8 +16,8 @@ from sklearn.metrics import roc_curve, auc
 from torch.utils.tensorboard import SummaryWriter
 import torch
 
-from KLIFS_dataset import KLIFSData
-from atom_wise_models import Two_Track_GIN_GAT_fixed_bn,Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8
+from KLIFS_dataset import KLIFSData 
+from atom_wise_models import Two_Track_GIN_GAT_fixed_bn,Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8, Hybrid_1g12, Hybrid_1g12_self_edges
 
 prepend = str(os.getcwd()) + "/trained_models/"
 
@@ -31,13 +31,25 @@ prepend = str(os.getcwd()) + "/trained_models/"
 # model_name = "trained_model_1646775694.0918303/epoch_49" # Standard Model
 # model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
 # model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
-model_name = "/trained_model_hybrid_1g8/epoch_18"
+# model_name = "trained_model_1648747746.262174/epoch_26" # Mean Self Edges
+
+# model_name = "trained_model_1g12_null_self_edges/epoch_49" # Null Self Edge. Use with Hybrid_1g12_self_edges
+# model = Hybrid_1g12_self_edges(input_dim = 88)
+
+# model_name = "trained_model_1g12_mean_self_edges/epoch_49" # Mean Self Edges. Use with Hybrid_1g12
+# model = Hybrid_1g12(input_dim = 88)
+
+# model_name = "trained_model_1g12_mean_self_edges_ligand_removed_SASA/epoch_49"
+# model = Hybrid_1g12(input_dim = 88)
+
+model_name= "trained_model_1650260810.482072/epoch_46"   # After site relabeling and OB. Old model's hyperparams
+model = Hybrid_1g12(input_dim = 88)
+
 model_path = prepend + model_name
-set_to_use = 'val'
+set_to_use = 'val'      # Currently using the OB and relabeling dataset
 # set_to_use = 'test'
 
 # model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
-model = Hybrid_1g8(input_dim=88)
 # model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
 
 ###################################################################################
@@ -84,7 +96,7 @@ prepend = str(os.getcwd())
 #########################
 if set_to_use == 'val':
     print("Initializing Validation Set")
-    data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
+    data_set = KLIFSData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
     # data_set.process()
     train_mask, val_mask = k_fold(data_set, prepend, 0) # <--- was the first fold, should have been 0
     val_set     = data_set[val_mask]

@@ -9,6 +9,7 @@ from networkx.generators import directed
 import numpy as np
 import scipy
 import multiprocessing
+from glob import glob
 import sys
 from joblib import Parallel, delayed
 
@@ -39,7 +40,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from KLIFS_dataset import KLIFSData#, KLIFSData_noisy_nodes
-from atom_wise_models import  Two_Track_GIN_GAT_fixed_bn, Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8_noisy, Hybrid_GRU, Hybrid_1g12
+from atom_wise_models import  Two_Track_GIN_GAT_fixed_bn, Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8_noisy, Hybrid_GRU, Hybrid_1g12, Hybrid_1g12_self_edges
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
@@ -105,6 +106,9 @@ def main(node_noise_variance):
     sample_size = 20
     learning_rate = 0.005
     train_test_split = .9
+    loss_weight = [1.0,1.0]#[0.8,1.2]
+    label_smoothing = 0#0.2
+    loss_fn_weighting = [.9,.1]
 
     # Other Parameters
     device = 'cpu'
@@ -117,21 +121,21 @@ def main(node_noise_variance):
 
     # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
     # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance).to(device)
-    model = Hybrid_1g12(input_dim = 88, noise_variance = node_noise_variance).to(device)
+    model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance).to(device)
     # model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add").to(device)
 
     optimizer = optim.Adam(model.parameters(), lr = learning_rate)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
-    loss_weight = [0.8,1.2]
+    
     print("Loss Weighting:", str(loss_weight))
-    loss_fn = LabelSmoothingLoss(2, smoothing=0.2, weight=torch.FloatTensor(loss_weight).to(device))
-    loss_fn_weighting = [.9,.1]
+    loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(loss_weight).to(device))
+    
     print("Weighted Cross Entropy Loss Function Weight:", loss_fn_weighting[0])
     print("Reconstruction (MSE) Loss Function Weight:  ", loss_fn_weighting[1])
     loss_fn_weighting = torch.tensor(loss_fn_weighting, device=device)
 
     print("Initializing Train Set", flush=True)
-    data_set = KLIFSData(prepend + '/data_dir', num_cpus, cutoff=5)
+    data_set = KLIFSData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
     # data_set.process()
 
     # Set to one temporarily to avoid doing full cv

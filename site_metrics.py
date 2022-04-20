@@ -12,8 +12,6 @@ from sklearn.metrics import matthews_corrcoef as mcc
 from sklearn.metrics import roc_curve, auc 
 import time
 
-import torch
-
 def sort_clusters(cluster_ids, probs, labels):
     c_probs = []
     unique_ids = np.unique(cluster_ids)
@@ -237,9 +235,16 @@ def compute_metrics_for_all(threshold = 0.5, path_to_mol2='/test_data_dir/mol2/'
 # model_name = "trained_model_1646775694.0918303/epoch_49"
 # model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
 # model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
-model_name = "/trained_model_hybrid_1g8/epoch_18"
+# model_name = "/trained_model_hybrid_1g8/epoch_18"
+# model_name = "trained_model_1648747746.262174/epoch_26" # 1g12 Mean Self Edges Epoch 26, scPDB Dataset
+# model_name = "trained_model_1g12_null_self_edges/epoch_49"
+# model_name = "trained_model_1g12_mean_self_edges/epoch_49"
+model_name = "trained_model_1650260810.482072/epoch_23" # Old params, new labeling, ob
+
+data_dir = 'scPDB_data_dir'
+
 prepend = str(os.getcwd())
-threshold_lst = [0.5, 0.45, 0.4]
+threshold_lst = [0.4, 0.45, 0.5]
 compute_optimal = True
 
 #######################################################################################
@@ -310,7 +315,7 @@ if compute_optimal:
     np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
     np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
     print("Done. {}".format(time.time()- start))
-    threshold_lst.append(optimal_threshold)
+    threshold_lst.insert(0, optimal_threshold)
     
 #######################################################################################
 
@@ -318,7 +323,7 @@ if compute_optimal:
 for threshold in threshold_lst:
     print("Calculating overlap and center distance metrics for "+str(threshold)+" threshold.", flush=True)
     start = time.time()
-    cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count = compute_metrics_for_all(threshold=threshold,path_to_mol2='/data_dir/mol2_scPDB/',path_to_labels='/train_metrics/')
+    cent_dist_list, lig_dist_list, vol_overlap_list, no_prediction_count = compute_metrics_for_all(threshold=threshold,path_to_mol2='/' + data_dir + '/mol2/',path_to_labels='/train_metrics/')
 
     cleaned_vol_overlap_list =  [entry[0] if len(entry) > 0 else np.nan for entry in vol_overlap_list]
     cleaned_cent_dist_list =  [entry[0] if len(entry) > 0 else np.nan for entry in cent_dist_list]
