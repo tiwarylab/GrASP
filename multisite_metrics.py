@@ -424,18 +424,18 @@ for threshold in threshold_lst:
         print(x)
 
     print("Done. {}".format(time.time()- start))
-if set_to_use == "val":
-    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
-elif set_to_use == "chen":
-    np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
+    if set_to_use == "val":
+        np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
+    elif set_to_use == "chen":
+        np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
 
-    print("-----------------------------------------------------------------------------------", flush=True)
-    print("Cutoff (Prediction Threshold):", threshold)
-    print("n (for top n):", top_n_plus)
-    print("-----------------------------------------------------------------------------------", flush=True)
-    print("Number of systems with no predictions:", no_prediction_count, flush=True)
-    #print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
-    #print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
-    #print("Average DCA:", np.nanmean(DCA), flush=True)
-    #print("Average VO:", np.nanmean(volumetric_overlaps), flush=True)
-#######################################################################################
+        print("-----------------------------------------------------------------------------------", flush=True)
+        print("Cutoff (Prediction Threshold):", threshold)
+        print("n (for top n):", top_n_plus)
+        print("-----------------------------------------------------------------------------------", flush=True)
+        print("Number of systems with no predictions:", no_prediction_count, flush=True)
+        #print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
+        #print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
+        #print("Average DCA:", np.nanmean(DCA), flush=True)
+        #print("Average VO:", np.nanmean(volumetric_overlaps), flush=True)
+    #######################################################################################
