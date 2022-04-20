@@ -186,7 +186,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
     DCA: numpy array
         List of closest distances from predicted site center to any ligand heavy atom. 
 
-    volumentric_overlaps: numpy array
+    volumetric_overlaps: numpy array
         Jaccard similarity between predicted site convex hull and true site convex hull. 
 
     """
@@ -254,7 +254,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
                 raise ValueError ("There were < 3 atoms in your true site label. The indicates that the associated ligand is not burried.")
             else:
                 volumetric_overlaps.append(np.nan)   
-        volumetric_overlaps = np.array(volumentric_overlaps)
+        volumetric_overlaps = np.array(volumetric_overlaps)
 
         return DCC_lig, DCC_site, DCA, volumetric_overlaps
 
@@ -265,13 +265,11 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         return nan_arr, nan_arr, nan_arr, nan_arr
 
 
-    
-
 def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_data_dir/mol2/', path_to_labels = '/test_metrics/'):
     DCC_lig_list = []
     DCC_site_list = []
     DCA_list = []
-    volumentric_overlaps_list = []
+    volumetric_overlaps_list = []
     
     no_prediction_count = 0
 
@@ -298,20 +296,20 @@ def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_d
                 elif 'site_for_ligand' in file_path.split('/')[-1]:
                     site = mda.Universe(file_path).select_atoms("not type H")
                     site_coords_list.append(site.atoms.positions)
-            DCC_lig, DCC_site, DCA, volumentric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list, probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, quantile=.3, cluster_all=False)
-            if DCC_lig == [] or DCC_site == [] or DCA == [] or volumentric_overlaps == []: 
+            DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list, probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, quantile=.3, cluster_all=False)
+            if np.all(np.isnan(DCC_lig)) or np.all(np.isnan(DCC_site)) or np.all(np.isnan(DCA)) or np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             DCC_lig_list.append(DCC_lig)
             DCC_site_list.append(DCC_site)
             DCA_list.append(DCA)
-            volumentric_overlaps_list.append(volumentric_overlaps)
+            volumetric_overlaps_list.append(volumetric_overlaps)
             
 
         except Exception as e:
             print(assembly_name, flush=True)
             raise e
         
-    return DCC_lig_list, DCC_site_list, DCA_list, volumentric_overlaps_list, no_prediction_count
+    return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count
 
 #######################################################################################
 # model_name = "trained_model_1640072931.267488_epoch_49"
@@ -329,11 +327,11 @@ def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_d
 # model_name = "trained_model_1648747746.262174/epoch_26" # 1g12 Mean Self Edges Epoch 26, scPDB Dataset
 # model_name = "trained_model_1g12_null_self_edges/epoch_49"
 # model_name = "trained_model_1g12_mean_self_edges/epoch_49"
-model_name = "trained_model_1650260810.482072/epoch_46" # Old params, new labeling, ob
+model_name = "epoch_46" # Old params, new labeling, ob
 
 data_dir = 'benchmark_data_dir'
 
-prepend = str(os.getcwd())
+prepend = str(os.getcwd()) + "/chen_benchmark_site_metrics/"
 threshold_lst = [0.4, 0.45, 0.5]
 compute_optimal = True
 top_n_plus=2
@@ -420,20 +418,20 @@ elif set_to_use == "val":
 for threshold in threshold_lst:
     print("Calculating overlap and center distance metrics for "+str(threshold)+" threshold.", flush=True)
     start = time.time()
-    # DCC_lig, DCC_site, DCA, volumentric_overlaps, no_prediction_count = compute_metrics_for_all(top_n_plus=top_n_plus, threshold=threshold,path_to_mol2='/' + data_dir + '/mol2/',path_to_labels='/train_metrics/')
-    DCC_lig, DCC_site, DCA, volumentric_overlaps, no_prediction_count = compute_metrics_for_all(top_n_plus=top_n_plus, threshold=threshold,path_to_mol2='/' + data_dir + '/mol2/',path_to_labels='/test_metrics/')
-    for x in [DCC_lig, DCC_site, DCA, volumentric_overlaps, no_prediction_count]:
+    # DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count = compute_metrics_for_all(top_n_plus=top_n_plus, threshold=threshold,path_to_mol2='/' + data_dir + '/mol2/',path_to_labels='/train_metrics/')
+    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count = compute_metrics_for_all(top_n_plus=top_n_plus, threshold=threshold,path_to_mol2='/' + data_dir + '/mol2/',path_to_labels='/test_metrics/')
+    for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
         print(x)
 
     cleaned_DCC_lig =  [entry[0] if len(entry) > 0 else np.nan for entry in DCC_lig]
     cleaned_DCC_site =  [entry[0] if len(entry) > 0 else np.nan for entry in DCC_site]
     cleaned_DCA =  [entry[0] if len(entry) > 0 else np.nan for entry in DCA]
-    cleaned_volumentric_overlaps =  [entry[0] if len(entry) > 0 else np.nan for entry in volumentric_overlaps]
+    cleaned_volumetric_overlaps =  [entry[0] if len(entry) > 0 else np.nan for entry in volumetric_overlaps]
     print("Done. {}".format(time.time()- start))
 if set_to_use == "val":
-    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumentric_overlaps = cleaned_volumentric_overlaps)
+    np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumetric_overlaps = cleaned_volumetric_overlaps)
 elif set_to_use == "chen":
-    np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumentric_overlaps = cleaned_volumentric_overlaps)
+    np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), cleaned_DCC_lig = cleaned_DCC_lig, cleaned_DCC_site = cleaned_DCC_site, cleaned_DCA = cleaned_DCA, cleaned_volumetric_overlaps = cleaned_volumetric_overlaps)
 
     print("-----------------------------------------------------------------------------------", flush=True)
     print("Cutoff (Prediction Threshold):", threshold)
