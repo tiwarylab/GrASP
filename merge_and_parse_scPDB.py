@@ -88,7 +88,13 @@ def generate_structures(i, pdbID, directory, save_directory):
     similar_structure_paths =  sorted(list(glob.glob(os.path.join(directory, pdbID + '*')) ))
     similar_structures = {x:remove_salts(mda.Universe(x+'/protein.mol2', format='mol2')) for x in similar_structure_paths}
     try:
-        similarity_dict = {(x,y):RMSD(similar_structures[x],similar_structures[y],select="name CA").run() if (len(similar_structures[x].select_atoms("name CA")) == len(similar_structures[y].select_atoms("name CA"))) else 999 for (x,y) in combinations(similar_structure_paths,2)}
+        similarity_dict = {}
+        for (x,y) in combinations(similar_structure_paths,2):
+            R = RMSD(similar_structures[x],similar_structures[y],select="name CA") if (len(similar_structures[x].select_atoms("name CA")) == len(similar_structures[y].select_atoms("name CA"))) else 999
+            if R != 999: R.run()
+            similarity_dict[(x,y)] = R
+            print(similarity_dict[(x,y)])
+            print(similarity_dict[(x,y)].rmsd)
     except AttributeError as e: 
         raise  AttributeError(str(i) + str(pdbID) + str(similar_structures))
         print(i)
@@ -105,8 +111,10 @@ def generate_structures(i, pdbID, directory, save_directory):
     G = nx.Graph()
     G.add_nodes_from(similar_structure_paths)
     try:
+        print([dir(v) for k, v in similarity_dict.items() if type(v)!=int])
         G.add_edges_from([k for k, v in similarity_dict.items() if type(v)!=int and v.results['rmsd'][0,2] < RMSD_CUTOFF])
     except Exception as e:
+        raise e
         raise TypeError (str(i) + str(pdbID) + str(similarity_dict.values()))
     components = nx.find_cliques(G) # returns a list of sets in which all paths to protein structures have 0 RMSD on the CA atoms. Files with no partner are returned as a set with one element 
     
@@ -118,7 +126,8 @@ def generate_structures(i, pdbID, directory, save_directory):
     #del all_ligand_structures, all_ligand_paths
     
     for structure_idx, identical_structure_paths in enumerate(components):
-        ligand_paths = [os.path.join(x,'ligand.mol2') for x in identical_structure_paths]
+        # Here, we actually take all ligands from similar structures, not just identical ones. This allows us to label as much as possible.
+        ligand_paths = [os.path.join(x,'ligand.mol2') for x in similar_structure_paths]
         protein_paths = [os.path.join(x,'protein.mol2') for x in identical_structure_paths]
         
         protein_structures       = [mda.Universe(x, format='mol2') for x in protein_paths]
@@ -237,10 +246,15 @@ def generate_structures(i, pdbID, directory, save_directory):
             for ligand in ligand_structures:
                 this_ligands_indices_ligand_universe = []
                 this_ligands_indices_complete_universe = []
+                ligand_not_added = False
                 for atom in ligand.atoms:
                     x, y, z = atom.position
                     # This is a prime location that two atoms in the same place could really mess things up
                     ligand_atom_sel = ligand_universe.select_atoms("point {} {} {} 0.1".format(x, y, z))
+                    print(ligand_atom_sel.atoms.positions, flush=True)
+                    if len(ligand_atom_sel) == 0: # This means the ligand wasn't added to the universe (probably overlapped)
+                        ligand_not_added = True
+                        break
                     assert(len(ligand_atom_sel) == 1), "Two ligand atoms were found in nearly the same position!"
                     known_ligand_indices_ligand_universe.append(ligand_atom_sel[0].index) 
                     this_ligands_indices_ligand_universe.append(ligand_atom_sel[0].index)
@@ -248,6 +262,7 @@ def generate_structures(i, pdbID, directory, save_directory):
                     known_index = complete_universe.select_atoms("point {} {} {} 0.1".format(x, y, z))[0].index
                     known_ligand_indices_complete_universe.append(known_index)
                     this_ligands_indices_complete_universe.append(known_index)
+                    if ligand_not_added: continue
                 SASA_ratio = np.mean(complete_SASA[this_ligands_indices_complete_universe])/np.mean(ligand_SASA[this_ligands_indices_ligand_universe])
                 known_ligand_SASA_ratios.append(SASA_ratio)
                 ligand.atoms.write(os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
@@ -255,8 +270,7 @@ def generate_structures(i, pdbID, directory, save_directory):
                 ligand_index += 1
             
             
-            # Find all ligand atoms that are not already labeled and have a sasa ratio above our cutoff
-            delete_list = []    
+            # Find all ligand atoms that are not already labeled and have a sasa ratio above our cutoff   
             for fragment in complete_universe.atoms.fragments:
                 sel = fragment.select_atoms("not type H")
                 if len(sel.atoms) in ligand_len_list:
