@@ -93,8 +93,6 @@ def generate_structures(i, pdbID, directory, save_directory):
             R = RMSD(similar_structures[x],similar_structures[y],select="name CA") if (len(similar_structures[x].select_atoms("name CA")) == len(similar_structures[y].select_atoms("name CA"))) else 999
             if R != 999: R.run()
             similarity_dict[(x,y)] = R
-            print(similarity_dict[(x,y)])
-            print(similarity_dict[(x,y)].rmsd)
     except AttributeError as e: 
         raise  AttributeError(str(i) + str(pdbID) + str(similar_structures))
         print(i)
@@ -111,7 +109,6 @@ def generate_structures(i, pdbID, directory, save_directory):
     G = nx.Graph()
     G.add_nodes_from(similar_structure_paths)
     try:
-        print([dir(v) for k, v in similarity_dict.items() if type(v)!=int])
         G.add_edges_from([k for k, v in similarity_dict.items() if type(v)!=int and v.results['rmsd'][0,2] < RMSD_CUTOFF])
     except Exception as e:
         raise e
@@ -251,7 +248,6 @@ def generate_structures(i, pdbID, directory, save_directory):
                     x, y, z = atom.position
                     # This is a prime location that two atoms in the same place could really mess things up
                     ligand_atom_sel = ligand_universe.select_atoms("point {} {} {} 0.1".format(x, y, z))
-                    print(ligand_atom_sel.atoms.positions, flush=True)
                     if len(ligand_atom_sel) == 0: # This means the ligand wasn't added to the universe (probably overlapped)
                         ligand_not_added = True
                         break
