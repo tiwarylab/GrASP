@@ -6,8 +6,9 @@ from merge_and_parse_scPDB import write_fragment
 import MDAnalysis as mda
 import os
 import sys
+import numpy as np
 import shutil
-from openbabel import openbabel
+import openbabel
 from tqdm import tqdm
 from glob import glob
 import re
@@ -15,56 +16,6 @@ import re
 allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL', 'C', 'G', 'A', 'U', 'I', 'DC', 'DG', 'DA', 'DU', 'DT', 'DI']
 selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)[:-1]]) + "resname " + str(allowed_residues[-1])
 
-
-def label_protein_site(bound_structure, structure_name, out_directory):
-    output_path = out_directory + '/ready_for_mol2_conversion/' + structure_name
-    if not os.path.isdir(output_path): os.makedirs(output_path)
-    # print(bound_structure)
-    protein = mda.Universe(bound_structure,format='PDB')
-    bound_structure = protein.select_atoms("protein")
-    bound_structure.select_atoms(selection_str)
-    ligand_structure = protein.select_atoms("not protein")
-    
-    assert len(bound_structure.atoms) > 0
-    assert len(ligand_structure.atoms) > 0
-    assert len(bound_structure.select_atoms('type H').atoms) == 0
-    assert len(ligand_structure.select_atoms('type H').atoms) == 0
-        
-    # Get residues that are considered a site
-    site_resid_list = []
-    for atom in ligand_structure.atoms:
-        x,y,z = atom.position
-        site_resid_list += (list(bound_structure.select_atoms("point {} {} {} 6.5".format(x, y, z)).resids))
-        
-    site_resid_list = list(set(site_resid_list))
-        
-    site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
-
-    bound_site = bound_structure.select_atoms(site_selection_str)
-
-    # Write bound_site to mol2 
-    bound_structure.write(output_path + '/protein.pdb')
-    bound_site.write(output_path + '/site.pdb')
-
-    # Write bound site of reach ligand to mol2
-    for idx, segment in enumerate(ligand_structure.segments):
-        segment.atoms.write(output_path + '/ligand_{}.pdb'.format(idx))
-        site_resid_list = []
-        for atom in ligand_structure.segments[idx].atoms:
-            x,y,z = atom.position
-            site_resid_list += (list(bound_structure.select_atoms("point {} {} {} 6.5".format(x, y, z)).resids))
-            
-        site_resid_list = list(set(site_resid_list))
-            
-        site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
-
-        site = bound_structure.select_atoms(site_selection_str)
-        
-        # resid_list = segment.residues.resids
-        # seg_selection_str = "".join(["resid " + str(x) + " or " for x in resid_list[:-1]] + ["resid " + str(resid_list[-1])])
-        # site = bound_structure.select_atoms(seg_selection_str)
-        site.write(output_path + '/site_for_ligand_{}.pdb'.format(idx))
-    return None
 
 def label_sites_given_ligands(path_to_mol2):
     protein = mda.Universe(os.path.join(path_to_mol2, 'protein.mol2'))
@@ -75,7 +26,7 @@ def label_sites_given_ligands(path_to_mol2):
         if 'protein' in file_path:
             # This is the main structure, we already have it
             pass
-        elif 'ligand' and not 'site' in file_path:
+        elif 'ligand' in file_path and not 'site' in file_path:
             # This is a ligand file
             ligand = mda.Universe(file_path)
             site_resid_list = []
@@ -96,12 +47,13 @@ def label_sites_given_ligands(path_to_mol2):
             pass
     site_resid_list = list(set(all_site_resids))
     
-    site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
-    protein.select_atoms(site_selection_str).atoms.write(os.path.join(path_to_mol2,"site.mol2"))
+    # site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
+    # protein.select_atoms(site_selection_str).atoms.write(os.path.join(path_to_mol2,"site.mol2"))
+    protein.residues[np.in1d(protein.residues.resids, site_resid_list)].atoms.write(os.path.join(path_to_mol2,"site.mol2"))
 
 def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
     # print("Starting")
-    output_path = out_directory + '/unprocessed_mol2/' + structure_name
+    output_path = out_directory + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
     
     obConversion = openbabel.OBConversion()
@@ -131,7 +83,7 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
 
 def protein2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
     # print("Starting")
-    output_path = out_directory + '/unprocessed_mol2/' + structure_name
+    output_path = out_directory + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
     
     obConversion = openbabel.OBConversion()
@@ -254,7 +206,8 @@ def process_train_openbabel(i, file, output_dir):
     except AssertionError as e: 
         print("Failed to find ligand in", file)
     except Exception as e:
-        print("ERROR", file, e)
+        # print("ERROR", file, e)
+        raise e
         
 def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unprocessed_scPDB_mol2'):
     # print("Processing", structure_name, flush=True)
@@ -263,7 +216,8 @@ def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unpr
     except AssertionError as e: 
         print("Failed to find ligand in", structure_name)
     except Exception as e:
-        print(e)
+        # print(e)
+        raise e
         
 def process_train_trimmed(i, structure_name, output_dir):
     # print("Processing", structure_name, flush=True)
@@ -343,7 +297,8 @@ def process_test(file, data_dir="benchmark_data_dir"):
     except AssertionError as e:
         print("Failed to find ligand in", file)
     except Exception as e:  
-        print(e)
+        # print(e)
+        raise e
 
 if __name__ == "__main__":   
     num_cores = 128
