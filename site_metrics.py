@@ -249,10 +249,10 @@ compute_optimal = True
 
 #######################################################################################
 if compute_optimal:
-    # all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
-    # all_labels = np.load(prepend + "/test_metrics/all_labels/" + model_name + ".npz")['arr_0']
-    all_probs  = np.load(prepend + "/train_metrics/all_probs/" + model_name + ".npz")['arr_0']
-    all_labels = np.load(prepend + "/train_metrics/all_labels/" + model_name + ".npz")['arr_0']
+    all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
+    all_labels = np.load(prepend + "/test_metrics/all_labels/" + model_name + ".npz")['arr_0']
+    # all_probs  = np.load(prepend + "/train_metrics/all_probs/" + model_name + ".npz")['arr_0']
+    # all_labels = np.load(prepend + "/train_metrics/all_labels/" + model_name + ".npz")['arr_0']
     print("Calculating optimal cutoffs.")
     start = time.time()
     # all_probs  =  all_probs.numpy()
@@ -290,10 +290,10 @@ if compute_optimal:
     tpr["macro"] = mean_tpr
     roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
-    # if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
-    #     os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
-    if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
-         os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
+    if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
+        os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
+    # if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
+    #      os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
 
     # Find optimal threshold
     gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
@@ -306,14 +306,14 @@ if compute_optimal:
     print("Negative Class AUC:", roc_auc[0])
     print("Positive Class AUC:", roc_auc[1])
 
-    # np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-    # np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
-    # np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
-    # np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
+    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
+    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
+    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
+    # np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
     print("Done. {}".format(time.time()- start))
     threshold_lst.insert(0, optimal_threshold)
     

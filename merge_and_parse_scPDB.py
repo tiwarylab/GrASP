@@ -346,7 +346,7 @@ def generate_structures(i, pdbID, directory, save_directory):
 def main():
     directory = './scPDB_data_dir/unprocessed_scPDB_mol2/'
     save_directory = './scPDB_data_dir/unprocessed_mol2'
-    num_cores = 1#24
+    num_cores = 24
     pdbID_i_list = os.listdir(directory)
     pdbID_list = np.unique(sorted([x[:4] for x in pdbID_i_list]))    
     
@@ -354,7 +354,7 @@ def main():
     # groups = combine_pdbs(directory, groups)
 
     try:
-        Parallel(n_jobs=num_cores)(delayed(generate_structures)(i, pdbID, directory, save_directory) for i, pdbID in enumerate(tqdm(pdbID_list[:]))) 
+        Parallel(n_jobs=num_cores)(delayed(generate_structures)(i, pdbID, directory, save_directory) for i, pdbID in enumerate(tqdm(pdbID_list[9000:])))
     finally:
         for i in range(len(directory)): # directory is a little more than we need but it's the only way to do this cleanly
             if os.path.isfile("temp_ligand_{}.mol2".format(i)): os.remove("temp_ligand_{}.mol2".format(i))

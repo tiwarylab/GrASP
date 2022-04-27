@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -p shared 
-#SBATCH --ntasks-per-node=6
+#SBATCH --ntasks-per-node=15
 #SBATCH --time 12:00:00
 #SBATCH --nodes=1
 #SBATCH --job-name="scPDB Metrics 1g12 old params, new labeling, ob"

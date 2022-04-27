@@ -19,7 +19,7 @@ import torch
 from KLIFS_dataset import KLIFSData 
 from atom_wise_models import Two_Track_GIN_GAT_fixed_bn,Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8, Hybrid_1g12, Hybrid_1g12_self_edges
 
-prepend = str(os.getcwd()) + "/trained_models/"
+prepend = str(os.getcwd())
 
 ###################################################################################
 ''' Some bits that are surrounded in comments like this can be used to temporarily
@@ -42,10 +42,11 @@ prepend = str(os.getcwd()) + "/trained_models/"
 # model_name = "trained_model_1g12_mean_self_edges_ligand_removed_SASA/epoch_49"
 # model = Hybrid_1g12(input_dim = 88)
 
-model_name= "trained_model_1650260810.482072/epoch_46"   # After site relabeling and OB. Old model's hyperparams
-model = Hybrid_1g12(input_dim = 88)
+model_name= "trained_model_1650260810.482072/epoch_46"   # After site relabeling and OB. Old model's hyperparams this is a Hybrid_1g12_self_edges() model
+# model = Hybrid_1g12(input_dim = 88)
+model = Hybrid_1g12_self_edges(input_dim = 88)
 
-model_path = prepend + model_name
+model_path = prepend + "/trained_models/" + model_name
 # set_to_use = 'val'      # Currently using the OB and relabeling dataset
 set_to_use = 'test'
 
@@ -92,7 +93,6 @@ print("The model will be using {} cpus.".format(num_cpus))
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
  
-prepend = str(os.getcwd())
 #########################
 if set_to_use == 'val':
     print("Initializing Validation Set")
