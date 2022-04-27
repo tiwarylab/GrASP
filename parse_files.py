@@ -2,12 +2,12 @@ from dataclasses import field
 from turtle import end_fill
 from parsing_regular import process_system
 from parsing_trimmed import process_trimmed
+from merge_and_parse_scPDB import write_fragment
 import MDAnalysis as mda
 import os
 import sys
-import numpy as np
 import shutil
-import openbabel
+from openbabel import openbabel
 from tqdm import tqdm
 from glob import glob
 import re
@@ -47,11 +47,10 @@ def label_protein_site(bound_structure, structure_name, out_directory):
     bound_site.write(output_path + '/site.pdb')
 
     # Write bound site of reach ligand to mol2
-    for idx, fragment in enumerate(ligand_structure.atoms.fragments):
-        print(fragment.atoms)
-        fragment.atoms.write(output_path + '/ligand_{}.pdb'.format(idx))
+    for idx, segment in enumerate(ligand_structure.segments):
+        segment.atoms.write(output_path + '/ligand_{}.pdb'.format(idx))
         site_resid_list = []
-        for atom in ligand_structure.atoms.fragments[idx].atoms:
+        for atom in ligand_structure.segments[idx].atoms:
             x,y,z = atom.position
             site_resid_list += (list(bound_structure.select_atoms("point {} {} {} 6.5".format(x, y, z)).resids))
             
@@ -76,7 +75,7 @@ def label_sites_given_ligands(path_to_mol2):
         if 'protein' in file_path:
             # This is the main structure, we already have it
             pass
-        elif 'ligand' in file_path and not 'site' in file_path:
+        elif 'ligand' and not 'site' in file_path:
             # This is a ligand file
             ligand = mda.Universe(file_path)
             site_resid_list = []
@@ -97,13 +96,12 @@ def label_sites_given_ligands(path_to_mol2):
             pass
     site_resid_list = list(set(all_site_resids))
     
-    # site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
-    # protein.select_atoms(site_selection_str).atoms.write(os.path.join(path_to_mol2,"site.mol2"))
-    protein.residues[np.in1d(protein.residues.resids, site_resid_list)].atoms.write(os.path.join(path_to_mol2,"site.mol2"))
+    site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
+    protein.select_atoms(site_selection_str).atoms.write(os.path.join(path_to_mol2,"site.mol2"))
 
 def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
     # print("Starting")
-    output_path = out_directory + structure_name
+    output_path = out_directory + '/unprocessed_mol2/' + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
     
     obConversion = openbabel.OBConversion()
@@ -118,6 +116,39 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
     if addH: 
         mol.CorrectForPH()
         mol.AddHydrogens()
+
+    obConversion.WriteFile(mol, output_mol2_path)
+    
+    if cleanup:
+        # Use MDA to remove clean file
+        univ = mda.Universe(output_mol2_path)
+        res_names = univ.residues.resnames
+        new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
+        univ.residues.resnames = new_names
+        univ = univ.select_atoms(selection_str)
+        mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
+
+
+def protein2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
+    # print("Starting")
+    output_path = out_directory + '/unprocessed_mol2/' + structure_name
+    if not os.path.isdir(output_path): os.makedirs(output_path)
+    
+    obConversion = openbabel.OBConversion()
+    obConversion.SetInAndOutFormats("pdb", "mol2")
+
+    output_mol2_path  = output_path + '/' + out_name +'.mol2'
+
+    mol = openbabel.OBMol()
+
+    obConversion.ReadFile(mol, pdb_file)
+    mol.DeleteHydrogens()
+    mol.StripSalts(256)
+    if addH: 
+        mol.CorrectForPH()
+        mol.AddHydrogens()
+    
+
     obConversion.WriteFile(mol, output_mol2_path)
     
     if cleanup:
@@ -193,6 +224,14 @@ def rebond_mol2(i,infile, structure_name, outfile, addH=False):
 #         print("Failed to find ligand in", file)
 #     except Exception as e:
 #         print(e)
+
+def extract_ligands(mol_directory):
+    univ = mda.Universe(f'{mol_directory}/system.mol2')
+    lig_ind = 0
+    for frag in univ.atoms.fragments:
+        if  3 < frag.n_atoms < 256:
+            write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+            lig_ind += 1
         
 def process_train_openbabel(i, file, output_dir):
     try:
@@ -215,8 +254,7 @@ def process_train_openbabel(i, file, output_dir):
     except AssertionError as e: 
         print("Failed to find ligand in", file)
     except Exception as e:
-        # print("ERROR", file, e)
-        raise e
+        print("ERROR", file, e)
         
 def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unprocessed_scPDB_mol2'):
     # print("Processing", structure_name, flush=True)
@@ -290,40 +328,36 @@ def move_SC6K(num_cores, verbose=False):
 #     thread.start()
 #     thread.join()
 
-def process_val(file, data_dir="benchmark_data_dir"):
+def process_test(file, data_dir="benchmark_data_dir"):
     try:
         prepend = os.getcwd()
         structure_name = file.split('_')[1][:-4]
-        label_protein_site(prepend + '/'+data_dir+'/unprocessed_pdb/' + file, structure_name, out_directory=prepend +'/benchmark_data_dir')
         path_to_pdb = prepend +'/'+data_dir+'/ready_for_mol2_conversion/'+structure_name +"/"
-        for file_name in os.listdir(path_to_pdb):
-            if 'protein' not in file_name:
-                # Do not add hydrogens to sites, they will not be used for labeling and moreover will  mess up comparison between 'ground truth' and predictions
-                pdb2mol2(path_to_pdb+file_name, structure_name,prepend+'/'+data_dir+'/unprocessed_mol2/',addH=False, out_name=file_name.split('/')[-1][:-4], cleanup=False) 
-            else:
-                pdb2mol2(path_to_pdb+file_name, structure_name,prepend+'/'+data_dir+'/unprocessed_mol2/', out_name='protein')
-        # print("processing system")
-        process_system('./'+data_dir+'/unprocessed_mol2/' + structure_name, save_directory='./'+data_dir)
+        pdb2mol2(path_to_pdb+file, structure_name, f'./{data_dir}/ready_to_parse_mol2/' , out_name='system', cleanup=False)
+        protein2mol2(path_to_pdb+file, structure_name, f'./{data_dir}/ready_to_parse_mol2/' , out_name='protein')
+        extract_ligands(f'./{data_dir}/ready_to_parse_mol2/{structure_name}/')
+        label_sites_given_ligands(f'./{data_dir}/ready_to_parse_mol2/{structure_name}')
+        
+        process_system(f'./{data_dir}/ready_to_parse_mol2/' + structure_name, save_directory='./'+data_dir)
         # break
     except AssertionError as e:
         print("Failed to find ligand in", file)
     except Exception as e:  
-        # print(e)
-        raise e
+        print(e)
 
 if __name__ == "__main__":   
-    num_cores = 1#24
+    num_cores = 128
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
  
     if str(sys.argv[1]) == "val":
         pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/benchmark_data_dir/unprocessed_pdb')))]
-        Parallel(n_jobs=num_cores)(delayed(process_val)(filename) for _, filename in enumerate(tqdm(pdb_files)))
+        Parallel(n_jobs=num_cores)(delayed(process_test)(filename) for _, filename in enumerate(tqdm(pdb_files)))
     elif str(sys.argv[1]) == "train_openbabel":
         print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm([mol2_files[12024]]))) 
+        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
     elif str(sys.argv[1]) == "train_classic":
@@ -346,7 +380,7 @@ if __name__ == "__main__":
         #     process_train(i,filename, 'hetro_data_dir')
     elif str(sys.argv[1]) == "coach420":
         pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/coach420_data_dir/unprocessed_pdb')))]
-        Parallel(n_jobs=num_cores)(delayed(process_val)(filename) for _, filename in enumerate(tqdm(pdb_files)))
+        Parallel(n_jobs=num_cores)(delayed(process_test)(filename) for _, filename in enumerate(tqdm(pdb_files)))
     elif str(sys.argv[1] == "SC6K"):
         if len(sys.argv) < 3: 
             move_SC6K(num_cores, verbose=False)
