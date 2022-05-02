@@ -1,7 +1,6 @@
 from dataclasses import field
 from turtle import end_fill
 from parsing_regular import process_system
-from parsing_trimmed import process_trimmed
 from merge_and_parse_scPDB import write_fragment
 import MDAnalysis as mda
 import os
@@ -81,7 +80,7 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
         mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
 
 
-def protein2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
+def protein2mol2(pdb_file, structure_name, out_directory, min_size=256, addH=True, out_name='protein', cleanup=True):
     # print("Starting")
     output_path = out_directory + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
@@ -94,8 +93,8 @@ def protein2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='p
     mol = openbabel.OBMol()
 
     obConversion.ReadFile(mol, pdb_file)
+    mol.StripSalts(min_size)
     mol.DeleteHydrogens()
-    mol.StripSalts(256)
     if addH: 
         mol.CorrectForPH()
         mol.AddHydrogens()
@@ -219,15 +218,6 @@ def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unpr
         # print(e)
         raise e
         
-def process_train_trimmed(i, structure_name, output_dir):
-    # print("Processing", structure_name, flush=True)
-    try:
-        process_trimmed('./' + output_dir + '/unprocessed_scPDB_mol2/' + structure_name, save_directory='./' + output_dir)
-    except AssertionError as e: 
-        print("Failed to find ligand in", structure_name)
-    except Exception as e:
-        # print(e)
-        raise(e)
     
 def move_SC6K(num_cores, verbose=False):
     if not os.path.isdir(os.path.join(prepend,'SC6K_data_dir/SC6K/unprocessed_mol2')): os.makedirs(os.path.join(prepend,'SC6K_data_dir/SC6K/unprocessed_mol2'))
@@ -286,9 +276,9 @@ def process_test(file, data_dir="benchmark_data_dir"):
     try:
         prepend = os.getcwd()
         structure_name = file.split('_')[1][:-4]
-        path_to_pdb = prepend +'/'+data_dir+'/ready_for_mol2_conversion/'+structure_name +"/"
+        path_to_pdb = prepend +'/'+data_dir+'/unprocessed_pdb/'
         pdb2mol2(path_to_pdb+file, structure_name, f'./{data_dir}/ready_to_parse_mol2/' , out_name='system', cleanup=False)
-        protein2mol2(path_to_pdb+file, structure_name, f'./{data_dir}/ready_to_parse_mol2/' , out_name='protein')
+        protein2mol2(path_to_pdb+file, structure_name, f'./{data_dir}/ready_to_parse_mol2/', min_size=231, out_name='protein', cleanup=True)
         extract_ligands(f'./{data_dir}/ready_to_parse_mol2/{structure_name}/')
         label_sites_given_ligands(f'./{data_dir}/ready_to_parse_mol2/{structure_name}')
         
@@ -301,7 +291,7 @@ def process_test(file, data_dir="benchmark_data_dir"):
         raise e
 
 if __name__ == "__main__":   
-    num_cores = 128
+    num_cores = 1#28
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
