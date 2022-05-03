@@ -14,7 +14,7 @@ import networkx as nx
 import csv
 
 
-SASA_RATIO_CUTOFF = 0.685
+SASA_RATIO_CUTOFF = 0.3
 RMSD_CUTOFF = 1e-4
 
 def remove_salts(universe: mda.Universe, threshold=256):
@@ -123,11 +123,11 @@ class pdbID():
         G.add_edges_from([k for k, v in similarity_dict.items() if type(v)!=int and v.results['rmsd'][0,2] < RMSD_CUTOFF])
         components = nx.find_cliques(G)
 
-        self.identical_structures = (Protein_Structure(index, paths, self) for index, paths in enumerate(components))
-        for structure in self.identical_structures: structure.find_unknown_ligands()
+        self.merge_groups = [Protein_Structure(index, paths, self) for index, paths in enumerate(components)]
+        for structure in self.merge_groups: structure.find_unknown_ligands()
         
     def write(self, directory:str):
-        for structure in self.identical_structures: structure.write(directory)
+        for structure in self.merge_groups: structure.write(directory + "/" + self.pdbID + "_" + str(self.index))
         
         
 class Protein_Structure():
@@ -153,19 +153,19 @@ class Protein_Structure():
     
     def find_unknown_ligands(self):      
         self.unknown_ligands = []
-        possible_lens = [len(lig.atoms) for identical_structure in self.parent_pdbID.identical_structures for lig in identical_structure.known_ligands]
+        possible_lens = [len(lig.mda_universe.atoms) for group in self.parent_pdbID.merge_groups for lig in group.known_ligands]
         for fragment in self.mda_universe.atoms.fragments:
             if len(fragment.atoms) not in possible_lens:
                 continue
             temp_lig =  Ligand(len(self.unknown_ligands)+len(self.known_ligands), fragment, False, 0, self)
             top_confidence_level = 0
             top_confidence_associated_SASA = 0
-            for identical_structure in self.parent_pdbID.identical_structures:  # Must check all ligands associated with the same pdb id 
-                confidence_levels = [temp_lig.compare_to(lig) for lig in identical_structure.known_ligands]
+            for group in self.parent_pdbID.merge_groups:  # Must check all ligands associated with the same pdb id 
+                confidence_levels = [temp_lig.compare_to(lig) for lig in group.known_ligands]
                 matched_ligand_index = np.argmax(confidence_levels)
                 if confidence_levels[matched_ligand_index] > top_confidence_level:
                     top_confidence_level = confidence_levels[matched_ligand_index]
-                    top_confidence_associated_SASA = identical_structure.known_ligands[matched_ligand_index].SASA_ratio
+                    top_confidence_associated_SASA = group.known_ligands[matched_ligand_index].SASA_ratio
             temp_lig.confidence_level = top_confidence_level
             if top_confidence_level:
                 if np.all([not temp_lig.overlaps(lig) for lig in self.known_ligands]) and np.all([not temp_lig.overlaps(lig) for lig in self.unknown_ligands]):
@@ -173,13 +173,16 @@ class Protein_Structure():
                         self.unknown_ligands.append(temp_lig)         
 
     def write(self, directory:str):
-        with open(directory+"/{}_{}/about.csv".format(self.parent_pdbID.pdbID, self.index),"w") as about_csv:
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+        with open(directory + "/about.csv","w") as about_csv:
             csvwriter = csv.writer(about_csv) 
             csvwriter.writerow(['ligand_number','is_known','SASA_ratio','SASA_ratio_of_known_ligand','confidence_level']) 
             for lig in self.known_ligands:      lig.write(directory, csvwriter)
             for lig in self.unknown_ligands:    lig.write(directory, csvwriter)
-                
-        self.stripped_mda_universe.write(directory + "protein.mol2")
+               
+        # We would like to save the stripped universe, but MDA can't do that right now 
+        self.mda_universe.atoms.write(directory + "/protein.mol2")
         
 class Ligand():
     def __init__(self,index:int,mda_universe, is_known:bool, confidence_level:int, parent_protein:Protein_Structure):
@@ -222,7 +225,7 @@ class Ligand():
 
     def write(self, directory:str, csvwriter):
         csvwriter.writerow([self.index, self.is_known, self.SASA_ratio, self.confidence_level])
-        self.mda_universe.atoms.write(directory + "ligand_{}.mol2".format(self.index))
+        self.mda_universe.atoms.write(directory + "/ligand_{}.mol2".format(self.index))
 
 def generate_structures(index, id, directory, save_directory):
     structures = pdbID(index, id, directory)
@@ -232,6 +235,10 @@ def main():
     directory = './scPDB_data_dir/unprocessed_scPDB_mol2/'
     save_directory = './scPDB_data_dir/unprocessed_mol2'
     num_cores = 1#24
+    
+    if not os.path.isdir(save_directory):
+        os.makedirs(save_directory)
+    
     pdbID_i_list = os.listdir(directory)
     pdbID_list = np.unique(sorted([x[:4] for x in pdbID_i_list]))    
     
