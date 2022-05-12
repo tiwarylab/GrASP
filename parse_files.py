@@ -19,7 +19,6 @@ selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)
 def label_sites_given_ligands(path_to_mol2):
     protein = mda.Universe(os.path.join(path_to_mol2, 'protein.mol2'))
     protein_no_h = protein.select_atoms("not type H")
-    ligand_idx = 0
     all_site_resids = []
     for file_path in sorted(glob(path_to_mol2+ '/*')):
         if 'protein' in file_path:
@@ -39,8 +38,7 @@ def label_sites_given_ligands(path_to_mol2):
             site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
 
             this_ligands_site = protein.select_atoms(site_selection_str)
-            this_ligands_site.atoms.write(os.path.join(path_to_mol2,"site_for_ligand_{}.mol2".format(ligand_idx)))
-            ligand_idx += 1
+            this_ligands_site.atoms.write(os.path.join(path_to_mol2,"site_for_ligand_{}.mol2".format(int("".join(filter(str.isdigit, file_path.split('/')[-1]))))))
         else:
             # This is an unexpected file
             pass
@@ -127,14 +125,14 @@ def protein2mol2(pdb_file, structure_name, out_directory, min_size=256, addH=Tru
 #         mol.AddHydrogens()
 #     obConversion.WriteFile(mol, output_mol2_path)
 
-def rebond_mol2(i,infile, structure_name, outfile, addH=False):
+def rebond_mol2(i,infile, structure_name, outfile, addH=False,strip_size=256):
     obConversion = openbabel.OBConversion()
     obConversion.SetInAndOutFormats("mol2", "pdb")
 
     mol = openbabel.OBMol()
     obConversion.ReadFile(mol, infile)
     mol.DeleteHydrogens()
-    mol.StripSalts(256)
+    mol.StripSalts(strip_size)
     obConversion.WriteFile(mol, 'temp{}.pdb'.format(i))
     pdb2mol2('temp{}.pdb'.format(i), structure_name, outfile, addH=addH)
 
@@ -185,6 +183,8 @@ def extract_ligands(mol_directory):
             lig_ind += 1
         
 def process_train_openbabel(i, file, output_dir):
+    strip_size = 98 # Max number of atoms in a ligand in scPDB excluding hydrogens
+    
     try:
         prepend = os.getcwd()
         structure_name = file
@@ -192,7 +192,7 @@ def process_train_openbabel(i, file, output_dir):
             os.makedirs(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name))
         # print(os.path.join(prepend, '/scPDB_data_dir/unprocessed_mol2/',file,'/protein.mol2'))
         # print(prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2')
-        rebond_mol2(i,prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/",addH=True)
+        rebond_mol2(i,prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/",addH=True, strip_size=strip_size)
         
         for file_path in glob(prepend + '/scPDB_data_dir/unprocessed_mol2/' + file + '/*'):
             if 'ligand' in file_path:
@@ -291,7 +291,7 @@ def process_test(file, data_dir="benchmark_data_dir"):
         raise e
 
 if __name__ == "__main__":   
-    num_cores = 1#28
+    num_cores = 48
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
@@ -302,7 +302,7 @@ if __name__ == "__main__":
     elif str(sys.argv[1]) == "train_openbabel":
         print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
+        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:5000])))
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
     elif str(sys.argv[1]) == "train_classic":
