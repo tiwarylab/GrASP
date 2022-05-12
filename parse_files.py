@@ -38,7 +38,8 @@ def label_sites_given_ligands(path_to_mol2):
             site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
 
             this_ligands_site = protein.select_atoms(site_selection_str)
-            this_ligands_site.atoms.write(os.path.join(path_to_mol2,"site_for_ligand_{}.mol2".format(int("".join(filter(str.isdigit, file_path.split('/')[-1]))))))
+            this_ligands_site.atoms.write(os.path.join(path_to_mol2,"site_for_ligand_{}.mol2".format(int(re.findall("\d+",file_path.split('/')[-1])[0]))))
+
         else:
             # This is an unexpected file
             pass
@@ -300,9 +301,9 @@ if __name__ == "__main__":
         pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/benchmark_data_dir/unprocessed_pdb')))]
         Parallel(n_jobs=num_cores)(delayed(process_test)(filename) for _, filename in enumerate(tqdm(pdb_files)))
     elif str(sys.argv[1]) == "train_openbabel":
-        print("Parsing the standard train set")
+        print("Parsing the openbabel train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:5000])))
+        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:])))
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
     elif str(sys.argv[1]) == "train_classic":
