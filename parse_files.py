@@ -313,9 +313,10 @@ if __name__ == "__main__":
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
     elif str(sys.argv[1]) == "train_trimmed":
-        print("Parsing the standard train set")
-        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_trimmed)(i, filename, 'regular_data_dir') for i, filename in enumerate(tqdm(mol2_files[4000:])))               # POINTS TO SAME DIR AS OPEN BABEL TO SAVE SPACE BE CAREFUL
+        raise DeprecationWarning ("This pipeline is deprecated")
+        # print("Parsing the standard train set")
+        # mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
+        # Parallel(n_jobs=num_cores)(delayed(process_train_trimmed)(i, filename, 'regular_data_dir') for i, filename in enumerate(tqdm(mol2_files[4000:])))               # POINTS TO SAME DIR AS OPEN BABEL TO SAVE SPACE BE CAREFUL
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
     elif str(sys.argv[1]) == "train_hetro":

@@ -14,6 +14,10 @@ class KLIFSData(Dataset):
         self.cutoff=cutoff
         self.force_process=force_process
         self.num_cpus = num_cpus
+        
+        if not os.path.isdir(root + '/processed'):
+            os.mkdir(root + '/processed')
+        
         super().__init__(root, None, None)
 
         # self.proceesed_dir = processed_dir
