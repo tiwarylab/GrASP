@@ -17,7 +17,7 @@ import csv
 SASA_RATIO_CUTOFF = 0.3
 RMSD_CUTOFF = 1e-4
 
-def remove_salts(universe: mda.Universe, threshold=256):
+def remove_salts(universe: mda.Universe, threshold=229):
     '''
     Removes any fragments from the universe that have 
     fewer atoms than the threshold. Fragments are 
@@ -32,7 +32,7 @@ def remove_salts(universe: mda.Universe, threshold=256):
         Default value is 256 which is larger than any ligand in the sc-PDB databse.
     '''
     to_return = []
-    for fragment in universe.atoms.fragments:
+    for fragment in universe.atoms.fragments:   # Note that because of the way fragments are written in MDA, this will ignore any selections
         if len(fragment.atoms) >= threshold:
             to_return.append(fragment)
     return mda.Merge(*to_return)
@@ -95,8 +95,8 @@ def get_SASA_ratio(i:int,protein_univ:mda.AtomGroup, ligand_univ:mda.AtomGroup):
     
     system_traj = mdtraj.load(temp_system_name)
     ligand_traj = mdtraj.load(temp_ligand_name)
-    system_SASA =  np.mean(np.array(shrake_rupley(system_traj, mode='atom')[0])[ligand_indices])
-    ligand_SASA =  np.mean(shrake_rupley(ligand_traj,mode='atom')[0])
+    system_SASA =  np.sum(np.array(shrake_rupley(system_traj, mode='atom')[0])[ligand_indices])
+    ligand_SASA =  np.sum(shrake_rupley(ligand_traj,mode='atom')[0])
     
     os.remove(temp_system_name)
     os.remove(temp_ligand_name)
@@ -127,7 +127,7 @@ class pdbID():
         for structure in self.merge_groups: structure.find_unknown_ligands()
         
     def write(self, directory:str):
-        for structure in self.merge_groups: structure.write(directory + "/" + self.pdbID + "_" + str(self.index))
+        for structure in self.merge_groups: structure.write(directory + "/" + self.pdbID + "_" + str(structure.index))
         
         
 class Protein_Structure():
@@ -200,12 +200,12 @@ class Ligand():
         self.SASA_ratio = get_SASA_ratio(unique_id, self.parent_protein.stripped_mda_universe, self.mda_universe)
         
     def compare_to(self, other):
-        if other is not Ligand:
+        if type(other) is not Ligand:
             return 0
         if self.num_heavy_atoms != other.num_heavy_atoms:
             return 0
         this_no_H = self.mda_universe.select_atoms("not type H")
-        other_no_H = other.mda_univers.select_atoms("not type H")
+        other_no_H = other.mda_universe.select_atoms("not type H")
         
         if np.all(this_no_H.atoms.types == other_no_H.atoms.types):
             return 4
@@ -221,7 +221,7 @@ class Ligand():
         dist_arr = distance_array(self.mda_universe.atoms.positions,
                                                         other.mda_universe.atoms.positions,
                                                         backend='openMP')
-        return np.any(dist_arr > 1e-4)
+        return np.any(dist_arr < 1e-4)
 
     def write(self, directory:str, csvwriter):
         csvwriter.writerow([self.index, self.is_known, self.SASA_ratio, self.confidence_level])
@@ -232,9 +232,9 @@ def generate_structures(index, id, directory, save_directory):
     structures.write(save_directory)
     
 def main():
-    directory = './scPDB_data_dir/unprocessed_scPDB_mol2/'
-    save_directory = './scPDB_data_dir/unprocessed_mol2'
-    num_cores = 1#24
+    directory       = './scPDB_data_dir/unprocessed_scPDB_mol2/'
+    save_directory  = './scPDB_data_dir/unprocessed_mol2'
+    num_cores = 24
     
     if not os.path.isdir(save_directory):
         os.makedirs(save_directory)
@@ -243,7 +243,7 @@ def main():
     pdbID_list = np.unique(sorted([x[:4] for x in pdbID_i_list]))    
     
     try:
-        Parallel(n_jobs=num_cores)(delayed(generate_structures)(i, id, directory, save_directory) for i, id in enumerate(tqdm(pdbID_list[9000:])))
+        Parallel(n_jobs=num_cores)(delayed(generate_structures)(i, id, directory, save_directory) for i, id in enumerate(tqdm(pdbID_list[:])))
     finally:
         for i in range(len(directory)): # directory is a little more than we need but it's the only way to do this cleanly
             if os.path.isfile("temp_ligand_{}.mol2".format(i)): os.remove("temp_ligand_{}.mol2".format(i))

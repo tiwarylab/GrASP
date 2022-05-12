@@ -21,18 +21,7 @@ ALLOWED_RESIDUES = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS
 ALLOWED_RESIUDES_SELECTION_STR = "".join(["resname " + x + " or " for x in list(ALLOWED_RESIDUES)[:-1]]) + "resname " + str(ALLOWED_RESIDUES[-1])
 
 '''
-/ = Done, ? = Question, - = TODO
-/ Split rcsbID_*'s by RMSD on only carbon alphas
-/ Merge all known ligands if they don't conflict. 
-? What should we do if known ligands conflict? seems unlikely enough to just raise an exception? right now they're ignored
-/ Merge unknown ligands with same resname if they don't conflict. If they do, they're ignored
-/ Merge protein in with ligand
-? Which protein file shold we use when building a final structure? Does it matter? I'm currently using the first: see line 93
-/ Remove any ligands that don't fit our SASA ratio
-/ Save file
-
-
-- If there are multiple of the same known ligands with the same resname, use the highest SASA ratio for the dynamic cutoff
+TODO:
 
 '''
 
@@ -83,13 +72,32 @@ def write_fragment(atom_group: mda.AtomGroup, parent_universe:mda.Universe, outp
     parent_universe.select_atoms(sel_str).write(output_path)
     return None
 
+def get_SASA_ratio(i:int,protein_structure_file:str, ligand_structure_file:str):
+    temp_file_name = "temp_system_{}.pdb".format(i)
+    
+    protein_univ = mda.Universe(protein_structure_file, format='mol2')
+    ligand_univ  = mda.Universe(ligand_structure_file, format='mol2')
+    
+    system_univ  = mda.Merge(remove_salts(protein_univ).atoms, ligand_univ.atoms)
+    system_univ.atoms.write(temp_file_name)
+    
+    ligand_indices = [system_univ.select_atoms("point {} {} {} 0.1".format(x, y, z))[0].index for x, y, z in ligand_univ.atoms.positions]
+    
+    system_traj = mdtraj.load(temp_file_name)
+    ligand_traj = mdtraj.load(ligand_structure_file)
+    system_SASA =  np.mean(np.array(shrake_rupley(system_traj, mode='atom')[0])[ligand_indices])
+    ligand_SASA =  np.mean(shrake_rupley(ligand_traj,mode='atom')[0])
+    
+    os.remove(temp_file_name)
+    return system_SASA/ligand_SASA
+
 def generate_structures(i, pdbID, directory, save_directory):
     # Get similarity between all pdbID_*.mol2 files
-    similar_structure_paths =  sorted(list(glob.glob(os.path.join(directory, pdbID + '*')) ))
-    similar_structures = {x:remove_salts(mda.Universe(x+'/protein.mol2', format='mol2')) for x in similar_structure_paths}
+    similar_protein_paths =  sorted(list(glob.glob(os.path.join(directory, pdbID + '*')) ))
+    similar_structures = {x:remove_salts(mda.Universe(x+'/protein.mol2', format='mol2')) for x in similar_protein_paths}
     try:
         similarity_dict = {}
-        for (x,y) in combinations(similar_structure_paths,2):
+        for (x,y) in combinations(similar_protein_paths,2):
             R = RMSD(similar_structures[x],similar_structures[y],select="name CA") if (len(similar_structures[x].select_atoms("name CA")) == len(similar_structures[y].select_atoms("name CA"))) else 999
             if R != 999: R.run()
             similarity_dict[(x,y)] = R
@@ -107,7 +115,7 @@ def generate_structures(i, pdbID, directory, save_directory):
         raise e
     # Create a graph where the maximal cliques have a RMSD similarity < RMSD_CUTOFF
     G = nx.Graph()
-    G.add_nodes_from(similar_structure_paths)
+    G.add_nodes_from(similar_protein_paths)
     try:
         G.add_edges_from([k for k, v in similarity_dict.items() if type(v)!=int and v.results['rmsd'][0,2] < RMSD_CUTOFF])
     except Exception as e:
@@ -116,27 +124,35 @@ def generate_structures(i, pdbID, directory, save_directory):
     components = nx.find_cliques(G) # returns a list of sets in which all paths to protein structures have 0 RMSD on the CA atoms. Files with no partner are returned as a set with one element 
     
     # Get all resnames from all known ligands
-    #all_ligand_paths = [os.path.join(x,'ligand.mol2') for x in similar_structure_paths]
-    #all_ligand_structures = [mda.Universe(x, format='mol2') for x in all_ligand_paths]
-    # ligand_resnames = np.unique([resname[:3] for lig in all_ligand_structures for resname in lig.residues.resnames ])
+    #all_ligand_paths = [os.path.join(x,'ligand.mol2') for x in similar_protein_paths]
+    #all_similar_ligand_structures = [mda.Universe(x, format='mol2') for x in all_ligand_paths]
+    # ligand_resnames = np.unique([resname[:3] for lig in all_similar_ligand_structures for resname in lig.residues.resnames ])
     # ligand_sel_str = "".join(["resname " + x + " or " for x in list(ligand_resnames)[:-1]]) + "resname " + str(list(ligand_resnames)[-1])
-    #del all_ligand_structures, all_ligand_paths
+    #del all_similar_ligand_structures, all_ligand_paths
     
     for structure_idx, identical_structure_paths in enumerate(components):
         # Here, we actually take all ligands from similar structures, not just identical ones. This allows us to label as much as possible.
-        ligand_paths = [os.path.join(x,'ligand.mol2') for x in similar_structure_paths]
-        protein_paths = [os.path.join(x,'protein.mol2') for x in identical_structure_paths]
         
-        protein_structures       = [mda.Universe(x, format='mol2') for x in protein_paths]
-        ligand_structures        = [mda.Universe(x, format='mol2') for x in ligand_paths]
-        ligand_structures_no_H   = [x.select_atoms('not type H') for x in ligand_structures]
-        ligand_len_list          = [len(x.atoms) for x in ligand_structures_no_H]
+        
+        identical_protein_paths          = [os.path.join(x,'protein.mol2') for x in identical_structure_paths]
+        identical_protein_structures     = [mda.Universe(x, format='mol2') for x in identical_protein_paths]
+        identical_ligand_paths           = [os.path.join(x,'ligand.mol2') for x in identical_structure_paths]
+        identical_ligand_structures      = [mda.Universe(x, format='mol2') for x in identical_ligand_paths]
+
+        similar_ligand_paths             = [os.path.join(x,'ligand.mol2') for x in similar_protein_paths]
+        similar_ligand_structures        = [mda.Universe(x, format='mol2') for x in similar_ligand_paths]
+        similar_ligand_structures_no_H   = [x.select_atoms('not type H') for x in similar_ligand_structures]
+        similar_ligand_len_list          = [len(x.atoms) for x in similar_ligand_structures_no_H]
+        '''
+        NEED TO ADD CLEANING TO PROTEIN
+        '''
+        similar_ligand_SASA_ratios       = [get_SASA_ratio(i, protein_path, ligand_path) for protein_path, ligand_path in zip(similar_protein_paths, similar_ligand_paths)]
         
         # Create a universe with all of the ligands only
         ligand_universe = mda.Universe.empty(0)
         # Add all known ligands
-        for prot_idx in range(len(protein_structures)):
-            ligand = ligand_structures[prot_idx]
+        for prot_idx in range(len(identical_protein_structures)):
+            ligand = identical_ligand_structures[prot_idx]
             # res_names = ligand.residues.resnames
             # new_resnames = [name[:3] for name in res_names]
             # ligand.residues.resnames = new_resnames
@@ -154,17 +170,17 @@ def generate_structures(i, pdbID, directory, save_directory):
                     ligand_universe = mda.Merge(ligand_universe.atoms, ligand.atoms)
                     
         # Add all unknown ligands
-        for prot_idx in range(len(protein_structures)):
-            protein = protein_structures[prot_idx]
+        for prot_idx in range(len(identical_protein_structures)):
+            protein = identical_protein_structures[prot_idx]
             # res_names = protein.residues.resnames
             # new_resnames = [ name[:3] for name in res_names]
             # protein.residues.resnames = new_resnames
 
-            # Iterate through fragments in each protein. If they match our criteria, we will add them to our ligand universe
+            # Iterate through fragments in each protein. If they match our criteria, we will add them to our ligand universe.
             for fragment in protein.atoms.fragments:
                 sel = fragment.select_atoms("not type H")
-                if len(sel.atoms) in ligand_len_list:
-                    if np.any([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):
+                if len(sel.atoms) in similar_ligand_len_list:
+                    if np.any([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):
                         # Types and sybyl types are the same and ordered correctly
                         # Check if ligand is already in universe or in it's place
                         safe = True
@@ -173,7 +189,7 @@ def generate_structures(i, pdbID, directory, save_directory):
                             if len(ligand_universe.select_atoms("point {} {} {} 0.1".format(x, y, z))) != 0:
                                 safe = False
                         if safe: ligand_universe = mda.Merge(ligand_universe.atoms, fragment.atoms)  
-                    elif  np.any([np.all([x.split('.')[0] for x in sel.atoms.types] == [x.split('.')[0] for x in lig.atoms.types] ) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):
+                    elif  np.any([np.all([x.split('.')[0] for x in sel.atoms.types] == [x.split('.')[0] for x in lig.atoms.types] ) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):
                         # Types are the same and ordered corrrectly
                         # Check if ligand is already in universe or in it's place
                         safe = True
@@ -182,7 +198,7 @@ def generate_structures(i, pdbID, directory, save_directory):
                             if len(ligand_universe.select_atoms("point {} {} {} 0.1".format(x, y, z))) != 0:
                                 safe = False
                         if safe: ligand_universe = mda.Merge(ligand_universe.atoms, fragment.atoms) 
-                    elif np.any([np.all(sorted(sel.atoms.types) == sorted(lig.atoms.types)) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):
+                    elif np.any([np.all(sorted(sel.atoms.types) == sorted(lig.atoms.types)) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):
                         # Types and sybyl types are the same but misordered
                         # Check if ligand is already in universe or in it's place
                         safe = True
@@ -191,7 +207,7 @@ def generate_structures(i, pdbID, directory, save_directory):
                             if len(ligand_universe.select_atoms("point {} {} {} 0.1".format(x, y, z))) != 0:
                                 safe = False
                         if safe: ligand_universe = mda.Merge(ligand_universe.atoms, fragment.atoms) 
-                    elif np.any([np.all(sorted([x.split('.')[0] for x in sel.atoms.types]) == sorted([x.split('.')[0] for x in lig.atoms.types])) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):
+                    elif np.any([np.all(sorted([x.split('.')[0] for x in sel.atoms.types]) == sorted([x.split('.')[0] for x in lig.atoms.types])) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):
                         # Types are the same but misordered
                         # Check if ligand is already in universe or in it's place
                         safe = True
@@ -207,7 +223,7 @@ def generate_structures(i, pdbID, directory, save_directory):
             
         ligand_universe.atoms.write("temp_ligand_{}.pdb".format(i))
         # Using the first protein in the universe because they're all guarenteed to be identical (in terms of RMSD on the CA atoms)
-        first_protein = mda.Universe(protein_paths[0], format='mol2')
+        first_protein = mda.Universe(identical_protein_paths[0], format='mol2')
         
         first_protein = remove_salts(first_protein)       
 
@@ -219,7 +235,7 @@ def generate_structures(i, pdbID, directory, save_directory):
         ligand_traj  = mdtraj.load("temp_ligand_{}.pdb".format(i))
         complete_traj = mdtraj.load("temp_complex_{}.pdb".format(i))
         
-        known_ligand_SASA_ratios = []
+        # known_ligand_SASA_ratios = []
         known_ligand_indices_ligand_universe = []  
         known_ligand_indices_complete_universe = []   
         
@@ -240,7 +256,7 @@ def generate_structures(i, pdbID, directory, save_directory):
             
             # Calculate indices of known ligand atoms in both the ligand only universe and the protein universe  
             ligand_index = 0
-            for ligand in ligand_structures:
+            for ligand in identical_ligand_structures:
                 this_ligands_indices_ligand_universe = []
                 this_ligands_indices_complete_universe = []
                 ligand_not_added = False
@@ -260,7 +276,7 @@ def generate_structures(i, pdbID, directory, save_directory):
                     this_ligands_indices_complete_universe.append(known_index)
                     if ligand_not_added: continue
                 SASA_ratio = np.mean(complete_SASA[this_ligands_indices_complete_universe])/np.mean(ligand_SASA[this_ligands_indices_ligand_universe])
-                known_ligand_SASA_ratios.append(SASA_ratio)
+                # known_ligand_SASA_ratios.append(SASA_ratio)
                 ligand.atoms.write(os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
                 csvwriter.writerow([ligand_index,True,SASA_ratio,SASA_ratio,5])
                 ligand_index += 1
@@ -269,65 +285,65 @@ def generate_structures(i, pdbID, directory, save_directory):
             # Find all ligand atoms that are not already labeled and have a sasa ratio above our cutoff   
             for fragment in complete_universe.atoms.fragments:
                 sel = fragment.select_atoms("not type H")
-                if len(sel.atoms) in ligand_len_list:
-                    if np.any([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):
+                if len(sel.atoms) in similar_ligand_len_list:
+                    if np.any([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):
                         # Types and sybyl types are the same and ordered correctly
                         indices = list(set(fragment.indices) - set(known_ligand_indices_complete_universe))
                         if len(indices) > 0:   # Wont be greater than zero if this is a known ligand
-                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H])
-                            matched_known_SASA_ratio = known_ligand_SASA_ratios[matched_ligand_index]
+                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H])
+                            matched_known_SASA_ratio = similar_ligand_SASA_ratios[matched_ligand_index]
                             this_ligand_traj = complete_traj.atom_slice(indices)
                             ligand_SASA = shrake_rupley(this_ligand_traj, mode='atom')[0]
                             SASA_ratio = np.mean(complete_SASA[indices])/np.mean(ligand_SASA)
                             
                             if SASA_ratio < SASA_RATIO_CUTOFF or SASA_ratio < matched_known_SASA_ratio + 0.1:
                                 # fragment.atoms.write(os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
-                                write_fragment(fragment, mda.Universe(protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
+                                write_fragment(fragment, mda.Universe(identical_protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
                                 csvwriter.writerow([ligand_index,False,SASA_ratio,matched_known_SASA_ratio,4])
                                 ligand_index += 1
-                    elif  np.any([np.all([x.split('.')[0] for x in sel.atoms.types] == [x.split('.')[0] for x in lig.atoms.types] ) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):
+                    elif  np.any([np.all([x.split('.')[0] for x in sel.atoms.types] == [x.split('.')[0] for x in lig.atoms.types] ) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):
                         # Types and sybyl types are the same and ordered correctly
                         indices = list(set(fragment.indices) - set(known_ligand_indices_complete_universe))
                         if len(indices) > 0:   # Wont be greater than zero if this is a known ligand  
-                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H])
-                            matched_known_SASA_ratio = known_ligand_SASA_ratios[matched_ligand_index]
+                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H])
+                            matched_known_SASA_ratio = similar_ligand_SASA_ratios[matched_ligand_index]
                             this_ligand_traj = complete_traj.atom_slice(indices)
                             ligand_SASA = shrake_rupley(this_ligand_traj, mode='atom')[0]
                             SASA_ratio = np.mean(complete_SASA[indices])/np.mean(ligand_SASA)
                             
                             if SASA_ratio < SASA_RATIO_CUTOFF or SASA_ratio < matched_known_SASA_ratio + 0.1:
                                 # fragment.atoms.write(os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
-                                write_fragment(fragment, mda.Universe(protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
+                                write_fragment(fragment, mda.Universe(identical_protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
                                 csvwriter.writerow([ligand_index,False,SASA_ratio,matched_known_SASA_ratio,3])
                                 ligand_index += 1
-                    elif np.any([np.all(sorted(sel.atoms.types) == sorted(lig.atoms.types)) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):    
+                    elif np.any([np.all(sorted(sel.atoms.types) == sorted(lig.atoms.types)) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):    
                         # Types and sybyl types are the same and ordered correctly
                         indices = list(set(fragment.indices) - set(known_ligand_indices_complete_universe))
                         if len(indices) > 0:   # Wont be greater than zero if this is a known ligand  
-                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H])
-                            matched_known_SASA_ratio = known_ligand_SASA_ratios[matched_ligand_index]
+                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H])
+                            matched_known_SASA_ratio = similar_ligand_SASA_ratios[matched_ligand_index]
                             this_ligand_traj = complete_traj.atom_slice(indices)
                             ligand_SASA = shrake_rupley(this_ligand_traj, mode='atom')[0]
                             SASA_ratio = np.mean(complete_SASA[indices])/np.mean(ligand_SASA)
                             
                             if SASA_ratio < SASA_RATIO_CUTOFF or SASA_ratio < matched_known_SASA_ratio + 0.1:
                                 # fragment.atoms.write(os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
-                                write_fragment(fragment, mda.Universe(protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
+                                write_fragment(fragment, mda.Universe(identical_protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
                                 csvwriter.writerow([ligand_index,False,SASA_ratio,matched_known_SASA_ratio,2])
                                 ligand_index += 1
-                    elif np.any([np.all(sorted([x.split('.')[0] for x in sel.atoms.types]) == sorted([x.split('.')[0] for x in lig.atoms.types])) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H]):
+                    elif np.any([np.all(sorted([x.split('.')[0] for x in sel.atoms.types]) == sorted([x.split('.')[0] for x in lig.atoms.types])) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H]):
                         # Types and sybyl types are the same and ordered correctly
                         indices = list(set(fragment.indices) - set(known_ligand_indices_complete_universe))
                         if len(indices) > 0:   # Wont be greater than zero if this is a known ligand  
-                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in ligand_structures_no_H])
-                            matched_known_SASA_ratio = known_ligand_SASA_ratios[matched_ligand_index]
+                            matched_ligand_index = np.argmax([np.all(sel.atoms.types == lig.atoms.types) if len(sel.atoms) == len(lig.atoms) else False for lig in similar_ligand_structures_no_H])
+                            matched_known_SASA_ratio = similar_ligand_SASA_ratios[matched_ligand_index]
                             this_ligand_traj = complete_traj.atom_slice(indices)
                             ligand_SASA = shrake_rupley(this_ligand_traj, mode='atom')[0]
                             SASA_ratio = np.mean(complete_SASA[indices])/np.mean(ligand_SASA)
                             
                             if SASA_ratio < SASA_RATIO_CUTOFF or SASA_ratio < matched_known_SASA_ratio + 0.1:
                                 # fragment.atoms.write(os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
-                                write_fragment(fragment, mda.Universe(protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
+                                write_fragment(fragment, mda.Universe(identical_protein_paths[0], format='mol2'), os.path.join(save_directory,"{}_{}/ligand_{}.mol2".format(pdbID, structure_idx, ligand_index)))
                                 csvwriter.writerow([ligand_index,False,SASA_ratio,matched_known_SASA_ratio,1])
                                 ligand_index += 1
                         
@@ -339,7 +355,7 @@ def generate_structures(i, pdbID, directory, save_directory):
         # delete_str = "".join(["not index " + x + " or " for x in list(delete_list)[:-1]]) + "not index " + str(list(delete_list)[-1])
         # complete_universe = complete_universe.select_atoms(delete_str)
         # It turns out the you can't write merged proteins as mol2 files so we're going to have to write an uncleaned protein and clean it up later
-        protein_to_output = mda.Universe(protein_paths[0], format='mol2')
+        protein_to_output = mda.Universe(identical_protein_paths[0], format='mol2')
         assert len(protein_to_output.atoms) > 0
         protein_to_output.atoms.write(os.path.join(save_directory,"{}_{}/protein.mol2".format(pdbID, structure_idx)))
         
