@@ -359,7 +359,7 @@ def process_mlig(path, lig_resnames, data_dir="benchmark_data_dir", min_size=256
         mol2_dir = f'./{data_dir}/ready_to_parse_mol2/'
         pdb2mol2(f'{prepend}/{path}', structure_name, mol2_dir , out_name='system', cleanup=False)
         protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
-        extract_ligands_from_list(f'{mol2_dir}{structure_name}/', lig_resnames)
+        extract_ligands_from_list(f'{mol2_dir}{structure_name}', lig_resnames)
         label_sites_given_ligands(f'{mol2_dir}{structure_name}')
         
         process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
