@@ -1,11 +1,13 @@
 from dataclasses import field
 from turtle import end_fill
 from parsing_regular import process_system
-from merge_and_parse_scPDB import write_fragment
+from merge import write_fragment
 import MDAnalysis as mda
+from MDAnalysis.analysis.distances import distance_array
 import os
 import sys
 import numpy as np
+import pandas as pd
 import shutil
 import openbabel
 from tqdm import tqdm
@@ -16,9 +18,12 @@ allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS
 selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)[:-1]]) + "resname " + str(allowed_residues[-1])
 
 
-def label_sites_given_ligands(path_to_mol2):
-    protein = mda.Universe(os.path.join(path_to_mol2, 'protein.mol2'))
+def label_sites_given_ligands(path_to_mol2, use_pdb=False):
+    if use_pdb: extension = 'pdb'
+    else: extension = 'mol2'
+    protein = mda.Universe(os.path.join(path_to_mol2, f'protein.{extension}'))
     protein_no_h = protein.select_atoms("not type H")
+    ligand_idx = 0
     all_site_resids = []
     for file_path in sorted(glob(path_to_mol2+ '/*')):
         if 'protein' in file_path:
@@ -38,8 +43,8 @@ def label_sites_given_ligands(path_to_mol2):
             site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
 
             this_ligands_site = protein.select_atoms(site_selection_str)
-            this_ligands_site.atoms.write(os.path.join(path_to_mol2,"site_for_ligand_{}.mol2".format(int(re.findall("\d+",file_path.split('/')[-1])[0]))))
-
+            this_ligands_site.atoms.write(os.path.join(path_to_mol2,f"site_for_ligand_{ligand_idx}.{extension}"))
+            ligand_idx += 1
         else:
             # This is an unexpected file
             pass
@@ -47,7 +52,7 @@ def label_sites_given_ligands(path_to_mol2):
     
     # site_selection_str = "".join(["resid " + str(x) + " or " for x in site_resid_list[:-1]] + ["resid " + str(site_resid_list[-1])])
     # protein.select_atoms(site_selection_str).atoms.write(os.path.join(path_to_mol2,"site.mol2"))
-    protein.residues[np.in1d(protein.residues.resids, site_resid_list)].atoms.write(os.path.join(path_to_mol2,"site.mol2"))
+    protein.residues[np.in1d(protein.residues.resids, site_resid_list)].atoms.write(os.path.join(path_to_mol2, f"site.{extension}"))
 
 def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
     # print("Starting")
@@ -110,23 +115,8 @@ def protein2mol2(pdb_file, structure_name, out_directory, min_size=256, addH=Tru
         univ = univ.select_atoms(selection_str)
         mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
 
-    
-# def mol22mol2(infile, structure_name, out_directory, addH=True, out_name="protein"):
-#     output_path = out_directory + '/unprocessed_mol2/' + structure_name
-#     if not os.path.isdir(output_path): os.makedirs(output_path)
-    
-#     obConversion = openbabel.OBConversion()
-#     obConversion.SetInAndOutFormats("mol2", "mol2")
 
-#     mol = openbabel.OBMol()
-#     obConversion.ReadFile(mol, infile)
-#     mol.DeleteHydrogens()
-#     if addH:
-#         mol.CorrectForPH()
-#         mol.AddHydrogens()
-#     obConversion.WriteFile(mol, output_mol2_path)
-
-def rebond_mol2(i,infile, structure_name, outfile, addH=False,strip_size=256):
+def rebond_mol2(i, infile, structure_name, outfile, addH=False, strip_size=256):
     obConversion = openbabel.OBConversion()
     obConversion.SetInAndOutFormats("mol2", "pdb")
 
@@ -140,8 +130,47 @@ def rebond_mol2(i,infile, structure_name, outfile, addH=False,strip_size=256):
     # Delete mol2 file
     os.remove('temp{}.pdb'.format(i))
     return None
- 
 
+
+def rebond_pdb(pdb_file, structure_name, out_directory, min_size=256, addH=True, out_name='protein', cleanup=True):
+    output_path = out_directory + structure_name
+    if not os.path.isdir(output_path): os.makedirs(output_path)
+    
+    obConversion = openbabel.OBConversion()
+    obConversion.SetInAndOutFormats("pdb", "pdb")
+
+    output_pdb_path  = output_path + '/' + out_name +'.pdb'
+
+    mol = openbabel.OBMol()
+
+    obConversion.ReadFile(mol, pdb_file)
+    mol.StripSalts(min_size)
+    mol.DeleteHydrogens()
+    if addH: 
+        mol.CorrectForPH()
+        mol.AddHydrogens()
+    
+
+    obConversion.WriteFile(mol, output_pdb_path)
+    
+    if cleanup:
+        # Use MDA to remove clean file
+        univ = mda.Universe(output_pdb_path)
+        res_names = univ.residues.resnames
+        new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
+        univ.residues.resnames = new_names
+        univ = univ.select_atoms(selection_str)
+        mda.coordinates.PDB.PDBWriter(output_pdb_path).write(univ)
+
+def convert_all_pdb(structure_name, out_directory, addH=True, cleanup=True):
+    output_path = out_directory + structure_name
+    files = os.listdir(output_path)
+    for file in files:
+        if file.split('.')[-1] == 'pdb':
+            pdb2mol2(f'{output_path}/{file}', structure_name, out_directory, addH=addH, out_name=file[:-4], cleanup=cleanup)
+            os.remove(f'{output_path}/{file}')
+
+ 
 # def process_train_openbabel(i, file, output_dir):
 #     print("Processing", file, flush=True)
 #     try:
@@ -175,6 +204,29 @@ def rebond_mol2(i,infile, structure_name, outfile, addH=False,strip_size=256):
 #     except Exception as e:
 #         print(e)
 
+def load_ligand_list(file, skiprows):
+    df = pd.read_csv(file, sep='\s+', names=['path', 'ligands'], index_col=False, skiprows=skiprows)
+    df = df[df['ligands'] != '<CONFLICTS>']
+    df['path'] = ['benchmark_data_dir/'+'/unprocessed_pdb/'.join(file.split('/')) for file in df['path']]
+    df['ligands'] = [l.split(',') for l in df['ligands']]
+    
+    return df
+
+def write_mlig(df, out_file):
+    with open(out_file, 'w') as f:
+        f.write('HEADER: protein ligand_codes\n\n')
+        for val in df.values:
+            val[0] = '/'.join(val[0].split('/')[1:4:2])
+            f.write(f'{val[0]}  {",".join(val[1])}\n')
+
+def deeppocket_mlig(dp_file, full_df, out_file):
+    df = pd.read_csv(dp_file, sep=',', names=['path', 'pockets'], index_col=False)
+    df['path'] = [f'benchmark_data_dir/{"/unprocessed_pdb/".join(file.split("/"))}.pdb' for file in df['path']]
+    df = df[df['pockets'] > 0]
+
+    dp_lig_df = full_df[full_df['path'].isin(df['path'])]
+    write_mlig(dp_lig_df, out_file)
+
 def extract_ligands(mol_directory):
     univ = mda.Universe(f'{mol_directory}/system.mol2')
     lig_ind = 0
@@ -182,7 +234,37 @@ def extract_ligands(mol_directory):
         if  3 < frag.n_atoms < 256:
             write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
             lig_ind += 1
-        
+
+def extract_ligands_from_list(mol_directory, lig_resnames):
+    univ = mda.Universe(f'{mol_directory}/system.mol2') 
+    prot = mda.Universe(f'{mol_directory}/protein.mol2')
+    lig_ind = 0
+    for frag in univ.atoms.fragments:
+        res_set = {res.resname[:3] for res in frag.residues}
+        if  res_set.issubset(set(lig_resnames)) and not res_set.issubset(set(allowed_residues)):
+            frag_dist = np.min(distance_array(frag.positions, prot.select_atoms("not type H").positions))
+            if frag_dist <= 6.5: 
+                write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+                lig_ind += 1
+    
+    if lig_ind == 0: # if no ligands were found, check if they are bonded
+        print(f'Residue-level selection needed for {mol_directory}', flush=True)
+        extract_residues_from_list(mol_directory, lig_resnames)
+
+
+
+def extract_residues_from_list(mol_directory, lig_resnames):
+    univ = mda.Universe(f'{mol_directory}/system.mol2')
+    prot = mda.Universe(f'{mol_directory}/protein.mol2')
+    lig_ind = 0
+    for res in univ.atoms.residues:
+        if (res.resname[:3] in lig_resnames) and (res.resname[:3] not in allowed_residues):
+            res_dist = np.min(distance_array(res.atoms.positions, prot.select_atoms("not type H").positions))
+            if res_dist <= 6.5: 
+                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+                lig_ind += 1
+
+
 def process_train_openbabel(i, file, output_dir):
     strip_size = 98 # Max number of atoms in a ligand in scPDB excluding hydrogens
     
@@ -273,37 +355,60 @@ def move_SC6K(num_cores, verbose=False):
 #     thread.start()
 #     thread.join()
 
-def process_test(file, data_dir="benchmark_data_dir"):
+def process_chen(file, data_dir="benchmark_data_dir"):
     try:
         prepend = os.getcwd()
         structure_name = file.split('_')[1][:-4]
+        mol2_dir = f'./{data_dir}/ready_to_parse_mol2/' 
         path_to_pdb = prepend +'/'+data_dir+'/unprocessed_pdb/'
-        pdb2mol2(path_to_pdb+file, structure_name, f'./{data_dir}/ready_to_parse_mol2/' , out_name='system', cleanup=False)
-        protein2mol2(path_to_pdb+file, structure_name, f'./{data_dir}/ready_to_parse_mol2/', min_size=231, out_name='protein', cleanup=True)
-        extract_ligands(f'./{data_dir}/ready_to_parse_mol2/{structure_name}/')
-        label_sites_given_ligands(f'./{data_dir}/ready_to_parse_mol2/{structure_name}')
+        pdb2mol2(path_to_pdb+file, structure_name, mol2_dir, out_name='system', cleanup=False)
+        protein2mol2(path_to_pdb+file, structure_name, mol2_dir, min_size=231, out_name='protein', cleanup=True)
+        extract_ligands(f'{mol2_dir}{structure_name}/')
+        label_sites_given_ligands(f'{mol2_dir}{structure_name}')
         
-        process_system(f'./{data_dir}/ready_to_parse_mol2/' + structure_name, save_directory='./'+data_dir)
+        process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
         # break
     except AssertionError as e:
-        print("Failed to find ligand in", file)
+        print("Failed to find ligand in", structure_name)
+    except Exception as e:  
+        # print(e)
+        raise e
+
+def process_mlig(path, lig_resnames, data_dir="benchmark_data_dir", min_size=256):
+    print(f'start {path}', flush=True)
+    try:
+        prepend = os.getcwd()
+        structure_name = path.split('/')[-1].split('.')[0]
+        mol2_dir = f'./{data_dir}/ready_to_parse_mol2/'
+        pdb2mol2(f'{prepend}/{path}', structure_name, mol2_dir , out_name='system', cleanup=False)
+        rebond_pdb(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
+        pdb2mol2(f'{mol2_dir}{structure_name}/protein.pdb', structure_name, mol2_dir , out_name='protein', cleanup=False)
+        extract_ligands_from_list(f'{mol2_dir}{structure_name}/', lig_resnames)
+        label_sites_given_ligands(f'{mol2_dir}{structure_name}', use_pdb=True)
+        convert_all_pdb(structure_name, mol2_dir) # we get sites w/ pdb then convert to avoid issues w/ duplicate resids
+        
+        process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
+        # break
+        print(f'end {path}', flush=True)
+    except AssertionError as e:
+        print("Failed to find ligand in", structure_name)
     except Exception as e:  
         # print(e)
         raise e
 
 if __name__ == "__main__":   
-    num_cores = 48
+    num_cores = 1
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
  
-    if str(sys.argv[1]) == "val":
-        pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/benchmark_data_dir/unprocessed_pdb')))]
-        Parallel(n_jobs=num_cores)(delayed(process_test)(filename) for _, filename in enumerate(tqdm(pdb_files)))
+    if str(sys.argv[1]) == "chen":
+        pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/benchmark_data_dir/chen/unprocessed_pdb')))]
+        Parallel(n_jobs=num_cores)(delayed(process_chen)(filename, data_dir='/benchmark_data_dir/chen') for _, filename in enumerate(tqdm(pdb_files)))
     elif str(sys.argv[1]) == "train_openbabel":
-        print("Parsing the openbabel train set")
+        print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:])))
+        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
     elif str(sys.argv[1]) == "train_classic":
@@ -326,8 +431,11 @@ if __name__ == "__main__":
         # for i, filename in enumerate(mol2_files[:]):
         #     process_train(i,filename, 'hetro_data_dir')
     elif str(sys.argv[1]) == "coach420":
-        pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/coach420_data_dir/unprocessed_pdb')))]
-        Parallel(n_jobs=num_cores)(delayed(process_test)(filename) for _, filename in enumerate(tqdm(pdb_files)))
+        full_df = load_ligand_list(f'{prepend}/benchmark_data_dir/coach420(mlig)-deeppocket.ds', skiprows=2)
+        Parallel(n_jobs=num_cores)(delayed(process_mlig)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420', min_size=4) for i in tqdm(full_df.index))
+    elif str(sys.argv[1]) == "holo4k":
+        full_df = load_ligand_list(f'{prepend}/benchmark_data_dir/holo4k(mlig)-deeppocket.ds', skiprows=2)
+        Parallel(n_jobs=num_cores)(delayed(process_mlig)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k', min_size=4) for i in tqdm(full_df.index[1868:1918]))
     elif str(sys.argv[1] == "SC6K"):
         if len(sys.argv) < 3: 
             move_SC6K(num_cores, verbose=False)
