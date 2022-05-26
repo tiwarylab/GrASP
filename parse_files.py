@@ -31,8 +31,6 @@ def label_sites_given_ligands(path_to_mol2, extension='mol2'):
     add_chains_from_frags(protein)
     protein_no_h = protein.select_atoms("not type H")
     
-
-    ligand_idx = 0
     all_sites = mda.AtomGroup([], protein) # empty AtomGroup
     for file_path in sorted(glob(path_to_mol2+ '/*')):
         if 'protein' in file_path:
@@ -56,8 +54,9 @@ def label_sites_given_ligands(path_to_mol2, extension='mol2'):
 
             this_ligands_site = protein.select_atoms(site_selection_str)
             all_sites += this_ligands_site
+            ligand_idx = int(re.findall("\d+",file_path.split('/')[-1])[0])
             this_ligands_site.atoms.write(os.path.join(path_to_mol2, f"site_for_ligand_{ligand_idx}.{extension}"))
-            ligand_idx += 1
+
         else:
             # This is an unexpected file
             pass
