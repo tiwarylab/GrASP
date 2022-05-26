@@ -210,11 +210,14 @@ def deeppocket_mlig(dp_file, full_df, out_file):
 
 def extract_ligands(mol_directory):
     univ = mda.Universe(f'{mol_directory}/system.mol2')
+    prot = mda.Universe(f'{mol_directory}/protein.mol2')
     lig_ind = 0
     for frag in univ.atoms.fragments:
         if  3 < frag.n_atoms < 256:
-            write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
-            lig_ind += 1
+            frag_dist = np.min(distance_array(frag.positions, prot.select_atoms("not type H").positions))
+            if frag_dist <= 6.5: 
+                write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+                lig_ind += 1
 
 
 def extract_ligands_from_list(mol_directory, lig_resnames):
