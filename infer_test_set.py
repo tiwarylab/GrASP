@@ -2,6 +2,7 @@ import os
 import numpy as np
 from datetime import datetime
 import time
+from tqdm import tqdm
 
 # import torch
 import torch.nn.functional as F
@@ -42,13 +43,16 @@ prepend = str(os.getcwd())
 # model_name = "trained_model_1g12_mean_self_edges_ligand_removed_SASA/epoch_49"
 # model = Hybrid_1g12(input_dim = 88)
 
-model_name= "trained_model_1650260810.482072/epoch_46"   # After site relabeling and OB. Old model's hyperparams this is a Hybrid_1g12_self_edges() model
-# model = Hybrid_1g12(input_dim = 88)
+# model_name= "trained_model_1650260810.482072/epoch_46"   # After site relabeling and OB. Old model's hyperparams this is a Hybrid_1g12_self_edges() model
+# model = Hybrid_1g12_self_edges(input_dim = 88)
+
+# New model trained on freshly merged dataset, and fixed site labeling issues
+model_name = "trained_model_1652221046.78391/epoch_49"
 model = Hybrid_1g12_self_edges(input_dim = 88)
 
 model_path = prepend + "/trained_models/" + model_name
-# set_to_use = 'val'      # Currently using the OB and relabeling dataset
-set_to_use = 'test'
+set_to_use = 'coach420'      # one of {'val','chen','coach420','holo4k','sc6k'}
+# set_to_use = 'chen'
 
 # model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
 # model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
@@ -96,30 +100,35 @@ model.to(device)
 #########################
 if set_to_use == 'val':
     print("Initializing Validation Set")
-    data_set = KLIFSData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
-    # data_set.process()
-    train_mask, val_mask = k_fold(data_set, prepend, 0) # <--- was the first fold, should have been 0
+    path_to_dataset = prepend + '/scPDB_data_dir'
+    metric_dir = '/test_metrics/validation'
+
+    data_set = KLIFSData(path_to_dataset, num_cpus, cutoff=5)
+    train_mask, val_mask = k_fold(data_set, prepend, 0) 
     val_set     = data_set[val_mask]
-
-    val_dataloader = DataLoader(val_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
-elif set_to_use == 'test':
-    print("Initializing Test Set")    
-    data_set = KLIFSData(prepend + '/benchmark_data_dir', num_cpus, cutoff=5)
+    val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
+else:  
+    if set_to_use == 'chen':
+        print("Initializing Chen Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/chen'
+        metric_dir = '/test_metrics/chen'
+    elif set_to_use ==  'coach420':
+        print("Initializing coach420 Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/coach420'
+        metric_dir = '/test_metrics/coach420'
+    elif set_to_use == 'holo4k':
+        print("Initializing holo4k Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/holo4k'
+        metric_dir = '/test_metrics/holo4k'
+    elif set_to_use == 'sc6k':
+        print("Initializing sc6k Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/sc6k'
+        metric_dir = '/test_metrics/sc6k'
+    else:
+        raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
+    data_set = KLIFSData(path_to_dataset, num_cpus, cutoff=5)
     data_set.process()
-    val_dataloader = DataLoader(data_set, batch_size=1, shuffle=True, pin_memory=True, num_workers=num_cpus)
-else:
-    raise ValueError("Expected 'val' or 'test' as set_to_use but got:", str(set_to_use))
-
-
-
-#########################
-# data_set = KLIFSData(prepend + '/test_data_dir', num_cpus, cutoff=5, force_process=False)
-# data_set.process()
-# data_set = torch.utils.data.Subset(data_set, np.random.choice(len(data_set), size = 5000, replace=False))
-######################### data_set = KLIFSData(prepend + '/test_data_dir', num_cpus)
-# Sticking with batch size 1 because it makes it easier to track predictions
-# test_dataloader =  DataLoader(data_set, batch_size = 1, shuffle=False, pin_memory=True, 
-#                               num_workers=num_cpus, persistent_workers=True)
+    val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
 test_epoch_loss = []
 test_epoch_acc = []
@@ -128,18 +137,13 @@ test_epoch_mcc = []
 all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
-#########################
-if set_to_use == 'val':
-    if not os.path.isdir(prepend + '/train_metrics/test_probs/' + model_name + '/'):
-        os.makedirs(prepend + '/train_metrics/test_probs/' + model_name + '/')
-    if not os.path.isdir(prepend + '/train_metrics/test_labels/'):
-        os.makedirs(prepend + '/train_metrics/test_labels/')
-#########################
-if set_to_use == 'test':    
-    if not os.path.isdir(prepend + '/test_metrics/test_probs/' + model_name + '/'):
-       os.makedirs(prepend + '/test_metrics/test_probs/' + model_name + '/')
-    if not os.path.isdir(prepend + '/test_metrics/test_labels/'):
-      os.makedirs(prepend + '/test_metrics/test_labels/')
+prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
+label_path = prepend + metric_dir + '/labels/' + '/'
+
+if not os.path.isdir(prob_path):
+    os.makedirs(prob_path)
+if not os.path.isdir(label_path):
+    os.makedirs(label_path)
 
 print("Begining Evaluation")
 model.eval()
@@ -148,7 +152,7 @@ with torch.no_grad():
     test_batch_acc = 0.0
     test_batch_mcc = 0.0
     # for batch, name in test_dataloader:
-    for batch, name in val_dataloader:
+    for batch, name in tqdm(val_dataloader, position=0, leave=True):
         
         labels = batch.y.to(device)
         assembly_name = name[0][:-4]  
@@ -169,17 +173,8 @@ with torch.no_grad():
         test_batch_loss += bl
         test_batch_acc  += ba
         test_batch_mcc  += bm
-        # print("Test Batch Loss:", bl)
-        # print("Test Batch Accu:", ba)
-        # print("Test Batch MCC:", bm)
-        #########################
-        if set_to_use == 'val':
-            np.save(prepend + '/train_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-            np.save(prepend + '/train_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
-        #########################
-        if set_to_use == 'test':
-            np.save(prepend + '/test_metrics/test_probs/' + model_name + '/' + assembly_name, probs.detach().cpu().numpy())
-            np.save(prepend + '/test_metrics/test_labels/' + assembly_name, labels.detach().cpu().numpy())
+        np.save(prob_path + assembly_name, probs.detach().cpu().numpy())
+        np.save(label_path + assembly_name, labels.detach().cpu().numpy())
         
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
@@ -204,25 +199,16 @@ with torch.no_grad():
 all_probs  =  all_probs.detach().cpu().numpy()
 all_labels = all_labels.detach().cpu().numpy()
 
+all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
+all_label_path = prepend + metric_dir + '/all_labels/'
 
-#########################
-if set_to_use == 'val':
-    if not os.path.isdir(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2]):
-        os.makedirs(prepend + '/train_metrics/all_probs/' + model_name.split('/')[-2])
-    if not os.path.isdir(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2]):
-        os.makedirs(prepend + '/train_metrics/all_labels/' + model_name.split('/')[-2])
+if not os.path.isdir(all_prob_path):
+    os.makedirs(all_prob_path)
+if not os.path.isdir(all_label_path):
+    os.makedirs(all_label_path)
 
-    np.savez(prepend + "/train_metrics/all_probs/" + model_name, all_probs)
-    np.savez(prepend + "/train_metrics/all_labels/" + model_name, all_labels)
-#########################
-if set_to_use == 'test':
-    if not os.path.isdir(prepend + '/test_metrics/all_probs/' + model_name):
-       os.makedirs(prepend + '/test_metrics/all_probs/' + model_name)
-    if not os.path.isdir(prepend + '/test_metrics/all_labels/' + model_name):
-       os.makedirs(prepend + '/test_metrics/all_labels/' + model_name) 
-
-    np.savez(prepend + "/test_metrics/all_probs/" + model_name, all_probs)
-    np.savez(prepend + "/test_metrics/all_labels/" + model_name, all_labels)
+np.savez(all_prob_path + 'all_probs', all_probs)
+np.savez(all_label_path + 'all_labels', all_labels)
 
 all_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
 
@@ -255,21 +241,11 @@ fpr["macro"] = all_fpr
 tpr["macro"] = mean_tpr
 roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
-#########################
-if set_to_use == 'val':
-    if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
-        os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
+roc_path = prepend + metric_dir + '/roc_curves/' + model_name
+if not os.path.isdir(roc_path):
+    os.makedirs(roc_path)
 
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
-#########################
-if set_to_use == 'test':
-    if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
-      os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
-
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+np.savez(roc_path + "/roc_auc", roc_auc)
+np.savez(roc_path + "/tpr", tpr)
+np.savez(roc_path + "/fpr", fpr)
+np.savez(roc_path + "/thresholds", thresholds)
