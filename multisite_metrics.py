@@ -267,7 +267,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         return nan_arr, nan_arr, nan_arr, nan_arr
 
 
-def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_data_dir/mol2/', path_to_labels = '/test_metrics/'):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, ):
     DCC_lig_list = []
     DCC_site_list = []
     DCA_list = []
@@ -277,17 +277,21 @@ def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_d
         no_prediction_count = 0
         assembly_name = file.split('.')[-2]
         try:
-            trimmed_protein = mda.Universe(prepend + path_to_mol2 + assembly_name + '.mol2')
-            labels = np.load(prepend + path_to_labels + 'test_labels/' + assembly_name + '.npy')
-            probs = np.load(prepend + path_to_labels + 'test_probs/' + model_name + '/' + assembly_name + '.npy')
+            trimmed_protein = mda.Universe(path_to_mol2 + assembly_name + '.mol2')
+            labels = np.load(prepend + metric_dir + '/labels/' + assembly_name + '.npy')
+            probs = np.load(prepend + metric_dir + '/probs/' + model_name + '/' + assembly_name + '.npy')
+            # print(probs.shape)
+            ############### THIS IS TEMPORARY AF REMOVE BEFORE PUBLICAITON ##############
+            probs = np.array([[1,0] if x ==0 else [0,1] for x in labels])
+            # print(probs.shape)
 
             lig_coord_list = []
             ligand_mass_list = []
             
             site_coords_list = []
-            
-            for file_path in sorted(glob(prepend + "/scPDB_data_dir/ready_to_parse_mol2/" + assembly_name + '/*')):
-            # for file_path in sorted(glob(prepend + "/benchmark_data_dir/unprocessed_mol2/" + assembly_name + '/*')):
+            print(data_dir + '/ready_to_parse_mol2/' + assembly_name + '/*')
+            for file_path in sorted(glob(data_dir + '/ready_to_parse_mol2/' + assembly_name + '/*')):
+                print(file_path)
                 if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
                     ligand = mda.Universe(file_path).select_atoms("not type H")
                     lig_coord_list.append(list(ligand.atoms.positions))
@@ -339,7 +343,9 @@ def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_d
     #     except Exception as e:
     #         print(assembly_name, flush=True)
     #         raise e
-    r = Parallel(n_jobs=15)(delayed(helper)(file) for file in tqdm(os.listdir(prepend + path_to_labels + 'test_probs/' + model_name + '/')[:],  position=0, leave=True))
+    
+    # Normally 15 jobs
+    r = Parallel(n_jobs=1)(delayed(helper)(file) for file in tqdm(os.listdir(path_to_labels)[:],  position=0, leave=True))
     DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count = zip(*r)
         
     return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count
@@ -360,7 +366,8 @@ def compute_metrics_for_all(top_n_plus=0, threshold = 0.5, path_to_mol2='/test_d
 # model_name = "trained_model_1648747746.262174/epoch_26" # 1g12 Mean Self Edges Epoch 26, scPDB Dataset
 # model_name = "trained_model_1g12_null_self_edges/epoch_49"
 # model_name = "trained_model_1g12_mean_self_edges/epoch_49"
-model_name = "trained_model_1650260810.482072/epoch_46" # Old params, new labeling, ob
+# model_name = "trained_model_1650260810.482072/epoch_46" # Old params, new labeling, ob
+model_name = "trained_model_1652221046.78391/epoch_49"
 
 
 prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
@@ -368,18 +375,37 @@ threshold_lst = [0.4, 0.45, 0.5]
 compute_optimal = True
 top_n_plus=2
 
-data_dir = 'scPDB_data_dir'
+set_to_use = "chen" #"chen"|"val"
 
-set_to_use = "val" #"chen"|"val"
+if set_to_use == 'val':
+    print("Performing Metrics on the Validation Set")
+    data_dir = prepend + '/scPDB_data_dir'
+    metric_dir = '/test_metrics/validation'
+elif set_to_use == 'chen':
+    print("Performing Metrics on the Chen Set")    
+    data_dir = prepend + '/benchmark_data_dir/chen'
+    metric_dir = '/test_metrics/chen'
+elif set_to_use ==  'coach420':
+    print("Performing Metrics on the coach420 Set")    
+    data_dir = prepend + '/benchmark_data_dir/coach420'
+    metric_dir = '/test_metrics/coach420'
+elif set_to_use == 'holo4k':
+    print("Performing Metrics on the holo4k Set")    
+    data_dir = prepend + '/benchmark_data_dir/holo4k'
+    metric_dir = '/test_metrics/holo4k'
+elif set_to_use == 'sc6k':
+    print("Performing Metrics on the sc6k Set")    
+    data_dir = prepend + '/benchmark_data_dir/sc6k'
+    metric_dir = '/test_metrics/sc6k'
+else:
+    raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
 
 #######################################################################################
 if compute_optimal:
-    if set_to_use == "chen":
-        all_probs  = np.load(prepend + "/test_metrics/all_probs/" + model_name + ".npz")['arr_0']
-        all_labels = np.load(prepend + "/test_metrics/all_labels/" + model_name + ".npz")['arr_0']
-    elif set_to_use == "val":
-        all_probs  = np.load(prepend + "/train_metrics/all_probs/" + model_name + ".npz")['arr_0']
-        all_labels = np.load(prepend + "/train_metrics/all_labels/" + model_name + ".npz")['arr_0']
+    all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
+    all_label_path = prepend + metric_dir + '/all_labels/'
+    all_probs  = np.load(all_prob_path + "all_probs.npz")['arr_0']
+    all_labels = np.load(all_label_path + "all_labels.npz")['arr_0']
     start = time.time()
 
     binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
@@ -415,17 +441,16 @@ if compute_optimal:
     tpr["macro"] = mean_tpr
     roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
 
-    if set_to_use =="chen":
-        if not os.path.isdir(prepend + '/test_metrics/roc_curves/' + model_name):
-            os.makedirs(prepend + '/test_metrics/roc_curves/' + model_name)
-    elif set_to_use == "val":
-        if not os.path.isdir(prepend + '/train_metrics/roc_curves/' + model_name):
-            os.makedirs(prepend + '/train_metrics/roc_curves/' + model_name)
+    roc_path = prepend + metric_dir + '/roc_curves/' + model_name
+
+    if not os.path.isdir(roc_path):
+        os.makedirs(roc_path)
 
     # Find optimal threshold
     gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
     ix = np.argmax(gmeans)
     optimal_threshold = thresholds[1][ix]
+    threshold_lst.insert(0, optimal_threshold)
 
     print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
     print("Micro Averaged AUC:", roc_auc["micro"])
@@ -433,18 +458,11 @@ if compute_optimal:
     print("Negative Class AUC:", roc_auc[0])
     print("Positive Class AUC:", roc_auc[1])
 
-if set_to_use == "chen":
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/tpr", tpr)
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/fpr", fpr)
-    np.savez(prepend + "/test_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
-elif set_to_use == "val":  
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/roc_auc", roc_auc)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/tpr", tpr)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/fpr", fpr)
-    np.savez(prepend + "/train_metrics/roc_curves/" + model_name + "/thresholds", thresholds)
+    np.savez(roc_path + "/roc_auc", roc_auc)
+    np.savez(roc_path + "/tpr", tpr)
+    np.savez(roc_path + "/fpr", fpr)
+    np.savez(roc_path + "/thresholds", thresholds)
     print("Done. {}".format(time.time()- start))
-    threshold_lst.insert(0, optimal_threshold)
     
 #######################################################################################
 
@@ -458,18 +476,19 @@ def extract_multi(metric_array):
 for threshold in threshold_lst:
     print("Calculating overlap and center distance metrics for "+str(threshold)+" threshold.", flush=True)
     start = time.time()
-    if set_to_use == 'val':
-        DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count = compute_metrics_for_all(top_n_plus=top_n_plus, threshold=threshold,path_to_mol2='/' + data_dir + '/mol2/',path_to_labels='/train_metrics/')
-    if set_to_use == 'chen':
-        DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count = compute_metrics_for_all(top_n_plus=top_n_plus, threshold=threshold,path_to_mol2='/' + data_dir + '/mol2/',path_to_labels='/test_metrics/')
+    path_to_mol2= data_dir + '/mol2/'
+    path_to_labels=prepend + metric_dir + '/labels/'
+    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold,)
     # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
     #     print(x)
 
     print("Done. {}".format(time.time()- start))
-    if set_to_use == "val":
-        np.savez(prepend + '/vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
-    elif set_to_use == "chen":
-        np.savez(prepend + '/chen_vol_overlap_cent_dist_val_set_threshold_{}_{}.npz'.format(model_name.replace("/", "_"), threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
+    
+    overlap_path = prepend + metric_dir + '/overlaps/' + model_name
+    if not os.path.isdir(overlap_path):
+        os.makedirs(overlap_path)
+    
+    np.savez(overlap_path + 'overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps)
     VO = volumetric_overlaps
 
     print("-----------------------------------------------------------------------------------", flush=True)
