@@ -1,27 +1,18 @@
 #!/bin/bash
-## --- Uncomment for GPU ---
-#SBATCH -p gpuk80
-#SBATCH --gres gpu:4
+#SBATCH -N 1
+#SBATCH -p GPU-shared
+#SBATCH -t 48:00:00
+#SBATCH --gpus=v100-32:4
 #SBATCH --ntasks-per-node=8
-#SBATCH --time 48:00:00
-#SBATCH --nodes=1
 #SBATCH --job-name="scPDB GPU Null Self Edges, Open Babel"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 
-## --- Uncomment for CPU ---
-##SBATCH -p shared 
-##SBATCH --ntasks-per-node=6
-##SBATCH --time 0:30:00
-##SBATCH --nodes=1
-##SBATCH --job-name="scPDB CPU GRU Debug"
-##SBATCH --mail-user=strobelm@umd.edu
-##SBATCH --mail-type=ALL
 
-
-ml anaconda
-ml cuda/10.2
-conda activate ~/pytorch_env
-python3 train.py 0.02
+module load anaconda3
+conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
+module load cuda/10.2
+conda activate ../../pytorch_env
+torchrun train.py 0.02
 
 
