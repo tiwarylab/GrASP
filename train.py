@@ -1,9 +1,6 @@
 ######################################################################################################
 #                          Currently Configured for train + val trianing                            # jK, not yet
 ######################################################################################################
-
-
-
 import os
 from networkx.generators import directed
 import numpy as np
@@ -19,7 +16,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import random_split
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel
 
 from torch_geometric.nn import GATv2Conv
 from torch_geometric.loader import DataLoader, NeighborLoader 
@@ -98,43 +97,43 @@ def k_fold(dataset, path, fold_number):
 
 
    
-def main(node_noise_variance):
+def main(rank : int, world_size : int, node_noise_variance : float):
     # Hyperparameters
     num_hops = 2
     num_epochs = 50
-    batch_size = 10
+    batch_size = 4
     sample_size = 20
     learning_rate = 0.005
     train_test_split = .9
     loss_weight = [1.0,1.0]#[0.8,1.2]
     label_smoothing = 0#0.2
     loss_fn_weighting = [.9,.1]
+    
+    dist.init_process_group('nccl', rank=rank, world_size=world_size)
 
-    # Other Parameters
-    device = 'cpu'
-    if torch.cuda.is_available():
-        device = 'cuda'
-    # num_cpus = os.cpu_count() # Don't do this, it will see all of the CPU's on the cluster. 
     num_cpus = 8
-    print("The model will be using the following device:", device, flush=True)
+    print('The model will be using {} gpus.'.format(world_size))
     print("The model will be using {} cpus.".format(num_cpus), flush=True)
 
-    # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-    # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance).to(device)
-    model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance).to(device)
-    # model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add").to(device)
+    # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(rank)
+    # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance).to(rank)
+    model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance).to(rank)
+    model =  DistributedDataParallel(model, device_ids=[rank])
+    
+    # model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add").to(rank)
 
     optimizer = optim.Adam(model.parameters(), lr = learning_rate)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
     
     print("Loss Weighting:", str(loss_weight))
-    loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(loss_weight).to(device))
+    loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(loss_weight).to(rank))
     
     print("Weighted Cross Entropy Loss Function Weight:", loss_fn_weighting[0])
     print("Reconstruction (MSE) Loss Function Weight:  ", loss_fn_weighting[1])
-    loss_fn_weighting = torch.tensor(loss_fn_weighting, device=device)
+    loss_fn_weighting = torch.tensor(loss_fn_weighting)
 
     print("Initializing Train Set", flush=True)
+    
     data_set = KLIFSData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
     # data_set.process()
 
@@ -147,8 +146,8 @@ def main(node_noise_variance):
         # train_size = int(train_test_split*len(data_set))
         # train_set, val_set = random_split(data_set, [train_size, len(data_set) - train_size], generator=torch.Generator().manual_seed(42))
         print("Initializing Data Loaders", flush=True)
-        train_dataloader = DataLoader(train_set, batch_size=2, shuffle=True, pin_memory=True, num_workers=num_cpus)
-        val_dataloader = DataLoader(val_set, batch_size=2, shuffle=True, pin_memory=True, num_workers=num_cpus)
+        train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
+        val_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
 
 
         # Track Training Statistics
@@ -179,13 +178,13 @@ def main(node_noise_variance):
             training_batch_mcc = 0.0
             training_batch_auc = 0.0
             for batch,_  in train_dataloader:
-                unperturbed_x = batch.x.clone().detach().to(device)
+                unperturbed_x = batch.x.clone().detach().to(rank)
                 # batch.x += (0.02**0.5)*torch.randn_like(batch.x)
                 labels = batch.y
                 # x_np = batch.x.numpy()
 
                 optimizer.zero_grad(set_to_none=True)
-                out, out_recon = model.forward(batch.to(device))
+                out, out_recon = model.forward(batch.to(rank))
 
                 # loss = F.cross_entropy(out, batch.y)
                 weighted_xent_l, mse_l = loss_fn_weighting[0] * loss_fn(out,batch.y), loss_fn_weighting[1] * F.mse_loss(out_recon, unperturbed_x)
@@ -252,7 +251,7 @@ def main(node_noise_variance):
                 for batch, _ in val_dataloader:
                     labels = batch.y
 
-                    out, _ = model.forward(batch.to(device))
+                    out, _ = model.forward(batch.to(rank))
                     # loss = F.cross_entropy(out, batch.y)
                     loss = loss_fn(out,batch.y) 
                     preds = np.argmax(out.detach().cpu().numpy(), axis=1)
@@ -291,6 +290,7 @@ def main(node_noise_variance):
                 val_epoch_num += 1
 
         writer.close()
+    dist.destroy_process_group()
 
 if __name__ == "__main__":
     node_noise_variance = sys.argv[1]
@@ -305,5 +305,7 @@ if __name__ == "__main__":
     # print("Training with noise with variance", str(sys.argv[1]), "and mean 0 added to nodes and noise with variance", str(sys.argv[2]), "and mean 0 added to edges.")
     print("Training with noise with variance", str(sys.argv[1]), "and mean 0 added to nodes.")
     
+    world_size = 4
     
-    main(node_noise_variance) 
+    args = (world_size, node_noise_variance)
+    mp.spawn(main, args=args, nprocs=world_size, join=True) 
