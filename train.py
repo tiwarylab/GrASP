@@ -109,11 +109,15 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
     if training_split not in ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k']:
         raise ValueError("Expected training_split to be one of ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k'] but got", training_split)
     
-    dist.init_process_group('nccl', rank=rank, world_size=world_size)
-
     num_cpus = 8
     print('The model will be using {} gpus.'.format(world_size))
     print("The model will be using {} cpus.".format(num_cpus), flush=True)
+
+    print("Loss Weighting:", str(loss_weight))
+    print("Weighted Cross Entropy Loss Function Weight:", loss_fn_weighting[0])
+    print("Reconstruction (MSE) Loss Function Weight:  ", loss_fn_weighting[1])
+
+    dist.init_process_group('nccl', rank=rank, world_size=world_size)
 
     # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(rank)
     # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance).to(rank)
@@ -125,14 +129,9 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
     optimizer = optim.Adam(model.parameters(), lr = learning_rate)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
     
-    print("Loss Weighting:", str(loss_weight))
     loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(loss_weight).to(rank))
     
-    print("Weighted Cross Entropy Loss Function Weight:", loss_fn_weighting[0])
-    print("Reconstruction (MSE) Loss Function Weight:  ", loss_fn_weighting[1])
     loss_fn_weighting = torch.tensor(loss_fn_weighting)
-
-    print("Initializing Train Set", flush=True)
     
     data_set = KLIFSData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
     
@@ -154,13 +153,13 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
 
     else:
         if training_split == 'chen':
-            train_names = np.load(prepend + '/splits/train_ids_chen')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_chen')
         elif training_split == 'coach420':
-            train_names = np.load(prepend + '/splits/train_ids_coach420')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_coach420')
         elif training_split == 'holo4k':
-            train_names = np.load(prepend + '/splits/train_ids_holo4k')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_holo4k')
         elif training_split == 'sc6k':
-            train_names = np.load(prepend + '/splits/train_ids_sc6k')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_sc6k')
         train_indices = []
         for idx, name in enumerate(data_set.raw_file_names):
             if name.split('.')[0] in train_names:
@@ -326,7 +325,7 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
 
 if __name__ == "__main__":
     node_noise_variance = sys.argv[1]
-    training_split = sys.arv[2]
+    training_split = sys.argv[2]
     try:
         node_noise_variance = float(node_noise_variance)
         # edge_noise_variance = float(edge_noise_variance)
