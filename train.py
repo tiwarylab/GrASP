@@ -1,6 +1,3 @@
-######################################################################################################
-#                          Currently Configured for train + val trianing                            # jK, not yet
-######################################################################################################
 import os
 from networkx.generators import directed
 import numpy as np
@@ -73,9 +70,9 @@ class LabelSmoothingLoss(nn.Module):
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
 #ref: https://github.com/pyg-team/pytorch_geometric/blob/master/benchmark/kernel/train_eval.py#L82-L97
-def k_fold(dataset, path, fold_number):
-    val_names    = np.loadtxt(prepend + "/splits/test_ids_fold"  + str(fold_number), dtype='str')
-    train_names   = np.loadtxt(prepend + "/splits/train_ids_fold" + str(fold_number), dtype='str')
+def k_fold(dataset:KLIFSData,train_path:str, val_path):
+    val_names    = np.loadtxt(train_path)
+    train_names   = np.loadtxt(val_path)
     
     train_indices, val_indices = [], []
     
@@ -93,11 +90,11 @@ def k_fold(dataset, path, fold_number):
     # Temporary sanity check to make sure I got this right
     assert train_mask.sum() > val_mask.sum()
 
-    return train_mask, val_mask
+    return dataset[train_mask], dataset[val_mask]
 
 
    
-def main(rank : int, world_size : int, node_noise_variance : float):
+def main(rank : int, world_size : int, node_noise_variance : float, training_split='cv'):
     # Hyperparameters
     num_hops = 2
     num_epochs = 50
@@ -108,6 +105,9 @@ def main(rank : int, world_size : int, node_noise_variance : float):
     loss_weight = [1.0,1.0]#[0.8,1.2]
     label_smoothing = 0#0.2
     loss_fn_weighting = [.9,.1]
+
+    if training_split not in ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k']:
+        raise ValueError("Expected training_split to be one of ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k'] but got", training_split)
     
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
 
@@ -135,13 +135,44 @@ def main(rank : int, world_size : int, node_noise_variance : float):
     print("Initializing Train Set", flush=True)
     
     data_set = KLIFSData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
-    # data_set.process()
+    
+    do_validation = False
+    if training_split == 'cv':
+        do_validation = True
+        val_paths = []
+        train_paths = []
+        for fold_number in range(1):
+            val_paths.append(prepend + "/splits/test_ids_fold"  + str(fold_number))
+            train_paths.append(prepend + "/splits/train_ids_fold" + str(fold_number))
+        data_points = zip(train_paths,val_paths)
+    
+        gen = (k_fold(data_set, train_path, val_path, i) for i, train_path, val_path in enumerate(data_points))
+
+    elif training_split == 'train_full':
+        do_validation = False
+        gen = zip([data_set], [], [0])
+
+    else:
+        if training_split == 'chen':
+            train_names = np.load(prepend + '/splits/train_ids_chen')
+        elif training_split == 'coach420':
+            train_names = np.load(prepend + '/splits/train_ids_coach420')
+        elif training_split == 'holo4k':
+            train_names = np.load(prepend + '/splits/train_ids_holo4k')
+        elif training_split == 'sc6k':
+            train_names = np.load(prepend + '/splits/train_ids_sc6k')
+        train_indices = []
+        for idx, name in enumerate(data_set.raw_file_names):
+            if name.split('.')[0] in train_names:
+                train_indices.append(idx)
+        train_mask = torch.zeros(len(data_set), dtype=torch.bool)
+        train_mask[train_indices] = 1
+
+        gen = zip([data_set[train_mask]],[],[0])
+
 
     # Set to one temporarily to avoid doing full cv
-    for cv_iteration in range(1):
-        train_mask, val_mask = k_fold(data_set, prepend, cv_iteration)
-        train_set   = data_set[train_mask]
-        val_set     = data_set[val_mask]
+    for train_set, val_set, cv_iteration in gen:
 
         # train_size = int(train_test_split*len(data_set))
         # train_set, val_set = random_split(data_set, [train_size, len(data_set) - train_size], generator=torch.Generator().manual_seed(42))
@@ -162,7 +193,7 @@ def main(rank : int, world_size : int, node_noise_variance : float):
         val_epoch_auc = []
 
 
-        writer = SummaryWriter(log_dir='atom_wise_model_logs/cv_split_' + str(cv_iteration) + "/" + str(job_start_time))
+        writer = SummaryWriter(log_dir='atom_wise_model_logs/' + training_split + '/cv_split_' + str(cv_iteration) + "/" + str(job_start_time))
         train_batch_num, val_batch_num = 0,0
         train_epoch_num, val_epoch_num = 0,0
 
@@ -235,65 +266,67 @@ def main(rank : int, world_size : int, node_noise_variance : float):
             writer.add_scalar('Epoch_MCC/Train',  training_epoch_mcc[-1],  train_epoch_num)
             writer.add_scalar('Epoch_AUC/Train',  training_epoch_auc[-1],  train_epoch_num)
 
-            if not os.path.isdir("./trained_models/trained_model_{}/".format(str(job_start_time))):
-                os.makedirs("./trained_models/trained_model_{}/".format(str(job_start_time)))
-            torch.save(model.state_dict(), "./trained_models/trained_model_{}/epoch_{}".format(str(job_start_time), train_epoch_num))
+            if not os.path.isdir("./trained_models/{}/trained_model_{}/".format(training_split, str(job_start_time))):
+                os.makedirs("./trained_models/{}/trained_model_{}/".format(training_split, str(job_start_time)))
+            torch.save(model.state_dict(), "./trained_models/{}/trained_model_{}/epoch_{}".format(training_split, str(job_start_time), train_epoch_num))
             
             train_epoch_num += 1
 
-            model.eval()
-            with torch.no_grad():
-                val_batch_loss = 0.0
-                val_batch_acc = 0.0
-                val_batch_mcc = 0.0
-                val_batch_auc = 0.0
+            if do_validation:
+                model.eval()
+                with torch.no_grad():
+                    val_batch_loss = 0.0
+                    val_batch_acc = 0.0
+                    val_batch_mcc = 0.0
+                    val_batch_auc = 0.0
 
-                for batch, _ in val_dataloader:
-                    labels = batch.y
+                    for batch, _ in val_dataloader:
+                        labels = batch.y
 
-                    out, _ = model.forward(batch.to(rank))
-                    # loss = F.cross_entropy(out, batch.y)
-                    loss = loss_fn(out,batch.y) 
-                    preds = np.argmax(out.detach().cpu().numpy(), axis=1)
-                    bl = loss.detach().cpu().item()
+                        out, _ = model.forward(batch.to(rank))
+                        # loss = F.cross_entropy(out, batch.y)
+                        loss = loss_fn(out,batch.y) 
+                        preds = np.argmax(out.detach().cpu().numpy(), axis=1)
+                        bl = loss.detach().cpu().item()
 
-                    ba = accuracy_score(labels, preds)
-                    bm = mcc(labels, preds)
-                    bc = roc_auc_score(labels, preds, labels=[0,1])
-                        
-                    val_batch_loss += bl
-                    val_batch_acc  += ba
-                    val_batch_mcc  += bm
-                    val_batch_auc  += bc
-                    # print("Validation Batch Loss:", val_batch_loss[-1])
-                    # print("Validation Batch Accu:", val_batch_acc[-1
-                    writer.add_scalar('Batch_Loss/Val', bl, val_batch_num)
-                    writer.add_scalar('Batch_ACC/Val',  ba,  val_batch_num)
-                    writer.add_scalar('Batch_MCC/Val',  bm,  val_batch_num)
-                    writer.add_scalar('Batch_AUC/Val',  bc,  val_batch_num)
-                    val_batch_num += 1
+                        ba = accuracy_score(labels, preds)
+                        bm = mcc(labels, preds)
+                        bc = roc_auc_score(labels, preds, labels=[0,1])
+                            
+                        val_batch_loss += bl
+                        val_batch_acc  += ba
+                        val_batch_mcc  += bm
+                        val_batch_auc  += bc
+                        # print("Validation Batch Loss:", val_batch_loss[-1])
+                        # print("Validation Batch Accu:", val_batch_acc[-1
+                        writer.add_scalar('Batch_Loss/Val', bl, val_batch_num)
+                        writer.add_scalar('Batch_ACC/Val',  ba,  val_batch_num)
+                        writer.add_scalar('Batch_MCC/Val',  bm,  val_batch_num)
+                        writer.add_scalar('Batch_AUC/Val',  bc,  val_batch_num)
+                        val_batch_num += 1
 
 
-                val_epoch_loss.append(val_batch_loss/len(val_dataloader))
-                val_epoch_acc.append(val_batch_acc/len(val_dataloader))
-                val_epoch_mcc.append(val_batch_mcc/len(val_dataloader))
-                val_epoch_auc.append(val_batch_auc/len(val_dataloader))
-                print("Validation Epoch {} Loss: {}".format(epoch, val_epoch_loss[-1]))
-                print("Validation Epoch {} Accu: {}".format(epoch, val_epoch_acc[-1]))
-                print("Validation Epoch {} MCC: {}".format(epoch, val_epoch_mcc[-1]))
-                print("Validation Epoch {} AUC: {}".format(epoch, val_epoch_auc[-1]))
-                writer.add_scalar('Epoch_Loss/Val', val_epoch_loss[-1], val_epoch_num)
-                writer.add_scalar('Epoch_ACC/Val',  val_epoch_acc[-1],  val_epoch_num)
-                writer.add_scalar('Epoch_MCC/Val',  val_epoch_mcc[-1],  val_epoch_num)
-                writer.add_scalar('Epoch_AUC/Val',  val_epoch_auc[-1],  val_epoch_num)
+                    val_epoch_loss.append(val_batch_loss/len(val_dataloader))
+                    val_epoch_acc.append(val_batch_acc/len(val_dataloader))
+                    val_epoch_mcc.append(val_batch_mcc/len(val_dataloader))
+                    val_epoch_auc.append(val_batch_auc/len(val_dataloader))
+                    print("Validation Epoch {} Loss: {}".format(epoch, val_epoch_loss[-1]))
+                    print("Validation Epoch {} Accu: {}".format(epoch, val_epoch_acc[-1]))
+                    print("Validation Epoch {} MCC: {}".format(epoch, val_epoch_mcc[-1]))
+                    print("Validation Epoch {} AUC: {}".format(epoch, val_epoch_auc[-1]))
+                    writer.add_scalar('Epoch_Loss/Val', val_epoch_loss[-1], val_epoch_num)
+                    writer.add_scalar('Epoch_ACC/Val',  val_epoch_acc[-1],  val_epoch_num)
+                    writer.add_scalar('Epoch_MCC/Val',  val_epoch_mcc[-1],  val_epoch_num)
+                    writer.add_scalar('Epoch_AUC/Val',  val_epoch_auc[-1],  val_epoch_num)
 
-                val_epoch_num += 1
+                    val_epoch_num += 1
 
         writer.close()
     dist.destroy_process_group()
 
 if __name__ == "__main__":
     node_noise_variance = sys.argv[1]
+    training_split = sys.arv[2]
     try:
         node_noise_variance = float(node_noise_variance)
         # edge_noise_variance = float(edge_noise_variance)
@@ -307,5 +340,5 @@ if __name__ == "__main__":
     
     world_size = 4
     
-    args = (world_size, node_noise_variance)
+    args = (world_size, node_noise_variance,training_split)
     mp.spawn(main, args=args, nprocs=world_size, join=True) 
