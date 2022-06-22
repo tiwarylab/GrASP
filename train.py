@@ -162,22 +162,23 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
             train_names = np.loadtxt(prepend + '/splits/train_ids_sc6k', dtype=str)
         train_indices = []
         for idx, name in enumerate(data_set.raw_file_names):
-            if name.split('.')[0] in train_names:
+            #print(name)
+            if name.split('_')[0] in train_names:
                 train_indices.append(idx)
         train_mask = torch.zeros(len(data_set), dtype=torch.bool)
         train_mask[train_indices] = 1
-
-        gen = zip([data_set[train_mask]],[],[0])
+        print(train_mask.sum())
+        gen = zip([data_set[train_mask]],[data_set[torch.zeros(len(data_set),dtype=torch.bool)]],[0])
 
 
     # Set to one temporarily to avoid doing full cv
     for train_set, val_set, cv_iteration in gen:
-
+        print("HeRE",flush=True)
         # train_size = int(train_test_split*len(data_set))
         # train_set, val_set = random_split(data_set, [train_size, len(data_set) - train_size], generator=torch.Generator().manual_seed(42))
         print("Initializing Data Loaders", flush=True)
         train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
-        val_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
+        if do_validation: val_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
 
 
         # Track Training Statistics
