@@ -71,8 +71,8 @@ class LabelSmoothingLoss(nn.Module):
 
 #ref: https://github.com/pyg-team/pytorch_geometric/blob/master/benchmark/kernel/train_eval.py#L82-L97
 def k_fold(dataset:KLIFSData,train_path:str, val_path):
-    val_names    = np.loadtxt(train_path)
-    train_names   = np.loadtxt(val_path)
+    val_names    = np.loadtxt(train_path, dtype=str)
+    train_names   = np.loadtxt(val_path, dtype=str)
     
     train_indices, val_indices = [], []
     
@@ -153,13 +153,13 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
 
     else:
         if training_split == 'chen':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_chen')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_chen', dtype=str)
         elif training_split == 'coach420':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_coach420')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_coach420', dtype=str)
         elif training_split == 'holo4k':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_holo4k')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_holo4k', dtype=str)
         elif training_split == 'sc6k':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_sc6k')
+            train_names = np.loadtxt(prepend + '/splits/train_ids_sc6k', dtype=str)
         train_indices = []
         for idx, name in enumerate(data_set.raw_file_names):
             if name.split('.')[0] in train_names:
