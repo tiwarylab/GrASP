@@ -110,12 +110,12 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
         raise ValueError("Expected training_split to be one of ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k'] but got", training_split)
     
     num_cpus = 8
-    print('The model will be using {} gpus.'.format(world_size))
-    print("The model will be using {} cpus.".format(num_cpus), flush=True)
+    # print('The model will be using {} gpus.'.format(world_size))
+    # print("The model will be using {} cpus.".format(num_cpus), flush=True)
 
-    print("Loss Weighting:", str(loss_weight))
-    print("Weighted Cross Entropy Loss Function Weight:", loss_fn_weighting[0])
-    print("Reconstruction (MSE) Loss Function Weight:  ", loss_fn_weighting[1])
+    # print("Loss Weighting:", str(loss_weight))
+    # print("Weighted Cross Entropy Loss Function Weight:", loss_fn_weighting[0])
+    # print("Reconstruction (MSE) Loss Function Weight:  ", loss_fn_weighting[1])
 
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
 
@@ -162,21 +162,15 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
             train_names = np.loadtxt(prepend + '/splits/train_ids_sc6k', dtype=str)
         train_indices = []
         for idx, name in enumerate(data_set.raw_file_names):
-            #print(name)
             if name.split('_')[0] in train_names:
                 train_indices.append(idx)
         train_mask = torch.zeros(len(data_set), dtype=torch.bool)
         train_mask[train_indices] = 1
-        print(train_mask.sum())
         gen = zip([data_set[train_mask]],[data_set[torch.zeros(len(data_set),dtype=torch.bool)]],[0])
 
 
     # Set to one temporarily to avoid doing full cv
     for train_set, val_set, cv_iteration in gen:
-        print("HeRE",flush=True)
-        # train_size = int(train_test_split*len(data_set))
-        # train_set, val_set = random_split(data_set, [train_size, len(data_set) - train_size], generator=torch.Generator().manual_seed(42))
-        print("Initializing Data Loaders", flush=True)
         train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
         if do_validation: val_dataloader = DataLoader(val_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
 
@@ -196,8 +190,7 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
         writer = SummaryWriter(log_dir='atom_wise_model_logs/' + training_split + '/cv_split_' + str(cv_iteration) + "/" + str(job_start_time))
         train_batch_num, val_batch_num = 0,0
         train_epoch_num, val_epoch_num = 0,0
-
-        print("Begining Training")
+        
         for epoch in range(num_epochs):
             # Training Set
             model.train()
@@ -218,9 +211,7 @@ def main(rank : int, world_size : int, node_noise_variance : float, training_spl
                 out, out_recon = model.forward(batch.to(rank))
 
                 # loss = F.cross_entropy(out, batch.y)
-                weighted_xent_l, mse_l = loss_fn_weighting[0] * loss_fn(out,batch.y), loss_fn_weighting[1] * F.mse_loss(out_recon, unperturbed_x)
-                if False:
-                    print(weighted_xent_l, mse_l)            
+                weighted_xent_l, mse_l = loss_fn_weighting[0] * loss_fn(out,batch.y), loss_fn_weighting[1] * F.mse_loss(out_recon, unperturbed_x)           
 
                 loss = weighted_xent_l + mse_l
                 loss.backward() 
