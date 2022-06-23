@@ -7,6 +7,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # I really wish I didn't have to do this but the way some of these paackages pickle I have no other way. If you know a better alternative feel free to reach out
     import re
     import MDAnalysis as mda
+    from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
     import numpy as np
     from pathlib import Path
     import scipy
