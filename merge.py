@@ -2,6 +2,7 @@ from numbers import Rational
 import MDAnalysis as mda
 from  MDAnalysis.analysis.rms import RMSD
 from MDAnalysis.analysis.distances import distance_array
+from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 import mdtraj
 from mdtraj import shrake_rupley
 from tqdm import tqdm

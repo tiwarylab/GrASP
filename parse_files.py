@@ -4,6 +4,7 @@ from parsing_regular import process_system
 from merge import write_fragment
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
+from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 import os
 import sys
 import numpy as np

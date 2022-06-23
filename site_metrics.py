@@ -1,5 +1,6 @@
 import numpy as np
 import MDAnalysis as mda
+from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 from sklearn.cluster import MeanShift
 from sklearn.cluster import estimate_bandwidth
 from scipy.spatial import ConvexHull, HalfspaceIntersection, Delaunay
