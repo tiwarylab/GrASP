@@ -379,9 +379,6 @@ if __name__ == "__main__":
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
 
-    if openbabel.__version__  != '2.4.1':
-        raise EnvironmentError("openbabel version 2.4.1 is required. Found version {}.").format(openbabel.__version__)
- 
     if str(sys.argv[1]) == "chen":
         pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/benchmark_data_dir/chen/unprocessed_pdb')))]
         Parallel(n_jobs=num_cores)(delayed(process_chen)(filename, data_dir='/benchmark_data_dir/chen') for _, filename in enumerate(tqdm(pdb_files)))
