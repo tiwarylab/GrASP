@@ -38,7 +38,7 @@ def remove_salts(universe: mda.Universe, threshold=229):
             to_return.append(fragment)
     return mda.Merge(*to_return)
 
-def write_fragment(atom_group: mda.AtomGroup, parent_universe:mda.Universe, output_path: str):
+def write_fragment(atom_group: mda.AtomGroup, parent_universe:mda.Universe, output_path: str, check_overlap=True):
     '''
     Writes an atom group to a mol2 with a specified output path.add()
     
@@ -59,7 +59,7 @@ def write_fragment(atom_group: mda.AtomGroup, parent_universe:mda.Universe, outp
         x, y, z = atom.position
         sel = parent_universe.select_atoms("point {} {} {} 0.1".format(x, y, z))
         assert(len(sel) > 0), "Expected an atom at point {} {} {} 0.1 but it was not found!".format(x, y, z)
-        assert(len(sel) == 1), "Two ligand atoms were found in nearly the same position!"
+        if check_overlap: assert(len(sel) == 1), "Two ligand atoms were found in nearly the same position!"
         indices.append(sel[0].index)
     sel_str = "".join(["index " + str(x) + " or " for x in indices[:-1]]) + "index " + str(indices[-1])
     parent_universe.select_atoms(sel_str).write(output_path)

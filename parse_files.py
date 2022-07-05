@@ -220,37 +220,37 @@ def extract_ligands(mol_directory):
                 lig_ind += 1
 
 
-def extract_ligands_from_list(mol_directory, lig_resnames):
-    univ = mda.Universe(f'{mol_directory}/system.mol2') 
-    prot = mda.Universe(f'{mol_directory}/protein.mol2')
-    lig_ind = 0
-    for frag in univ.atoms.fragments:
-        res_set = {res.resname[:3] for res in frag.residues}
-        if  res_set.issubset(set(lig_resnames)) and not res_set.issubset(set(allowed_residues)):
-            frag_dist = np.min(distance_array(frag.positions, prot.select_atoms("not type H").positions))
-            if frag_dist <= 6.5: 
-                write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
-                lig_ind += 1
+# def extract_ligands_from_list(mol_directory, lig_resnames):
+#     univ = mda.Universe(f'{mol_directory}/system.mol2') 
+#     prot = mda.Universe(f'{mol_directory}/protein.mol2')
+#     lig_ind = 0
+#     for frag in univ.atoms.fragments:
+#         res_set = {res.resname[:3] for res in frag.residues}
+#         if  res_set.issubset(set(lig_resnames)) and not res_set.issubset(set(allowed_residues)):
+#             frag_dist = np.min(distance_array(frag.positions, prot.select_atoms("not type H").positions))
+#             if frag_dist <= 6.5: 
+#                 write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+#                 lig_ind += 1
     
-    if lig_ind == 0: # if no ligands were found, check if they are bonded
-        print(f'Residue-level selection needed for {mol_directory}', flush=True)
-        extract_residues_from_list(mol_directory, lig_resnames)
+#     if lig_ind == 0: # if no ligands were found, check if they are bonded
+#         print(f'Residue-level selection needed for {mol_directory}', flush=True)
+#         extract_residues_from_list(mol_directory, lig_resnames)
 
 
-def extract_residues_from_list(mol_directory, lig_resnames):
-    univ = mda.Universe(f'{mol_directory}/system.mol2')
-    prot = mda.Universe(f'{mol_directory}/protein.mol2')
-    add_chains_from_frags(univ)
+def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='mol2', prot_extension='mol2'):
+    univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
+    prot = mda.Universe(f'{mol_directory}/protein.{prot_extension}')
+    if univ_extension == 'mol2': add_chains_from_frags(univ)
 
     lig_ind = 0
     for res in univ.atoms.residues:
         if (res.resname[:3] in lig_resnames) and (res.resname[:3] not in allowed_residues):
             chains = np.unique(res.atoms.chainIDs)
-            for chain in chains:
+            for chain in chains: # this catches mol2 files where a residue is multiple fragments in error
                 res_atoms = res.atoms.select_atoms(f'chainID {chain}')
                 res_dist = np.min(distance_array(res_atoms.positions, prot.select_atoms("not type H").positions))
                 if res_dist <= 6.5: 
-                    write_fragment(res_atoms, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+                    write_fragment(res_atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
                     lig_ind += 1
 
 
@@ -360,10 +360,11 @@ def process_mlig(path, lig_resnames, data_dir="benchmark_data_dir", min_size=256
         prepend = os.getcwd()
         structure_name = path.split('/')[-1].split('.')[0]
         mol2_dir = f'./{data_dir}/ready_to_parse_mol2/'
-        pdb2mol2(f'{prepend}/{path}', structure_name, mol2_dir , out_name='system', cleanup=False)
         protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
-        extract_ligands_from_list(f'{mol2_dir}{structure_name}', lig_resnames)
+        shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
+        extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames, univ_extension='pdb') # parsing pdb avoids selection issues
         label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+        convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
         process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
         # break
