@@ -123,12 +123,10 @@ def main(node_noise_variance : float, training_split='cv'):
 
     # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean")
     # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance)
-    model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance)
+    model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=int(sys.argv[3]))
     model =  DataParallel(model)
     model.to(device)
     
-    # model =   Two_Track_GAT_GAT(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="mean", right_aggr="add")
-
     optimizer = optim.Adam(model.parameters(), lr = learning_rate)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
     
@@ -262,7 +260,7 @@ def main(node_noise_variance : float, training_split='cv'):
 
             if not os.path.isdir("./trained_models/{}/trained_model_{}/".format(training_split, str(job_start_time))):
                 os.makedirs("./trained_models/{}/trained_model_{}/".format(training_split, str(job_start_time)))
-            torch.save(model.state_dict(), "./trained_models/{}/trained_model_{}/epoch_{}".format(training_split, str(job_start_time), train_epoch_num))
+            torch.save(model.module.state_dict(), "./trained_models/{}/trained_model_{}/epoch_{}".format(training_split, str(job_start_time), train_epoch_num))
             
             train_epoch_num += 1
 
