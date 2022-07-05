@@ -13,7 +13,7 @@
 module load anaconda3
 conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/10.2
-conda activate ../../pytorch_env
+conda activate envs/pytorch_env
 python train.py 0.02 cv 4
 
 
