@@ -1,0 +1,4 @@
+name: pytorch_env
+channels:
+  - defaults
+prefix: /jet/home/strobelm/.conda/envs/pytorch_env
