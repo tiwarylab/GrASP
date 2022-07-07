@@ -794,7 +794,7 @@ class Hybrid_1g12(nn.Module):
         return x, rcon_output
     
 class Hybrid_1g12_self_edges(nn.Module):
-    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4):
         self.noise_variance = noise_variance
         # No need for bias in GAT Convs due to batch norms
         super(Hybrid_1g12_self_edges, self).__init__()
@@ -805,18 +805,18 @@ class Hybrid_1g12_self_edges(nn.Module):
         self.preprocess2 = nn.Linear(72, 64, bias=False)
         self.pre_BN2 = BatchNorm(64, track_running_stats=False)
 
-        self.block1  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block2  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block3  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block4  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block5  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block6  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block7  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block8  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block9  = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block10 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block11 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
-        self.block12 = Hybrid_Cat_Block(64, 64, GAT_heads=8, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block1  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block2  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block3  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block4  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block5  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block6  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block7  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block8  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block9  = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block10 = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block11 = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
+        self.block12 = Hybrid_Cat_Block(64, 64, GAT_heads=GAT_heads, edge_dim=8, MLP_dim=64, drop_prob=.01, GAT_aggr=GAT_aggr, GIN_aggr=GIN_aggr, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1,0]))
 
         self.post_BN = BatchNorm(832, track_running_stats=False)
         self.postprocess1 = nn.Linear(832, 256)
