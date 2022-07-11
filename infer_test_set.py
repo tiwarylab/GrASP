@@ -1,4 +1,6 @@
+from collections import OrderedDict
 import os
+import sys
 import numpy as np
 from datetime import datetime
 import time
@@ -8,6 +10,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 
 from torch_geometric.loader import DataLoader
+from torch_geometric.nn import DataParallel
 
 from sklearn.preprocessing import label_binarize
 from scipy import interp
@@ -47,11 +50,16 @@ prepend = str(os.getcwd())
 # model = Hybrid_1g12_self_edges(input_dim = 88)
 
 # New model trained on freshly merged dataset, and fixed site labeling issues
-model_name = "trained_model_1652221046.78391/epoch_49"
-model = Hybrid_1g12_self_edges(input_dim = 88)
+# model_name = "trained_model_1652221046.78391/epoch_49"
+# model = Hybrid_1g12_self_edges(input_dim = 88)
+
+# Model trained exclusively on the holo4k split: "holo4k/trained_model_1656153741.4964042/epoch_49"
+model_name = sys.argv[2]
+model = Hybrid_1g12_self_edges(input_dim = 88, GAT_heads=8)
+
 
 model_path = prepend + "/trained_models/" + model_name
-set_to_use = 'coach420'      # one of {'val','chen','coach420','holo4k','sc6k'}
+set_to_use = sys.argv[1]      # one of {'val','chen','coach420','holo4k','sc6k'}
 # set_to_use = 'chen'
 
 # model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
@@ -94,7 +102,17 @@ print("The model will be using {} cpus.".format(num_cpus))
 # model = GATModelv2(input_dim=43, output_dim=2)
 # model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
 
-model.load_state_dict(torch.load(model_path, map_location=device))
+'''
+This whole bit is a quick fix that allows us to load incorrectly saved models.
+This has been fixed in the training script and as a result we can remove this in the future
+'''
+state_dict = torch.load(model_path, map_location=device)
+new_state_dict = OrderedDict()
+for k, v in state_dict.items():
+    name = k[7:] #remove 'module'
+    new_state_dict[name] = v
+
+model.load_state_dict(new_state_dict)
 model.to(device)
  
 #########################
@@ -116,10 +134,18 @@ else:
         print("Initializing coach420 Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/coach420'
         metric_dir = '/test_metrics/coach420'
+    elif set_to_use ==  'coach420_dp':
+        print("Initializing coach420 DeepPocket Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/coach420_dp'
+        metric_dir = '/test_metrics/coach420_dp'
     elif set_to_use == 'holo4k':
         print("Initializing holo4k Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/holo4k'
         metric_dir = '/test_metrics/holo4k'
+    elif set_to_use == 'holo4k_dp':
+        print("Initializing holo4k DeepPocket Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/holo4k_dp'
+        metric_dir = '/test_metrics/holo4k_dp'
     elif set_to_use == 'sc6k':
         print("Initializing sc6k Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/sc6k'
@@ -138,7 +164,7 @@ all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
 prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
-label_path = prepend + metric_dir + '/labels/' + '/'
+label_path = prepend + metric_dir + '/labels/'
 
 if not os.path.isdir(prob_path):
     os.makedirs(prob_path)
