@@ -91,11 +91,11 @@ class Hybrid_1g12_self_edges(nn.Module):
 
         return x, rcon_output
     
-class Hybrid_1g12_self_edges_dropped_concat(nn.Module):
+class Hybrid_1g12_self_edges_dropped_bn(nn.Module):
     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4):
         self.noise_variance = noise_variance
         # No need for bias in GAT Convs due to batch norms
-        super(Hybrid_1g12_self_edges_dropped_concat, self).__init__()
+        super(Hybrid_1g12_self_edges_dropped_bn, self).__init__()
         self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
 
         self.preprocess1 = nn.Linear(input_dim, 72, bias=False)
