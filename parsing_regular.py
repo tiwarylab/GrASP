@@ -142,7 +142,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         # it means that the bonded atom no longer exists in our universe (i.e., it was dropped). If this happens it will
         # be a very rare occasion as must things other than solvents are not droppped.
         local_SAS = np.array([SAS[atom_idx[1]]  for atom_idx in atom.bonds.indices])    
-        SAS[atom.index] = np.sum(local_SAS * is_bonded_to_H)       # Only take the values from hydrogens
+        SAS[atom.index] += np.sum(local_SAS * is_bonded_to_H)       # Only take the values from hydrogens
     # Drop Hydrogens
     protein_w_H.ids = np.arange(0, len(protein_w_H.atoms))
     protein = protein_w_H.select_atoms("not type H")
