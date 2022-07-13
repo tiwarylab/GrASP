@@ -89,7 +89,7 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
         # Use MDA to remove clean file
         univ = mda.Universe(output_mol2_path)
         res_names = univ.residues.resnames
-        new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
+        new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
         univ.residues.resnames = new_names
         univ = univ.select_atoms(selection_str)
         mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
