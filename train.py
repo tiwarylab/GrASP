@@ -37,7 +37,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from KLIFS_dataset import KLIFSData#, KLIFSData_noisy_nodes
-from atom_wise_models import  Two_Track_GIN_GAT_fixed_bn, Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8_noisy, Hybrid_GRU, Hybrid_1g12, Hybrid_1g12_self_edges
+from atom_wise_models import Hybrid_1g12_self_edges, Hybrid_1g12_self_edges_dropped_bn, Hybrid_1g12_self_edges_transformer_style
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
@@ -123,7 +123,19 @@ def main(node_noise_variance : float, training_split='cv'):
 
     # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean")
     # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance)
-    model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=int(sys.argv[3]))
+    if sys.argv[3] == "Hybrid_1g12_self_edges":
+        print("Using Hybrid_1g12_self_edges")
+        model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    if sys.argv[3] == "Hybrid_1g12_self_edges_dropped_bn":
+        print("Using Hybrid_1g12_self_edges_dropped_bn")
+        model = Hybrid_1g12_self_edges_dropped_bn(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    if sys.argv[3] == "Hybrid_1g12_self_edges_transformer_style":
+        print("Using Hybrid_1g12_self_edges_transformer_style")
+        model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)   
+    elif len(sys.argv) < 4:
+        raise ValueError("Expected Model Type")
+    else:
+        raise ValueError("Unknown Model Type:", sys.argv[3])
     model =  DataParallel(model)
     model.to(device)
     

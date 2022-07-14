@@ -1,4 +1,4 @@
-name: null
+name: pytorch_env
 channels:
   - pytorch
   - pyg
