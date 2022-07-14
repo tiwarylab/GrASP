@@ -5,6 +5,7 @@ from merge import write_fragment
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
+from scipy.spatial import ConvexHull
 import os
 import sys
 import numpy as np
@@ -254,6 +255,98 @@ def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='mol2
                     lig_ind += 1
 
 
+def inside_hull(convex_hull, point):
+    vertices = convex_hull.points[convex_hull.vertices]
+    
+    concat_points = np.row_stack([vertices, point])
+    cat_hull = ConvexHull(concat_points)
+    cat_vertices = cat_hull.points[cat_hull.vertices]
+    
+    inside = np.array_equal(vertices, cat_vertices)
+    
+    return inside
+
+
+def fraction_inside(convex_hull, ligand):
+    lig_coords = ligand.atoms.positions
+    inside = [inside_hull(convex_hull, coord) for coord in lig_coords]
+    
+    return np.mean(inside)
+
+
+def cavity_distances(cavity, ligand):
+    all_distances = distance_array(cavity.atoms.positions, ligand.atoms.positions)
+    min_distances = np.min(all_distances, axis=0)
+    
+    return min_distances
+
+
+def write_matched_ligand(cavity_path, ligand_path, output_dir):
+    if not os.path.isdir(output_dir): os.makedirs(output_dir)
+    dp_cavity_name = cavity_path.split('/')[-2]
+    dp_cavity_num = dp_cavity_name.split('ligand')[-1]
+    if 'new' in dp_cavity_num: 
+        dp_cavity_num = dp_cavity_num.split('new')[-1]
+    with open(f'{output_dir}cavity_association.txt', 'a') as outfile:
+        outfile.write(f'{dp_cavity_name}: {ligand_path}\n')
+        
+    shutil.copyfile(ligand_path, f'{output_dir}ligand_{dp_cavity_num}.mol2')
+
+
+def match_ligands(dp_data_path, orig_data_path, new_data_path, structure_name):
+    cavity_dir = f'{dp_data_path}{structure_name}/'
+    ligand_dir = f'{orig_data_path}{structure_name}/'
+    output_dir = f'{new_data_path}{structure_name}/'
+    
+    cavity_paths = [cavity_dir + path for path in os.listdir(cavity_dir) if os.path.isdir(cavity_dir + path)]
+    for i, path in enumerate(cavity_paths):
+        contents = os.listdir(path)
+        mol2_count = 0
+        for file in contents:
+            if file.split('.')[-1] == 'mol2':
+                cavity_paths[i] += f'/{file}'
+                mol2_count += 1
+        if mol2_count > 1: print(f'Warning: Multiple MOL2 found in {path}!')
+    
+    ligand_paths = [ligand_dir + path for path in os.listdir(ligand_dir) if 'ligand' in path and not 'site' in path]
+    
+    with open(f'{output_dir}cavity_association.txt', 'w') as outfile:
+        outfile.write('Link between DeepPocket cavities and our ligands.\nThe format is cavity name:ligand path.\n\n')
+    
+    for cavity_path in cavity_paths:
+        cavity = mda.Universe(cavity_path)
+        if len(cavity.atoms) >= 4:
+            cav_hull = ConvexHull(cavity.atoms.positions)
+        
+            ligand_fractions = []
+            for ligand_path in ligand_paths:
+                ligand = mda.Universe(ligand_path)
+                ligand_fractions.append(fraction_inside(cav_hull, ligand))
+        else: 
+            print(f'Warning: The cavity at {cavity_path} only has {len(cavity.atoms)} points.')
+            ligand_fractions = 0
+            
+        if np.max(ligand_fractions) < 1e-4:
+            print(f'Warning: No ligand found within the cavity at {cavity_path}, using closest ligand.')
+            average_dists = []
+            for ligand_path in ligand_paths:
+                ligand = mda.Universe(ligand_path)
+                average_dists.append(np.mean(cavity_distances(cavity, ligand)))
+                
+            closest_avg = np.min(average_dists)
+            print(f'Closest ligand found with average distance of {closest_avg:.2f} A.')
+            selected_ligand = ligand_paths[np.argmin(average_dists)]
+            
+        elif np.max(ligand_fractions) < .5:
+            print(f'Warning: Ligand is less than half inside {cavity_path}')
+            selected_ligand = ligand_paths[np.argmax(ligand_fractions)]
+            
+        else:
+            selected_ligand = ligand_paths[np.argmax(ligand_fractions)]
+            
+        write_matched_ligand(cavity_path, selected_ligand, output_dir)
+
+
 def process_train_openbabel(i, file, output_dir):
     strip_size = 98 # Max number of atoms in a ligand in scPDB excluding hydrogens
     
@@ -290,49 +383,6 @@ def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unpr
     except Exception as e:
         # print(e)
         raise e
-        
-    
-def move_SC6K(num_cores, verbose=False):
-    if not os.path.isdir(os.path.join(prepend,'SC6K_data_dir/SC6K/unprocessed_mol2')): os.makedirs(os.path.join(prepend,'SC6K_data_dir/SC6K/unprocessed_mol2'))
-    
-    prot_pattern = re.compile("([a-zA-Z0-9]{4}_[0-9]+).*PROT\.pdb")         # Although we have the mol2 versions of these files, OB doesn't seem to like them
-    site_pattern = re.compile("([a-zA-Z0-9]{4}_[0-9]+).*SITE\.mol2")
-    
-    if not verbose: 
-        lst = tqdm(sorted(os.listdir(os.path.join(prepend,'SC6K_data_dir/SC6K/'))))
-    else:
-        lst = sorted(os.listdir(os.path.join(prepend,'SC6K_data_dir/SC6K/'))) 
-        
-    def move_files(rcsb_id):
-        if verbose: print(rcsb_id)
-        for file in os.listdir(os.path.join(prepend,'SC6K_data_dir/SC6K/',rcsb_id)):
-            prot_name = re.fullmatch(prot_pattern, file)
-            if prot_name is not None:
-                prot_name = prot_name.groups()[0]
-            site_name = re.fullmatch(site_pattern, file)   
-            if site_name is not None:
-                site_name = site_name.groups()[0]
-            
-            if prot_name is not None:
-                output_path = os.path.join(prepend,'SC6K_data_dir/unprocessed_mol2/',prot_name)
-                if not os.path.isdir(output_path): os.makedirs(output_path)
-                
-                mol = openbabel.OBMol()
-                obConversion = openbabel.OBConversion()
-                obConversion.SetInAndOutFormats("pdb", "mol2")
-                obConversion.ReadFile(mol, os.path.join(prepend,'SC6K_data_dir/SC6K/',rcsb_id,file))
-                mol.DeleteHydrogens()
-                mol.CorrectForPH()
-                mol.AddHydrogens()
-                
-                obConversion.WriteFile(mol, os.path.join(output_path, "protein.mol2"))
-                
-            elif site_name is not None:
-                output_path = os.path.join(prepend,'SC6K_data_dir/unprocessed_mol2/',site_name)
-                if not os.path.isdir(output_path): os.makedirs(output_path)
-                shutil.copyfile(os.path.join(prepend,'SC6K_data_dir/SC6K/',rcsb_id,file), os.path.join(output_path,'site.mol2'))
-    
-    Parallel(n_jobs=num_cores)(delayed(move_files)(rcsb_id) for rcsb_id in lst) 
         
 
 def process_chen(file, data_dir="benchmark_data_dir"):
@@ -374,12 +424,26 @@ def process_mlig(path, lig_resnames, data_dir="benchmark_data_dir", min_size=256
         # print(e)
         raise e
 
+def remake_deeppocket(dp_data_dir, orig_data_dir, new_data_dir, structure_name):
+    orig_mol2_dir = f'{orig_data_dir}ready_to_parse_mol2/'
+    mol2_dir = f'{new_data_dir}ready_to_parse_mol2/'
+    output_path = f'{mol2_dir}{structure_name}'
+    if not os.path.isdir(f'{output_path}'): os.makedirs(f'{output_path}')
+
+    shutil.copyfile(f'{orig_mol2_dir}{structure_name}/system.mol2', f'{output_path}/system.mol2')
+    shutil.copyfile(f'{orig_mol2_dir}{structure_name}/protein.mol2', f'{output_path}/protein.mol2')
+    match_ligands(dp_data_dir, orig_mol2_dir, mol2_dir, structure_name)
+    label_sites_given_ligands(f'{output_path}')
+
+    process_system(mol2_dir + structure_name, save_directory=new_data_dir)
+
+
 if __name__ == "__main__":   
     num_cores = 24
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
-
+ 
     if str(sys.argv[1]) == "chen":
         pdb_files = [filename for filename in sorted(list(os.listdir(prepend +'/benchmark_data_dir/chen/unprocessed_pdb')))]
         Parallel(n_jobs=num_cores)(delayed(process_chen)(filename, data_dir='/benchmark_data_dir/chen') for _, filename in enumerate(tqdm(pdb_files)))
@@ -414,14 +478,12 @@ if __name__ == "__main__":
     elif str(sys.argv[1]) == "holo4k":
         full_df = load_ligand_list(f'{prepend}/benchmark_data_dir/holo4k(mlig)-deeppocket.ds', skiprows=2)
         Parallel(n_jobs=num_cores)(delayed(process_mlig)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k', min_size=4) for i in tqdm(full_df.index))
-    elif str(sys.argv[1] == "SC6K"):
-        if len(sys.argv) < 3: 
-            move_SC6K(num_cores, verbose=False)
-        elif str(sys.argv[2]) == "-v":
-            move_SC6K(num_cores, verbose=True)
-        else:
-            raise IOError()
-        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/SC6K_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_classic)(i, filename, 'SC6K_data_dir', unprocessed_dir='unprocessed_mol2') for i, filename in enumerate(tqdm(mol2_files[:]))) 
+    elif str(sys.argv[1]) == "coach420_dp" or str(sys.argv[1]) == "holo4k_dp":
+        set_name = sys.argv[1][:-3]
+        dp_data_dir =  f'{prepend}/benchmark_data_dir/dp_cavities/{set_name}/'
+        orig_data_dir =  f'{prepend}/benchmark_data_dir/{set_name}/'
+        new_data_dir = f'{prepend}/benchmark_data_dir/{set_name}_dp/'
+        dp_systems = [system for system in sorted(os.listdir(dp_data_dir)) if os.path.isdir(dp_data_dir + system)]
+        Parallel(n_jobs=num_cores)(delayed(remake_deeppocket)(dp_data_dir, orig_data_dir, new_data_dir, i) for i in tqdm(dp_systems))
     else:
         print("Expected first argument to be 'test', 'train', or 'train_hetro' instead got " + str(sys.argv[1]))
