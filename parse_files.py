@@ -439,7 +439,7 @@ def remake_deeppocket(dp_data_dir, orig_data_dir, new_data_dir, structure_name):
 
 
 if __name__ == "__main__":   
-    num_cores = 1
+    num_cores = 24
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
