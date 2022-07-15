@@ -203,7 +203,8 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             assert not np.any(np.isnan(hydrophobe)) 
             assert not np.any(np.isnan(lumped_hydrophobe))
 
-            # Add feature vector with                                                  54-63          64               65               66               67-68        69-70                   71        72        73-79       80-81    82-83     84-85       86-87
+            # Warning, any change to SAS's index must be reflected in infer_test_set.py
+            # Add feature vector with                  0-37               38-52        53-62       63               64                  65               66-67        68-69              70             71      72-78        79-80    81-82    83-84     85-86 (87 is degree)
             feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
         except Exception as e:
             print("Error while feautrizing atom for file {}.{}".format(path_to_files,e), flush=True)
