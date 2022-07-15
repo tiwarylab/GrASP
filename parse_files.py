@@ -1,6 +1,6 @@
 from dataclasses import field
 from turtle import end_fill
-from parsing_regular import process_system
+from featurize_protein import process_system
 from merge import write_fragment
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
@@ -439,7 +439,7 @@ def remake_deeppocket(dp_data_dir, orig_data_dir, new_data_dir, structure_name):
 
 
 if __name__ == "__main__":   
-    num_cores = 24
+    num_cores = 1
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
     from joblib import Parallel, delayed
