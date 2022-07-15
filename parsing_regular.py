@@ -128,11 +128,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         # failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while calculating SASA {}.".format(e, path_to_files)])
         return
 
-
-    mapping = defaultdict(lambda: -1)                           # A mapping from atom indices to position in SAS
-    for i in range(len(protein_w_H.atoms)):
-        mapping[protein_w_H.atoms.indices[i]] = i
-
     # Add SAS from hydrogen to bonded atom, create number of bonded hydrogens feature
     num_bonded_H = np.zeros(traj.n_atoms)
     for atom in protein_w_H:
