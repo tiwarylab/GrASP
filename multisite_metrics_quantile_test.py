@@ -416,6 +416,7 @@ eps_list = [4.5]
 threshold = 0.45
 compute_optimal = False
 top_n_plus=2
+SASA_threshold = None
 
 set_to_use = sys.argv[1] #"chen"|"val"
 is_label=False
@@ -423,6 +424,9 @@ if len(sys.argv) > 3:
     if sys.argv[3] == 'label':
         is_label=True
         print("Using labels rather than probabilities.")
+    elif sys.argv[3] == 'surf'
+        SASA_threshold = 1e-4
+        print("Using surface atoms to find ligands.")
 
 if set_to_use == 'val':
     print("Performing Metrics on the Validation Set")
@@ -533,7 +537,7 @@ for eps in eps_list:
     start = time.time()
     path_to_mol2= data_dir + '/mol2/'
     path_to_labels=prepend + metric_dir + '/labels/'
-    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=1e-4)
+    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=SASA_threshold)
     # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
     #     print(x)
 
