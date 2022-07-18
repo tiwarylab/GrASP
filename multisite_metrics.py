@@ -1,6 +1,7 @@
 import numpy as np
 import MDAnalysis as mda
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
+from rdkit import Chem
 from sklearn.cluster import MeanShift
 from sklearn.cluster import estimate_bandwidth
 from scipy.spatial import ConvexHull, HalfspaceIntersection, Delaunay
@@ -295,8 +296,9 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
                 print(file_path)
                 if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
                     ligand = mda.Universe(file_path).select_atoms("not type H")
+                    rdk_ligand = Chem.MolFromMol2File(file_path, removeHs = False, sanitize=False, cleanupSubstructures=False)
                     lig_coord_list.append(list(ligand.atoms.positions))
-                    ligand_mass_list.append(list(ligand.atoms.masses))
+                    ligand_mass_list.append([rdk_ligand.GetAtomWithIdx(int(i)).GetMass() for i in ligand.atoms.indices])
                 elif 'site_for_ligand' in file_path.split('/')[-1]:
                     site = mda.Universe(file_path).select_atoms("not type H")
                     site_coords_list.append(site.atoms.positions)

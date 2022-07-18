@@ -1,6 +1,6 @@
 from dataclasses import field
 from turtle import end_fill
-from parsing_regular import process_system
+from featurize_protein import process_system
 from merge import write_fragment
 import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array

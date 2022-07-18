@@ -1,5 +1,7 @@
 import numpy as np
 import MDAnalysis as mda
+from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
+from rdkit import Chem
 from sklearn.cluster import MeanShift,DBSCAN
 import networkx as nx 
 from networkx.algorithms.community import louvain_communities
@@ -242,10 +244,10 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         Jaccard similarity between predicted site convex hull and true site convex hull. 
 
     """
-    bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all)
+    # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all)
     # bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps)
     # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, bw=eps)
-    # bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
+    bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
 
     true_hull_list = [ConvexHull(true_points) for true_points in site_coords_list]
     true_center_list = [hull_center(true_hull) for true_hull in true_hull_list]
@@ -346,8 +348,9 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
                 # print(file_path)
                 if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
                     ligand = mda.Universe(file_path).select_atoms("not type H")
+                    rdk_ligand = Chem.MolFromMol2File(file_path, removeHs = False, sanitize=False, cleanupSubstructures=False)
                     lig_coord_list.append(list(ligand.atoms.positions))
-                    ligand_mass_list.append(list(ligand.atoms.masses))
+                    ligand_mass_list.append([rdk_ligand.GetAtomWithIdx(int(i)).GetMass() for i in ligand.atoms.indices])
                 elif 'site_for_ligand' in file_path.split('/')[-1]:
                     site = mda.Universe(file_path).select_atoms("not type H")
                     site_coords_list.append(site.atoms.positions)
