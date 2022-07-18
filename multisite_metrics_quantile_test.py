@@ -424,7 +424,7 @@ if len(sys.argv) > 3:
     if sys.argv[3] == 'label':
         is_label=True
         print("Using labels rather than probabilities.")
-    elif sys.argv[3] == 'surf'
+    elif sys.argv[3] == 'surf':
         SASA_threshold = 1e-4
         print("Using surface atoms to find ligands.")
 
