@@ -347,7 +347,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         return nan_arr, nan_arr, nan_arr, nan_arr
 
 
-def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, cluster_all=False):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, cluster_all=False, SASA_threshold=None):
     DCC_lig_list = []
     DCC_site_list = []
     DCA_list = []
@@ -360,6 +360,8 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             trimmed_protein = mda.Universe(path_to_mol2 + assembly_name + '.mol2')
             labels = np.load(prepend + metric_dir + '/labels/' + assembly_name + '.npy')
             probs = np.load(prepend + metric_dir + '/probs/' + model_name + '/' + assembly_name + '.npy')
+            if SASA_threshold is not None: 
+                SASAs = np.load(prepend + metric_dir + '/SASAs/' + model_name + '/' + assembly_name + '.npy')
             # print(probs.shape)
             ############### THIS IS TEMPORARY AF REMOVE BEFORE PUBLICAITON ##############
             if is_label: probs = np.array([[1,0] if x ==0 else [0,1] for x in labels])
@@ -382,7 +384,13 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
                     site_coords_list.append(site.atoms.positions)
             # TODO: MAKE THIS AN ACUTAL PATH
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
-            DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list, probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
+            if SASA_threshold is not None:
+                surf_mask = SASAs > SASA_threshold
+                DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
+            else:
+                DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             return DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count
@@ -525,7 +533,7 @@ for eps in eps_list:
     start = time.time()
     path_to_mol2= data_dir + '/mol2/'
     path_to_labels=prepend + metric_dir + '/labels/'
-    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps,)
+    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=1e-4)
     # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
     #     print(x)
 
