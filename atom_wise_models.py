@@ -355,7 +355,7 @@ class Hybrid_Single_Cat_Block(nn.Module):
 class Hybrid_Cat_Linear_Block(nn.Module):
     def __init__(self, input_dim, output_dim, GAT_heads, edge_dim, MLP_dim, drop_prob=.01, GAT_aggr="mean", GIN_aggr="add", GAT_fill_value='mean'):
         # No need for bias in GAT Convs due to batch norms
-        super(Hybrid_Single_Cat_Block, self).__init__()
+        super(Hybrid_Cat_Linear_Block, self).__init__()
         GNN_out_dim = int(output_dim/2)
         self.GAT = GATv2Conv(input_dim, int(GNN_out_dim/GAT_heads), heads=GAT_heads, edge_dim=edge_dim, bias=False, dropout=drop_prob, aggr=GAT_aggr, fill_value=GAT_fill_value)
         self.GIN = GINConv(MLP(3, input_dim, MLP_dim, GNN_out_dim), aggr=GIN_aggr)

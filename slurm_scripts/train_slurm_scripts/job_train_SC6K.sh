@@ -13,7 +13,7 @@
 module load anaconda3
 conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/10.2
-conda activate ../../pytorch_env
-python3 train.py 0.02 sc6k
+conda activate envs/pytorch_env
+python3 train.py 0.02 sc6k Hybrid_1g12_self_edges
 
 

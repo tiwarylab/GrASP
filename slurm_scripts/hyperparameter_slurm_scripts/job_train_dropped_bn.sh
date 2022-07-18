@@ -4,7 +4,7 @@
 #SBATCH -t 24:00:00
 #SBATCH --gpus=v100-32:4
 #SBATCH --ntasks-per-node=8
-#SBATCH --job-name="scPDB GPU CV Training 4 heads"
+#SBATCH --job-name="scPDB GPU CV Training Dropped BN"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 
