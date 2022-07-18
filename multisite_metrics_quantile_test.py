@@ -357,7 +357,7 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             # TODO: MAKE THIS AN ACUTAL PATH
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list, probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
-            if np.all(np.isnan(DCC_lig)) or np.all(np.isnan(DCC_site)) or np.all(np.isnan(DCA)) or np.all(np.isnan(volumetric_overlaps)): 
+            if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             return DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count
 
@@ -529,7 +529,6 @@ for eps in eps_list:
     DCC_lig_succ, DCC_lig_mean = extract_multi(DCC_lig)
     DCC_site_succ, DCC_site_mean = extract_multi(DCC_site)
     DCA_succ, DCA_mean = extract_multi(DCA)
-    print(f"Number of systems with no predictions: {np.sum([np.all(np.isnan(i)) for i in VO])}", flush=True)
 
     print(f"Average DCC_lig: {DCC_lig_mean}", flush=True)
     print(f"DCC_lig Success: {DCC_lig_succ}", flush=True)
