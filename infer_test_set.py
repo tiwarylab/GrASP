@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from KLIFS_dataset import KLIFSData 
-from atom_wise_models import Two_Track_GIN_GAT_fixed_bn,Two_Track_GIN_GAT_Noisy_Nodes, Hybrid_1g8, Hybrid_1g12, Hybrid_1g12_self_edges
+from atom_wise_models import Hybrid_1g12_self_edges
 
 prepend = str(os.getcwd())
 
@@ -165,11 +165,14 @@ all_labels = torch.Tensor([])
 
 prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
 label_path = prepend + metric_dir + '/labels/'
+surface_path = prepend + metric_dir + '/SASAs/'
 
 if not os.path.isdir(prob_path):
     os.makedirs(prob_path)
 if not os.path.isdir(label_path):
     os.makedirs(label_path)
+if not os.path.isdir(surface_path):
+    os.makedirs(surface_path)
 
 print("Begining Evaluation")
 model.eval()
@@ -192,6 +195,7 @@ with torch.no_grad():
         bl = loss.detach().cpu().item()
         
         labels = batch.y.detach().cpu()
+        SASAs = batch.x[:,63].detach().cpu()
         
         ba = accuracy_score(labels, preds)
         bm = mcc(labels, preds)
@@ -201,6 +205,7 @@ with torch.no_grad():
         test_batch_mcc  += bm
         np.save(prob_path + assembly_name, probs.detach().cpu().numpy())
         np.save(label_path + assembly_name, labels.detach().cpu().numpy())
+        np.save(surface_path + assembly_name, SASAs.detach().cpu().numpy())
         
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
