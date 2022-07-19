@@ -34,7 +34,7 @@ class GASPData(Dataset):
     def len(self):
         return len(self.raw_file_names)
 
-    def process_helper(self, processed_dir, raw_path, i, cutoff=4):
+    def process_helper(self, processed_dir, raw_path, i, cutoff):
         try:
             arr = np.load(raw_path, allow_pickle=True)
         except Exception as e:
