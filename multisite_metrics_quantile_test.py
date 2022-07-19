@@ -53,7 +53,7 @@ def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=Non
         return None, None, None
     bind_coords = all_coords[predicted_labels]
     if bind_coords.shape[0] != 1:
-        if bw == None:
+        if bw is None:
             bw = estimate_bandwidth(bind_coords, quantile=quantile)
         if bw == 0:
             bw = 1e-17
@@ -196,8 +196,28 @@ def volumetric_overlap(hull1, hull2):
     
     return jaccard
 
+def hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus):
+    top_ids = np.unique(sorted_ids)[::-1][:len(site_coords_list)+top_n_plus]
+    predicted_points_list = []
+    predicted_hull_list = []
+    predicted_center_list = []
+    
+    for c_id in top_ids:
+        if c_id is not None:
+            if c_id >= 0:
+                predicted_points = bind_coords[sorted_ids == c_id]
+                predicted_points_list.append(predicted_points)
+                if len(predicted_points) < 4:  # You need four points to define a convex hull so we'll say the overlap is 0
+                    predicted_center_list.append(get_centroid(predicted_points))
+                    predicted_hull_list.append(None)
+                else:
+                    predicted_hull = ConvexHull(predicted_points)
+                    predicted_hull_list.append(ConvexHull(predicted_points))
+                    predicted_center_list.append(hull_center(predicted_hull))
 
-def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, cluster_all=False,adj_matrix=None):
+    return predicted_points_list, predicted_hull_list, predicted_center_list
+
+def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, cluster_all=False, adj_matrix=None, surf_mask=None):
     """Cluster multiple binding sites and calculate distance from true site center, distance from ligand and volumetric overlap with true site 
 
     Parameters
@@ -248,50 +268,55 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
     # bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps)
     # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, bw=eps)
     bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
+    if surf_mask is not None:
+        surf_coords, surf_ids, _ = cluster_atoms_graph_clustering(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold)
 
     true_hull_list = [ConvexHull(true_points) for true_points in site_coords_list]
     true_center_list = [hull_center(true_hull) for true_hull in true_hull_list]
-    
     ligand_center_list = [center_of_mass(lig_coord_list[i], ligand_mass_list[i]) for i in range(len(lig_coord_list))]
 
-    DCC_lig = []
-    DCC_site = []
-    DCA = []
-    volumetric_overlaps = []
-    
-    
-    top_ids = np.unique(sorted_ids)[::-1][:len(site_coords_list)+top_n_plus]
-    predicted_points_list = []
-    predicted_hull_list = []
-    predicted_center_list = []
-    
-    for c_id in top_ids:
-        if c_id != None:
-            if c_id >= 0:
-                predicted_points = bind_coords[sorted_ids == c_id]
-                predicted_points_list.append(predicted_points)
-                if len(predicted_points) < 4:  # You need four points to define a convex hull so we'll say the overlap is 0
-                    predicted_center_list.append(get_centroid(predicted_points))
-                    predicted_hull_list.append(None)
-                else:
-                    predicted_hull = ConvexHull(predicted_points)
-                    predicted_hull_list.append(ConvexHull(predicted_points))
-                    predicted_center_list.append(hull_center(predicted_hull))
-    if len(predicted_center_list) > 0:            
-        DCC_lig_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
-        DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
-        DCA_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
-        for index, x in np.ndenumerate(DCC_lig_matrix):
+    predicted_points_list, predicted_hull_list, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus)
+    if surf_mask is not None:
+        surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus)
+
+    if len(predicted_center_list) > 0:
+        DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])            
+        if surf_mask is None:
+            DCC_lig_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
+            DCA_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])
+        else:
+            DCC_lig_matrix = np.zeros([len(true_center_list), len(surf_center_list)])
+            DCA_matrix = np.zeros([len(true_center_list), len(surf_center_list)])
+
+        for index, x in np.ndenumerate(DCC_site_matrix):
             true_ind, pred_ind = index
-            ligand_center = ligand_center_list[true_ind]
-            lig_coords = lig_coord_list[true_ind]
+
             site_center = true_center_list[true_ind]
             predicted_center = predicted_center_list[pred_ind]
+            if surf_mask is None:
+                ligand_center = ligand_center_list[true_ind]
+                lig_coords = lig_coord_list[true_ind]
 
-            DCC_lig_matrix[index] = np.sqrt(np.sum((predicted_center - ligand_center)**2))
             DCC_site_matrix[index] = np.sqrt(np.sum((predicted_center - site_center)**2))
-            DCA_matrix[index] = DCA_dist(predicted_center, lig_coords)
-                  
+            if surf_mask is None:
+                DCC_lig_matrix[index] = np.sqrt(np.sum((predicted_center - ligand_center)**2))
+                DCA_matrix[index] = DCA_dist(predicted_center, lig_coords)
+
+        if surf_mask is not None:
+            if len(surf_center_list) > 0:
+                for index, x in np.ndenumerate(DCC_lig_matrix):
+                    true_ind, pred_ind = index
+
+                    surf_center = surf_center_list[pred_ind]
+                    ligand_center = ligand_center_list[true_ind]
+                    lig_coords = lig_coord_list[true_ind]
+
+                    DCC_lig_matrix[index] = np.sqrt(np.sum((surf_center - ligand_center)**2))
+                    DCA_matrix[index] = DCA_dist(surf_center, lig_coords)
+            else:
+                DCC_lig_matrix[:,:] = np.nan
+                DCA_matrix[:,:] = np.nan
+
         # print(DCC_lig_matrix)
         closest_predictions = np.argmin(DCC_site_matrix, axis=1)
         site_pairs = np.column_stack([np.arange(len(closest_predictions)), closest_predictions])
@@ -299,14 +324,15 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         DCC_lig = np.min(DCC_lig_matrix, axis=1)
         DCC_site = np.min(DCC_site_matrix, axis=1)
         DCA = np.min(DCA_matrix, axis=1)
-                                    
+
+        volumetric_overlaps = []                            
         for pair in site_pairs:
             true_ind, pred_ind = pair
             true_hull = true_hull_list[true_ind]
             predicted_hull = predicted_hull_list[pred_ind]                    
-            if predicted_hull != None: 
+            if predicted_hull is not None: 
                 volumetric_overlaps.append(volumetric_overlap(predicted_hull, true_hull))
-            elif true_hull == None:
+            elif true_hull is None:
                 raise ValueError ("There were < 3 atoms in your true site label. The indicates that the associated ligand is not burried.")
             else:
                 volumetric_overlaps.append(np.nan)   
@@ -321,7 +347,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         return nan_arr, nan_arr, nan_arr, nan_arr
 
 
-def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, cluster_all=False):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, cluster_all=False, SASA_threshold=None):
     DCC_lig_list = []
     DCC_site_list = []
     DCA_list = []
@@ -334,6 +360,8 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             trimmed_protein = mda.Universe(path_to_mol2 + assembly_name + '.mol2')
             labels = np.load(prepend + metric_dir + '/labels/' + assembly_name + '.npy')
             probs = np.load(prepend + metric_dir + '/probs/' + model_name + '/' + assembly_name + '.npy')
+            if SASA_threshold is not None: 
+                SASAs = np.load(prepend + metric_dir + '/SASAs/' + model_name + '/' + assembly_name + '.npy')
             # print(probs.shape)
             ############### THIS IS TEMPORARY AF REMOVE BEFORE PUBLICAITON ##############
             if is_label: probs = np.array([[1,0] if x ==0 else [0,1] for x in labels])
@@ -356,8 +384,14 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
                     site_coords_list.append(site.atoms.positions)
             # TODO: MAKE THIS AN ACUTAL PATH
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
-            DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list, probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
-            if np.all(np.isnan(DCC_lig)) or np.all(np.isnan(DCC_site)) or np.all(np.isnan(DCA)) or np.all(np.isnan(volumetric_overlaps)): 
+            if SASA_threshold is not None:
+                surf_mask = SASAs > SASA_threshold
+                DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
+            else:
+                DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
+            if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             return DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count
 
@@ -382,6 +416,7 @@ eps_list = [4.5]
 threshold = 0.45
 compute_optimal = False
 top_n_plus=2
+SASA_threshold = None
 
 set_to_use = sys.argv[1] #"chen"|"val"
 is_label=False
@@ -389,6 +424,9 @@ if len(sys.argv) > 3:
     if sys.argv[3] == 'label':
         is_label=True
         print("Using labels rather than probabilities.")
+    elif sys.argv[3] == 'surf':
+        SASA_threshold = 1e-4
+        print("Using surface atoms to find ligands.")
 
 if set_to_use == 'val':
     print("Performing Metrics on the Validation Set")
@@ -499,7 +537,7 @@ for eps in eps_list:
     start = time.time()
     path_to_mol2= data_dir + '/mol2/'
     path_to_labels=prepend + metric_dir + '/labels/'
-    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps,)
+    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=SASA_threshold)
     # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
     #     print(x)
 
@@ -529,7 +567,6 @@ for eps in eps_list:
     DCC_lig_succ, DCC_lig_mean = extract_multi(DCC_lig)
     DCC_site_succ, DCC_site_mean = extract_multi(DCC_site)
     DCA_succ, DCA_mean = extract_multi(DCA)
-    print(f"Number of systems with no predictions: {np.sum([np.all(np.isnan(i)) for i in VO])}", flush=True)
 
     print(f"Average DCC_lig: {DCC_lig_mean}", flush=True)
     print(f"DCC_lig Success: {DCC_lig_succ}", flush=True)
