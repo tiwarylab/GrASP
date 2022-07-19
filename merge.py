@@ -78,8 +78,8 @@ def get_SASA_ratio(i:int,protein_structure_file:str, ligand_structure_file:str):
     
     system_traj = mdtraj.load(temp_system_name)
     ligand_traj = mdtraj.load(ligand_structure_file)
-    system_SASA =  np.mean(np.array(shrake_rupley(system_traj, mode='atom')[0])[ligand_indices])
-    ligand_SASA =  np.mean(shrake_rupley(ligand_traj,mode='atom')[0])
+    system_SASA =  np.sum(np.array(shrake_rupley(system_traj, mode='atom')[0])[ligand_indices])
+    ligand_SASA =  np.sum(shrake_rupley(ligand_traj,mode='atom')[0])
     
     os.remove(temp_system_name)
     return system_SASA/ligand_SASA
