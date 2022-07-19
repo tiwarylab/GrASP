@@ -9,7 +9,7 @@ import torch
 from torch_geometric.data import Data, Dataset
 from torch_geometric.utils import from_scipy_sparse_matrix
 
-class KLIFSData(Dataset):
+class GASPData(Dataset):
     def __init__(self, root, num_cpus, cutoff=5, force_process=False):
         self.cutoff=cutoff
         self.force_process=force_process
@@ -21,7 +21,7 @@ class KLIFSData(Dataset):
         super().__init__(root, None, None)
 
         # self.proceesed_dir = processed_dir
-        # self.processed_dir = "processed_KLIFS_Dataset/{}".format(mode)
+        # self.processed_dir = "processed_GASP_Dataset/{}".format(mode)
 
     @property
     def raw_file_names(self):
@@ -96,7 +96,7 @@ class KLIFSData(Dataset):
 
 from torch_geometric.data import HeteroData
 
-class KLIFSData_Hetro(Dataset):
+class GASPData_Hetro(Dataset):
     def __init__(self, root, num_cpus, cutoff=5, force_process=False):
         self.cutoff=cutoff
         self.force_process=force_process
@@ -104,7 +104,7 @@ class KLIFSData_Hetro(Dataset):
         super().__init__(root, None, None)
 
         # self.proceesed_dir = processed_dir
-        # self.processed_dir = "processed_KLIFS_Dataset/{}".format(mode)
+        # self.processed_dir = "processed_GASP_Dataset/{}".format(mode)
 
     @property
     def raw_file_names(self):

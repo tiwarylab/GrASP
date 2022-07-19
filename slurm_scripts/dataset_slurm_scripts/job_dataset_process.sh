@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=16
 #SBATCH --time 6:0:0
 #SBATCH --nodes=1
-#SBATCH --job-name="KLIFS Process"
+#SBATCH --job-name="GASP Process"
 #SBATCH --mail-user=strobelm@umd.edu
 #SBATCH --mail-type=ALL
 

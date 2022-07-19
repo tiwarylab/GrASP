@@ -36,7 +36,7 @@ import time
 from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
-from KLIFS_dataset import KLIFSData#, KLIFSData_noisy_nodes
+from GASP_dataset import GASPData#, GASPData_noisy_nodes
 from atom_wise_models import Hybrid_1g12_self_edges, Hybrid_1g12_self_edges_dropped_bn, Hybrid_1g12_self_edges_transformer_style
 
 job_start_time = time.time()
@@ -71,7 +71,7 @@ class LabelSmoothingLoss(nn.Module):
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
 #ref: https://github.com/pyg-team/pytorch_geometric/blob/master/benchmark/kernel/train_eval.py#L82-L97
-def k_fold(dataset:KLIFSData,train_path:str, val_path, i):
+def k_fold(dataset:GASPData,train_path:str, val_path, i):
     val_names    = np.loadtxt(val_path, dtype=str)
     train_names   = np.loadtxt(train_path, dtype=str)
     
@@ -146,7 +146,7 @@ def main(node_noise_variance : float, training_split='cv'):
     
     loss_fn_weighting = torch.tensor(loss_fn_weighting).to(device)
     
-    data_set = KLIFSData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
+    data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
     
     do_validation = False
     if training_split == 'cv':
