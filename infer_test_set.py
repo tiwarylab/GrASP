@@ -107,12 +107,14 @@ This whole bit is a quick fix that allows us to load incorrectly saved models.
 This has been fixed in the training script and as a result we can remove this in the future
 '''
 state_dict = torch.load(model_path, map_location=device)
-new_state_dict = OrderedDict()
-for k, v in state_dict.items():
-    name = k[7:] #remove 'module'
-    new_state_dict[name] = v
+# new_state_dict = OrderedDict()
+# for k, v in state_dict.items():
+#     name = k[7:] #remove 'module'
+#     new_state_dict[name] = v
 
-model.load_state_dict(new_state_dict)
+# model.load_state_dict(new_state_dict)
+model.load_state_dict(state_dict, map_location=device)
+
 model.to(device)
  
 #########################
