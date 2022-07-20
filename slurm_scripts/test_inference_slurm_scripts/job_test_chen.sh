@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -p GPU-shared
-#SBATCH -t 10:00:00
+#SBATCH -t 1:00:00
 #SBATCH --gpus=v100-32:2
 #SBATCH --ntasks-per-node=4
 #SBATCH --job-name="scPDB chen Inference"
