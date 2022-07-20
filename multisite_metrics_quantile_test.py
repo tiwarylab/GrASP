@@ -277,7 +277,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
 
     predicted_points_list, predicted_hull_list, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus)
     if surf_mask is not None:
-        surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus)
+        surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(surf_coords, surf_ids, site_coords_list, top_n_plus)
 
     if len(predicted_center_list) > 0:
         DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])            
@@ -361,7 +361,7 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             labels = np.load(prepend + metric_dir + '/labels/' + assembly_name + '.npy')
             probs = np.load(prepend + metric_dir + '/probs/' + model_name + '/' + assembly_name + '.npy')
             if SASA_threshold is not None: 
-                SASAs = np.load(prepend + metric_dir + '/SASAs/' + model_name + '/' + assembly_name + '.npy')
+                SASAs = np.load(prepend + metric_dir + '/SASAs/'  + assembly_name + '.npy')
             # print(probs.shape)
             ############### THIS IS TEMPORARY AF REMOVE BEFORE PUBLICAITON ##############
             if is_label: probs = np.array([[1,0] if x ==0 else [0,1] for x in labels])
@@ -421,10 +421,10 @@ SASA_threshold = None
 set_to_use = sys.argv[1] #"chen"|"val"
 is_label=False
 if len(sys.argv) > 3:
-    if sys.argv[3] == 'label':
+    if 'label' in sys.argv:
         is_label=True
         print("Using labels rather than probabilities.")
-    elif sys.argv[3] == 'surf':
+    if 'surf' in sys.argv:
         SASA_threshold = 1e-4
         print("Using surface atoms to find ligands.")
 
