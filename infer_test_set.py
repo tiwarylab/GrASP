@@ -55,7 +55,7 @@ prepend = str(os.getcwd())
 
 # Model trained exclusively on the holo4k split: "holo4k/trained_model_1656153741.4964042/epoch_49"
 model_name = sys.argv[2]
-model = Hybrid_1g12_self_edges(input_dim = 88, GAT_heads=8)
+model = Hybrid_1g12_self_edges(input_dim = 88)
 
 
 model_path = prepend + "/trained_models/" + model_name
@@ -113,7 +113,7 @@ state_dict = torch.load(model_path, map_location=device)
 #     new_state_dict[name] = v
 
 # model.load_state_dict(new_state_dict)
-model.load_state_dict(state_dict, map_location=device)
+model.load_state_dict(state_dict)
 
 model.to(device)
  
