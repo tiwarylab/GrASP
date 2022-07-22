@@ -2,10 +2,9 @@ import numpy as np
 import MDAnalysis as mda
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 from rdkit import Chem
-from sklearn.cluster import MeanShift,DBSCAN
+from sklearn.cluster import MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
 import networkx as nx 
 from networkx.algorithms.community import louvain_communities
-from sklearn.cluster import estimate_bandwidth
 from scipy.spatial import ConvexHull, HalfspaceIntersection, Delaunay
 from scipy.optimize import linprog
 import os
@@ -29,12 +28,19 @@ def DCA_dist(center, lig_coords):
     
     return shortest
 
-def sort_clusters(cluster_ids, probs, labels):
+def sort_clusters(cluster_ids, probs, labels, score_type='mean'):
     c_probs = []
     unique_ids = np.unique(cluster_ids)
 
     for c_id in unique_ids[unique_ids >= 0]:
-        c_prob = np.mean(probs[:,1][labels][cluster_ids==c_id])
+        if score_type == 'mean':
+            c_prob = np.mean(probs[:,1][labels][cluster_ids==c_id])
+        elif score_type == 'sum':
+            c_prob = np.sum(probs[:,1][labels][cluster_ids==c_id])
+        elif score_type == 'square':
+            c_prob = np.sum(probs[:,1][labels][cluster_ids==c_id]**2)
+        else:
+            print('sort_clusters score_type must be mean, sum, or square.')
         c_probs.append(c_prob)
 
     c_order = np.argsort(c_probs)
@@ -46,7 +52,7 @@ def sort_clusters(cluster_ids, probs, labels):
         
     return sorted_ids
 
-def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=None,**kwargs):
+def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=None, score_type='mean', **kwargs):
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -64,7 +70,7 @@ def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=Non
             raise e
         cluster_ids = ms_clustering.labels_
         
-        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels)
+        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
     else:
         # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
         # the clustering fails so we'll just call this one atom our best 'cluster'.
@@ -77,7 +83,7 @@ def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=Non
     # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
-def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_samples=5):
+def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_samples=5, score_type='mean'):
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -87,7 +93,7 @@ def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_s
         ms_clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(bind_coords)
         cluster_ids = ms_clustering.labels_
         
-        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels)
+        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
     else:
         # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
         # the clustering fails so we'll just call this one atom our best 'cluster'.
@@ -100,7 +106,7 @@ def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_s
     # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
-def cluster_atoms_graph_clustering(all_coords,adj_matrix, predicted_probs, threshold=.5):
+def cluster_atoms_graph_clustering(all_coords,adj_matrix, predicted_probs, threshold=.5, score_type='mean'):
     predicted_labels=predicted_probs[:,1] > threshold
     
     G = nx.from_scipy_sparse_array(adj_matrix, edge_attribute="distance")
@@ -130,12 +136,34 @@ def cluster_atoms_graph_clustering(all_coords,adj_matrix, predicted_probs, thres
             assignment_dict[id] = i
         
     cluster_ids = np.array([assignment_dict[k] for k in sorted(assignment_dict.keys())])
-    sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels)
+    sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
     
     all_ids = -1*np.ones(predicted_labels.shape)
     all_ids[predicted_labels] = sorted_ids
     # np.savez('./1zis_site_labels', bind_coords=bind_coords, sorted_ids=sorted_ids)
     return bind_coords, sorted_ids, all_ids
+
+def cluster_atoms_linkage(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    predicted_labels = predicted_probs[:,1] > threshold
+    if np.sum(predicted_labels) == 0:
+        # No positive predictions were made with specified cutoff
+        return None, None, None
+    bind_coords = all_coords[predicted_labels]
+    if bind_coords.shape[0] != 1:
+        link_clustering = AgglomerativeClustering(**kwargs).fit(bind_coords)
+        cluster_ids = link_clustering.labels_
+        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
+    else:
+        # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
+        # the clustering fails so we'll just call this one atom our best 'cluster'.
+        sorted_ids = [0]
+
+    all_ids = -1*np.ones(predicted_labels.shape)
+    all_ids[predicted_labels] = sorted_ids
+
+    # print(sorted_ids)
+    # print(all_ids)
+    return bind_coords, sorted_ids, all_ids    
 
 def hull_center(hull):
     hull_com = np.zeros(3)
@@ -267,9 +295,12 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
     # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all)
     # bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps)
     # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, bw=eps)
-    bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
+    #bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
+    bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
+    
     if surf_mask is not None:
-        surf_coords, surf_ids, _ = cluster_atoms_graph_clustering(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold)
+        #surf_coords, surf_ids, _ = cluster_atoms_graph_clustering(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold)
+        surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
 
     true_hull_list = [ConvexHull(true_points) for true_points in site_coords_list]
     true_center_list = [hull_center(true_hull) for true_hull in true_hull_list]
