@@ -131,21 +131,14 @@ def main(node_noise_variance : float, training_split='cv'):
     #     model = Hybrid_1g12_self_edges_dropped_bn(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
     # elif str(sys.argv[3]) == "Hybrid_1g12_self_edges_transformer_style":
     #     print("Using Hybrid_1g12_self_edges_transformer_style")
-    #     model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)   
-    if len(sys.argv) == 4:
-        if str(sys.argv[3]) == "mean":
-            print("Using Hybrid_1g12_self_edges with mean self-edge encoding, traditional")
-            model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4, GAT_fill_value='mean')
-        if str(sys.argv[3]) == "null":
+    #     model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    
+    if sys.argv[3] == 'hybrid':
             print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, traditional")
-            model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1]))
-    elif len(sys.argv) == 5:
-        if str(sys.argv[3]) == "mean":
-            print("Using Hybrid_1g12_self_edges with mean self-edge encoding, transformer style")
-            model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4, GAT_fill_value='mean')
-        if str(sys.argv[3]) == "null":
-            print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
-            model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1]))
+            model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    elif sys.argv[3] == 'transformer':
+        print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
+        model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
     elif len(sys.argv) < 4:
         raise ValueError("Expected Model Type")
     else:
