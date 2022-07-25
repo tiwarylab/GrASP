@@ -304,8 +304,10 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
     if surf_mask is not None:
         surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(surf_coords, surf_ids, site_coords_list, top_n_plus)
 
-    # New metric, site count ratio: quantifies ratio of (total predicted sites / total true sites)
-    SCR = np.sum(np.unique(sorted_ids) > -1) / len(site_coords_list)
+    # New metric, site count difference: total predicted sites - total true sites
+    n_predicted = np.sum(np.unique(sorted_ids) > -1)
+    n_true = len(site_coords_list)
+    SCD = n_predicted-n_true
 
     if len(predicted_center_list) > 0:
         DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])            
@@ -366,7 +368,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
                 volumetric_overlaps.append(np.nan)   
         volumetric_overlaps = np.array(volumetric_overlaps)
 
-        return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR
+        return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD
 
     else:
         nan_arr =  np.empty(len(true_center_list))
@@ -414,14 +416,14 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             if SASA_threshold is not None:
                 surf_mask = SASAs > SASA_threshold
-                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
             else:
-                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
-            return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR, no_prediction_count
+            return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD, no_prediction_count
 
         except Exception as e:
             print("ERROR")
@@ -430,9 +432,9 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
     # DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count = helper('1zis_0.npy')
     # print(DCC_site_list, DCA_list)
     r = Parallel(n_jobs=15)(delayed(helper)(file) for file in tqdm(os.listdir(path_to_labels)[:],  position=0, leave=True))
-    DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCR, no_prediction_count = zip(*r)
+    DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCD, no_prediction_count = zip(*r)
     names = [file for file in os.listdir(path_to_labels)]
-    return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCR, no_prediction_count, names
+    return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCD, no_prediction_count, names
 
 #######################################################################################
 # model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
@@ -443,7 +445,7 @@ prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
 eps_list = [4.5] 
 threshold = 0.45
 compute_optimal = False
-top_n_plus=0
+top_n_list=[0,2]
 SASA_threshold = None
 
 set_to_use = sys.argv[1] #"chen"|"val"
@@ -561,52 +563,55 @@ def extract_multi(metric_array):
 
 #######################################################################################
 for eps in eps_list:
-    print("Calculating overlap and center distance metrics for "+str(threshold)+" threshold.", flush=True)
-    start = time.time()
-    path_to_mol2= data_dir + '/mol2/'
-    path_to_labels=prepend + metric_dir + '/labels/'
-    DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=SASA_threshold)
-    # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
-    #     print(x)
+    for top_n_plus in top_n_list:
+        print(f"Calculating n+{top_n_plus} metrics for {threshold} threshold.", flush=True)
+        start = time.time()
+        path_to_mol2= data_dir + '/mol2/'
+        path_to_labels=prepend + metric_dir + '/labels/'
+        DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=SASA_threshold)
+        # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
+        #     print(x)
 
-    print("Done. {}".format(time.time()- start))
-    
-    overlap_path = prepend + metric_dir + '/overlaps/' + model_name
-    if not os.path.isdir(overlap_path):
-        os.makedirs(overlap_path)
-    
-    if is_label:
-        np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCR=SCR,names=names)
-    else:
-        np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCR=SCR, names=names)
+        print("Done. {}".format(time.time()- start))
+        
+        overlap_path = prepend + metric_dir + '/overlaps/' + model_name
+        if not os.path.isdir(overlap_path):
+            os.makedirs(overlap_path)
+        
+        if is_label:
+            np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD,names=names)
+        else:
+            np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD, names=names)
 
-    VO = volumetric_overlaps
+        VO = volumetric_overlaps
 
-    print("-----------------------------------------------------------------------------------", flush=True)
-    print("Cutoff (Prediction Threshold):", threshold)
-    print("EPS:", eps)
-    print("top n +", top_n_plus, "prediction")
-    print("-----------------------------------------------------------------------------------", flush=True)
-    print("Number of systems with no predictions:", np.sum(no_prediction_count), flush=True)
-    # print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
-    # print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
-    # print("Average DCA:", np.nanmean(DCA), flush=True)
-    # print("Average VO:", np.nanmean(volumetric_overlaps), flush=True)
-    DCC_lig_succ, DCC_lig_mean = extract_multi(DCC_lig)
-    DCC_site_succ, DCC_site_mean = extract_multi(DCC_site)
-    DCA_succ, DCA_mean = extract_multi(DCA)
+        print("-----------------------------------------------------------------------------------", flush=True)
+        print("Cutoff (Prediction Threshold):", threshold)
+        print("EPS:", eps)
+        print("top n +", top_n_plus, "prediction")
+        print("-----------------------------------------------------------------------------------", flush=True)
+        print("Number of systems with no predictions:", np.sum(no_prediction_count), flush=True)
+        # print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
+        # print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
+        # print("Average DCA:", np.nanmean(DCA), flush=True)
+        # print("Average VO:", np.nanmean(volumetric_overlaps), flush=True)
+        DCC_lig_succ, DCC_lig_mean = extract_multi(DCC_lig)
+        DCC_site_succ, DCC_site_mean = extract_multi(DCC_site)
+        DCA_succ, DCA_mean = extract_multi(DCA)
 
-    print(f"Average DCC_lig: {DCC_lig_mean}", flush=True)
-    print(f"DCC_lig Success: {DCC_lig_succ}", flush=True)
+        print(f"Average DCC_lig: {DCC_lig_mean}", flush=True)
+        print(f"DCC_lig Success: {DCC_lig_succ}", flush=True)
 
-    print(f"Average DCC_site: {DCC_site_mean}", flush=True)
-    print(f"DCC_site Success: {DCC_site_succ}", flush=True)
+        print(f"Average DCC_site: {DCC_site_mean}", flush=True)
+        print(f"DCC_site Success: {DCC_site_succ}", flush=True)
 
-    print(f"Average DCA: {DCA_mean}", flush=True)
-    print(f"DCA Success: {DCA_succ}", flush=True)
+        print(f"Average DCA: {DCA_mean}", flush=True)
+        print(f"DCA Success: {DCA_succ}", flush=True)
 
-    print(f"Average VO: {np.nanmean(np.concatenate(VO))}", flush=True)
-    print(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}", flush=True)
+        print(f"Average VO: {np.nanmean(np.concatenate(VO))}", flush=True)
+        print(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}", flush=True)
 
-    print(print(f"Average SCR: {np.nanmean(SCR)}", flush=True))
-    #######################################################################################
+        print(f"Average SCD: {np.nanmean(SCD)}", flush=True)
+        print(f"Exact Num Sites: {np.mean(SCD == 0)}", flush=True)
+        print(f"Num Sites Within 1: {np.mean(np.abs(SCD) <= 1)}", flush=True)
+        #######################################################################################
