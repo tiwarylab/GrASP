@@ -584,6 +584,7 @@ for eps in eps_list:
             np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD, names=names)
 
         VO = volumetric_overlaps
+        SCD = np.array(SCD)
 
         print("-----------------------------------------------------------------------------------", flush=True)
         print("Cutoff (Prediction Threshold):", threshold)
