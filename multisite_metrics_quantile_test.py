@@ -22,12 +22,6 @@ from joblib import Parallel, delayed
 def center_of_mass(coords, masses):
     return np.sum(coords*np.tile(masses, (3,1)).T, axis=0)/np.sum(masses)
 
-def DCA_dist(center, lig_coords):
-    distances = np.sqrt(np.sum((center - lig_coords)**2, axis=1))
-    shortest = np.min(distances)
-    
-    return shortest
-
 def sort_clusters(cluster_ids, probs, labels, score_type='mean'):
     c_probs = []
     unique_ids = np.unique(cluster_ids)
@@ -295,12 +289,12 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
     # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all)
     # bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps)
     # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, bw=eps)
-    #bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
-    bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
+    bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
+    #bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
     
     if surf_mask is not None:
-        #surf_coords, surf_ids, _ = cluster_atoms_graph_clustering(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold)
-        surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
+        surf_coords, surf_ids, _ = cluster_atoms_graph_clustering(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold)
+        #surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
 
     true_hull_list = [ConvexHull(true_points) for true_points in site_coords_list]
     true_center_list = [hull_center(true_hull) for true_hull in true_hull_list]
@@ -309,6 +303,9 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
     predicted_points_list, predicted_hull_list, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus)
     if surf_mask is not None:
         surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(surf_coords, surf_ids, site_coords_list, top_n_plus)
+
+    # New metric, site count ratio: quantifies ratio of (total predicted sites / total true sites)
+    SCR = np.sum(np.unique(sorted_ids) > -1) / len(site_coords_list)
 
     if len(predicted_center_list) > 0:
         DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])            
@@ -369,13 +366,13 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
                 volumetric_overlaps.append(np.nan)   
         volumetric_overlaps = np.array(volumetric_overlaps)
 
-        return DCC_lig, DCC_site, DCA, volumetric_overlaps
+        return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR
 
     else:
         nan_arr =  np.empty(len(true_center_list))
         nan_arr[:] = np.nan
 
-        return nan_arr, nan_arr, nan_arr, nan_arr
+        return nan_arr, nan_arr, nan_arr, nan_arr, np.nan
 
 
 def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, cluster_all=False, SASA_threshold=None):
@@ -417,14 +414,14 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             if SASA_threshold is not None:
                 surf_mask = SASAs > SASA_threshold
-                DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
             else:
-                DCC_lig, DCC_site, DCA, volumetric_overlaps = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
-            return DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count
+            return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR, no_prediction_count
 
         except Exception as e:
             print("ERROR")
@@ -433,9 +430,9 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
     # DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count = helper('1zis_0.npy')
     # print(DCC_site_list, DCA_list)
     r = Parallel(n_jobs=15)(delayed(helper)(file) for file in tqdm(os.listdir(path_to_labels)[:],  position=0, leave=True))
-    DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count = zip(*r)
+    DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCR, no_prediction_count = zip(*r)
     names = [file for file in os.listdir(path_to_labels)]
-    return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count, names
+    return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCR, no_prediction_count, names
 
 #######################################################################################
 # model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
@@ -446,7 +443,7 @@ prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
 eps_list = [4.5] 
 threshold = 0.45
 compute_optimal = False
-top_n_plus=2
+top_n_plus=0
 SASA_threshold = None
 
 set_to_use = sys.argv[1] #"chen"|"val"
@@ -568,7 +565,7 @@ for eps in eps_list:
     start = time.time()
     path_to_mol2= data_dir + '/mol2/'
     path_to_labels=prepend + metric_dir + '/labels/'
-    DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=SASA_threshold)
+    DCC_lig, DCC_site, DCA, volumetric_overlaps, SCR, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=SASA_threshold)
     # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
     #     print(x)
 
@@ -579,9 +576,9 @@ for eps in eps_list:
         os.makedirs(overlap_path)
     
     if is_label:
-        np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps,names=names)
+        np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCR=SCR,names=names)
     else:
-        np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps,names=names)
+        np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCR=SCR, names=names)
 
     VO = volumetric_overlaps
 
@@ -610,4 +607,6 @@ for eps in eps_list:
 
     print(f"Average VO: {np.nanmean(np.concatenate(VO))}", flush=True)
     print(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}", flush=True)
+
+    print(print(f"Average SCR: {np.nanmean(SCR)}", flush=True))
     #######################################################################################
