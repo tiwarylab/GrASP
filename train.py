@@ -160,7 +160,7 @@ def main(node_noise_variance : float, training_split='cv'):
         do_validation = True
         val_paths = []
         train_paths = []
-        for fold_number in range(2):
+        for fold_number in range(1):
             val_paths.append(prepend + "/splits/test_ids_fold"  + str(fold_number))
             train_paths.append(prepend + "/splits/train_ids_fold" + str(fold_number))
         data_points = zip(train_paths,val_paths)
