@@ -258,7 +258,7 @@ class Hybrid_Cat_Linear_Block(nn.Module):
         self.BN1 = BatchNorm(output_dim, track_running_stats=False)
         self.BN2 = BatchNorm(output_dim, track_running_stats=False)
         
-        self.linear1 = nn.Linear(output_dim, output_dim)
+        self.linear1 = nn.Linear(output_dim, output_dim, bias=False)
         self.BN3 = BatchNorm(output_dim, track_running_stats=False)
         self.linear2 = nn.Linear(output_dim, output_dim)
         self.BN4 = BatchNorm(output_dim, track_running_stats=False)
