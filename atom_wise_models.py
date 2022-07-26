@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 class Hybrid_1g12_self_edges(nn.Module):
     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+        self.noise_variance = noise_variance
         # No need for bias in GAT Convs due to batch norms
         super(Hybrid_1g12_self_edges, self).__init__()
         self.BN0 = BatchNorm(input_dim, track_running_stats=False, affine=False)
