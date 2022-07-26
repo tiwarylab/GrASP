@@ -37,7 +37,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData#, GASPData_noisy_nodes
-from atom_wise_models import Hybrid_1g12_self_edges, Hybrid_1g12_self_edges_dropped_bn, Hybrid_1g12_self_edges_transformer_style
+from atom_wise_models import Hybrid_1g12_self_edges, Hybrid_1g12_self_edges_transformer_style
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
