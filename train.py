@@ -345,9 +345,9 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.005, help="Adam learning rate.")
-    parser.add_argument("-w", "--class_loss_weight", type=float, nargs=2, default=[1.0, 1.0], help="Loss weight for [negative, positive] classes.")
-    parser.add_argument("-s", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
-    parser.add_argument("-h", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
+    parser.add_argument("-cw", "--class_loss_weight", type=float, nargs=2, default=[1.0, 1.0], help="Loss weight for [negative, positive] classes.")
+    parser.add_argument("-ls", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
+    parser.add_argument("-hw", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
     args = parser.parse_args()
 
     node_noise_variance = args.node_noise_variance
