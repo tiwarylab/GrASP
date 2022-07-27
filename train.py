@@ -99,12 +99,9 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
    
 def main(node_noise_variance : float, training_split='cv'):
     # Hyperparameters
-    num_hops = 2
     num_epochs = 50
     batch_size = 4
-    sample_size = 20
     learning_rate = 0.005
-    train_test_split = .9
     loss_weight = [1.0,1.0]#[0.8,1.2]
     label_smoothing = 0#0.2
     loss_fn_weighting = [.9,.1]
