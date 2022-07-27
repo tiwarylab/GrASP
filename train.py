@@ -5,7 +5,7 @@ import numpy as np
 import scipy
 import multiprocessing
 from glob import glob
-import sys
+import argparse
 from joblib import Parallel, delayed
 
 import networkx as nx
@@ -99,12 +99,12 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
    
 def main(node_noise_variance : float, training_split='cv'):
     # Hyperparameters
-    num_epochs = 50
-    batch_size = 4
-    learning_rate = 0.005
-    class_loss_weight = [1.0,1.0]#[0.8,1.2]
-    label_smoothing = 0#0.2
-    head_loss_weight = [.9,.1]
+    num_epochs = args.num_epochs
+    batch_size = args.batch_size
+    learning_rate = args.learning_rate
+    class_loss_weight = args.class_loss_weight#[0.8,1.2]
+    label_smoothing = args.label_smoothing#0.2
+    head_loss_weight = args.head_loss_weight
 
     if training_split not in ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k']:
         raise ValueError("Expected training_split to be one of ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k'] but got", training_split)
@@ -130,16 +130,14 @@ def main(node_noise_variance : float, training_split='cv'):
     #     print("Using Hybrid_1g12_self_edges_transformer_style")
     #     model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
     
-    if sys.argv[3] == 'hybrid':
+    if args.model == 'hybrid':
             print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, traditional")
             model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    elif sys.argv[3] == 'transformer':
+    elif args.model == 'transformer':
         print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
         model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    elif len(sys.argv) < 4:
-        raise ValueError("Expected Model Type")
     else:
-        raise ValueError("Unknown Model Type:", sys.argv[3])
+        raise ValueError("Unknown Model Type:", args.model)
     model =  DataParallel(model)
     model.to(device)
     
@@ -202,7 +200,7 @@ def main(node_noise_variance : float, training_split='cv'):
         val_epoch_auc = []
 
 
-        writer = SummaryWriter(log_dir='atom_wise_model_logs/' + training_split + '/cv_split_' + str(cv_iteration) + "/" + str(job_start_time))
+        writer = SummaryWriter(log_dir='atom_wise_model_logs/' + training_split + '/cv_split_' + str(cv_iteration) + "/" + args.model + "_" + str(job_start_time))
         train_batch_num, val_batch_num = 0,0
         train_epoch_num, val_epoch_num = 0,0
         
@@ -340,17 +338,21 @@ def main(node_noise_variance : float, training_split='cv'):
         writer.close()
 
 if __name__ == "__main__":
-    node_noise_variance = sys.argv[1]
-    training_split = sys.argv[2]
-    try:
-        node_noise_variance = float(node_noise_variance)
-        # edge_noise_variance = float(edge_noise_variance)
-    except ValueError:
-        # print("Expected arguments (noise added during training) to be a float, instead got:", str(sys.argv[1]), str(sys.argv[2]))
-        print("Expected arguments (noise added during training) to be a float, instead got:", str(sys.argv[1]))
-        
-        sys.exit()
-    # print("Training with noise with variance", str(sys.argv[1]), "and mean 0 added to nodes and noise with variance", str(sys.argv[2]), "and mean 0 added to edges.")
-    print("Training with noise with variance", str(sys.argv[1]), "and mean 0 added to nodes.")
+    parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.")
+    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "train_full", "chen", "coach420", "holo4k", "sc6k"], help="Training set.")
+    parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
+    parser.add_argument("-m", "--model", default="hybrid", choices=["hybrid", "transformer"], help="GNN architecture to train.")
+    parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
+    parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
+    parser.add_argument("-lr", "--learning_rate", type=float, default=0.005, help="Adam learning rate.")
+    parser.add_argument("-w", "--class_loss_weight", type=float, nargs=2, default=[1.0, 1.0], help="Loss weight for [negative, positive] classes.")
+    parser.add_argument("-s", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
+    parser.add_argument("-h", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
+    args = parser.parse_args()
+
+    node_noise_variance = args.node_noise_variance
+    training_split = args.training_split
+
+    print("Training with noise with variance", node_noise_variance, "and mean 0 added to nodes.")
     
     main(node_noise_variance,training_split)
