@@ -102,9 +102,9 @@ def main(node_noise_variance : float, training_split='cv'):
     num_epochs = 50
     batch_size = 4
     learning_rate = 0.005
-    loss_weight = [1.0,1.0]#[0.8,1.2]
+    class_loss_weight = [1.0,1.0]#[0.8,1.2]
     label_smoothing = 0#0.2
-    loss_fn_weighting = [.9,.1]
+    head_loss_weight = [.9,.1]
 
     if training_split not in ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k']:
         raise ValueError("Expected training_split to be one of ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k'] but got", training_split)
@@ -114,9 +114,9 @@ def main(node_noise_variance : float, training_split='cv'):
     # print('The model will be using {} gpus.'.format(world_size))
     # print("The model will be using {} cpus.".format(num_cpus), flush=True)
 
-    # print("Loss Weighting:", str(loss_weight))
-    # print("Weighted Cross Entropy Loss Function Weight:", loss_fn_weighting[0])
-    # print("Reconstruction (MSE) Loss Function Weight:  ", loss_fn_weighting[1])
+    # print("Loss Weighting:", str(class_loss_weight))
+    # print("Weighted Cross Entropy Loss Function Weight:", head_loss_weight[0])
+    # print("Reconstruction (MSE) Loss Function Weight:  ", head_loss_weight[1])
 
     # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean")
     # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance)
@@ -146,9 +146,9 @@ def main(node_noise_variance : float, training_split='cv'):
     optimizer = optim.Adam(model.parameters(), lr = learning_rate)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
     
-    loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(loss_weight), device=device)
+    loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(class_loss_weight), device=device)
     
-    loss_fn_weighting = torch.tensor(loss_fn_weighting).to(device)
+    head_loss_weight = torch.tensor(head_loss_weight).to(device)
     
     data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
     
@@ -228,7 +228,7 @@ def main(node_noise_variance : float, training_split='cv'):
                 optimizer.zero_grad(set_to_none=True)
                 out, out_recon = model.forward(batch)
 
-                weighted_xent_l, mse_l = loss_fn_weighting[0] * loss_fn(out,y), loss_fn_weighting[1] * F.mse_loss(out_recon, unperturbed_x)           
+                weighted_xent_l, mse_l = head_loss_weight[0] * loss_fn(out,y), head_loss_weight[1] * F.mse_loss(out_recon, unperturbed_x)           
 
                 loss = weighted_xent_l + mse_l
                 loss.backward() 
