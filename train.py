@@ -5,8 +5,8 @@ import numpy as np
 import scipy
 import multiprocessing
 from glob import glob
-import argparse
 import sys
+import argparse
 from joblib import Parallel, delayed
 
 import networkx as nx
@@ -200,7 +200,7 @@ def main(node_noise_variance : float, training_split='cv'):
         val_epoch_mcc = []
         val_epoch_auc = []
 
-        writer = SummaryWriter(log_dir='atom_wise_model_logs/' + training_split + '/cv_split_' + str(cv_iteration) + "/" + argstring)
+        writer = SummaryWriter(log_dir='atom_wise_model_logs/' + training_split + '/cv_split_' + str(cv_iteration) + "/" + model_id)
         train_batch_num, val_batch_num = 0,0
         train_epoch_num, val_epoch_num = 0,0
         
@@ -272,9 +272,9 @@ def main(node_noise_variance : float, training_split='cv'):
             writer.add_scalar('Epoch_MCC/Train',  training_epoch_mcc[-1],  train_epoch_num)
             writer.add_scalar('Epoch_AUC/Train',  training_epoch_auc[-1],  train_epoch_num)
 
-            if not os.path.isdir("./trained_models/{}/trained_model_{}/".format(training_split, argstring)):
-                os.makedirs("./trained_models/{}/trained_model_{}/".format(training_split, argstring))
-            torch.save(model.module.state_dict(), "./trained_models/{}/trained_model_{}/epoch_{}".format(training_split, argstring, train_epoch_num))
+            if not os.path.isdir("./trained_models/{}/trained_model_{}/".format(training_split, model_id)):
+                os.makedirs("./trained_models/{}/trained_model_{}/".format(training_split, model_id))
+            torch.save(model.module.state_dict(), "./trained_models/{}/trained_model_{}/epoch_{}".format(training_split, model_id, train_epoch_num))
             
             train_epoch_num += 1
 
@@ -350,6 +350,7 @@ if __name__ == "__main__":
     parser.add_argument("-hw", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
+    model_id = argstring + str(job_start_time)
 
     node_noise_variance = args.node_noise_variance
     training_split = args.training_split
