@@ -232,7 +232,7 @@ def main(node_noise_variance : float, training_split='cv'):
                 loss.backward() 
                 optimizer.step()
 
-                probs = out.detach().cpu().numpy()
+                probs = out.softmax(dim=-1).detach().cpu().numpy()
                 preds = np.argmax(probs, axis=1)
 
                 l = loss.detach().cpu().item()
@@ -240,7 +240,7 @@ def main(node_noise_variance : float, training_split='cv'):
                 bl = l 
                 ba = accuracy_score(labels, preds)
                 bm = mcc(labels, preds)
-                bc = roc_auc_score(labels, probs, labels=[0,1])
+                bc = roc_auc_score(labels, probs[:,1])
                 training_batch_loss += bl
                 training_batch_acc  += ba
                 training_batch_mcc  += bm
@@ -301,13 +301,13 @@ def main(node_noise_variance : float, training_split='cv'):
                         out, _ = model.forward(batch)
                         # loss = F.cross_entropy(out, batch.y)
                         loss = loss_fn(out,y)
-                        probs = out.detach().cpu().numpy()
+                        probs = out.softmax(dim=-1).detach().cpu().numpy()
                         preds = np.argmax(probs, axis=1)
                         bl = loss.detach().cpu().item()
 
                         ba = accuracy_score(labels, preds)
                         bm = mcc(labels, preds)
-                        bc = roc_auc_score(labels, probs, labels=[0,1])
+                        bc = roc_auc_score(labels, probs[:,1])
                             
                         val_batch_loss += bl
                         val_batch_acc  += ba
