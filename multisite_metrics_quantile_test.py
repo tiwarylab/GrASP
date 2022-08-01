@@ -445,7 +445,7 @@ prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
 eps_list = [4.5] 
 threshold = 0.45
 compute_optimal = False
-top_n_list=[0,2]
+top_n_list=[0,2,10]
 SASA_threshold = None
 
 set_to_use = sys.argv[1] #"chen"|"val"
