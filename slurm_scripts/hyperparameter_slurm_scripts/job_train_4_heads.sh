@@ -4,7 +4,7 @@
 #SBATCH -t 12:00:00
 #SBATCH --gpus=v100-32:4
 #SBATCH --ntasks-per-node=8
-#SBATCH --job-name="scPDB GPU CV Training Hybrid"
+#SBATCH --job-name="scPDB -m hybrid"
 #SBATCH --mail-user=zsmith7@umd.edu
 #SBATCH --mail-type=ALL
 
