@@ -38,7 +38,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData#, GASPData_noisy_nodes
-from atom_wise_models import Hybrid_1g12_self_edges, Hybrid_1g12_self_edges_transformer_style
+from atom_wise_models import Hybrid_1g12_self_edges, Hybrid_1g12_self_edges_transformer_style, Hybrid_1g12_LN, Hybrid_1g12_IN, Hybrid_1g12_GN
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
@@ -137,6 +137,15 @@ def main(node_noise_variance : float, training_split='cv'):
     elif args.model == 'transformer':
         print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
         model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    elif args.model == 'layernorm':
+        print("Using Hybrid_1g12_self_edges with layer norm.")
+        model = Hybrid_1g12_LN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    elif args.model == 'instancenorm':
+        print("Using Hybrid_1g12_self_edges with instance norm.")
+        model = Hybrid_1g12_IN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    elif args.model == 'graphnorm':
+        print("Using Hybrid_1g12_self_edges with graph norm.")
+        model = Hybrid_1g12_GN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
     else:
         raise ValueError("Unknown Model Type:", args.model)
     model =  DataParallel(model)
@@ -343,7 +352,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "train_full", "chen", "coach420", "holo4k", "sc6k"], help="Training set.")
     parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
-    parser.add_argument("-m", "--model", default="hybrid", choices=["hybrid", "transformer"], help="GNN architecture to train.")
+    parser.add_argument("-m", "--model", default="hybrid", choices=["hybrid", "transformer", "layernorm", "instancenorm", "graphnorm"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.005, help="Adam learning rate.")
