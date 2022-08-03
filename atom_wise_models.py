@@ -549,7 +549,7 @@ class Hybrid_Cat_GN(nn.Module):
         GNN_out_dim = int(output_dim/2)
         self.GAT = GATv2Conv(input_dim, int(GNN_out_dim/GAT_heads), heads=GAT_heads, edge_dim=edge_dim, bias=False, dropout=drop_prob, aggr=GAT_aggr, fill_value=GAT_fill_value)
         self.GIN = GINConv(MLP(3, input_dim, MLP_dim, GNN_out_dim), aggr=GIN_aggr)
-        self.GN1 = GraphNorm(output_dim, track_running_stats=False, affine=True)
+        self.GN1 = GraphNorm(output_dim)
         self.elu = torch.nn.ELU()
 
     def forward(self, x, edge_index, edge_attr):
