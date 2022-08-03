@@ -167,7 +167,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         name = "".join(re.findall("^[a-zA-Z]+", atom.resname)).upper()                      # Remove numbers from the name string
         element = re.search("^[a-zA-Z]+", atom.type).group().upper()
         try:
-            # rdf calculation where dr = 1 and r_max = 5
+            # rdf calculation where dr = 1 and r_max = 10
             d = trimmed[np.where(protein.ids == atom.id)[0][0]]
             n, bins = np.histogram(d[d>0], bins =bins)
             r = bins[1:]
