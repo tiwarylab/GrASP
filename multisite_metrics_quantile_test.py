@@ -17,6 +17,7 @@ from sklearn.metrics import roc_curve, auc
 import time
 
 import sys
+import argparse
 from joblib import Parallel, delayed
 
 def center_of_mass(coords, masses):
@@ -32,7 +33,7 @@ def sort_clusters(cluster_ids, probs, labels, score_type='mean'):
         elif score_type == 'sum':
             c_prob = np.sum(probs[:,1][labels][cluster_ids==c_id])
         elif score_type == 'square':
-            c_prob = np.sum(probs[:,1][labels][cluster_ids==c_id]**2)
+            c_prob = np.sum((probs[:,1][labels][cluster_ids==c_id])**2)
         else:
             print('sort_clusters score_type must be mean, sum, or square.')
         c_probs.append(c_prob)
@@ -100,7 +101,7 @@ def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_s
     # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
-def cluster_atoms_graph_clustering(all_coords,adj_matrix, predicted_probs, threshold=.5, score_type='mean'):
+def cluster_atoms_louvain(all_coords,adj_matrix, predicted_probs, threshold=.5, cutoff=5, score_type='mean'):
     predicted_labels=predicted_probs[:,1] > threshold
     
     G = nx.from_scipy_sparse_array(adj_matrix, edge_attribute="distance")
@@ -117,7 +118,7 @@ def cluster_atoms_graph_clustering(all_coords,adj_matrix, predicted_probs, thres
     
     # Cleanout anything larger than our cutoff
     for u,v, dist in list(G.edges.data("distance")):
-        if dist > 5:
+        if dist > cutoff:
             G.remove_edge(u,v)
 
     
@@ -239,7 +240,7 @@ def hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus):
 
     return predicted_points_list, predicted_hull_list, predicted_center_list
 
-def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, cluster_all=False, adj_matrix=None, surf_mask=None):
+def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, method="louvain", score_type="mean", cluster_all=False, adj_matrix=None, surf_mask=None):
     """Cluster multiple binding sites and calculate distance from true site center, distance from ligand and volumetric overlap with true site 
 
     Parameters
@@ -286,15 +287,15 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         Jaccard similarity between predicted site convex hull and true site convex hull. 
 
     """
-    # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all)
-    # bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps)
-    # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, bw=eps)
-    bind_coords, sorted_ids, _ = cluster_atoms_graph_clustering(prot_coords,adj_matrix,predicted_probs,threshold=threshold)
-    #bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
+    # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
+    # bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
+    # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, bw=eps, score_type=score_type)
+    bind_coords, sorted_ids, _ = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, score_type=score_type)
+    #bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
     
     if surf_mask is not None:
-        surf_coords, surf_ids, _ = cluster_atoms_graph_clustering(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold)
-        #surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps)
+        surf_coords, surf_ids, _ = cluster_atoms_louvain(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold, cutoff=eps, score_type=score_type)
+        #surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
 
     true_hull_list = [ConvexHull(true_points) for true_points in site_coords_list]
     true_center_list = [hull_center(true_hull) for true_hull in true_hull_list]
@@ -377,7 +378,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         return nan_arr, nan_arr, nan_arr, nan_arr, np.nan
 
 
-def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, cluster_all=False, SASA_threshold=None):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, method="louvain", score_type="mean", cluster_all=False, SASA_threshold=None):
     DCC_lig_list = []
     DCC_site_list = []
     DCA_list = []
@@ -417,10 +418,10 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             if SASA_threshold is not None:
                 surf_mask = SASAs > SASA_threshold
                 DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
-                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
             else:
                 DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
-                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, cluster_all=cluster_all, adj_matrix=adj_matrix)
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, cluster_all=cluster_all, adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD, no_prediction_count
@@ -436,183 +437,230 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
     names = [file for file in os.listdir(path_to_labels)]
     return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCD, no_prediction_count, names
 
-#######################################################################################
-# model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
-model_name = sys.argv[2]
-
-prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
-# 4.5 was found to be ebst on validation labels with threshold = 0.4
-eps_list = [4.5] 
-threshold = 0.45
-compute_optimal = False
-top_n_list=[0,2,10]
-SASA_threshold = None
-
-set_to_use = sys.argv[1] #"chen"|"val"
-is_label=False
-if len(sys.argv) > 3:
-    if 'label' in sys.argv:
-        is_label=True
-        print("Using labels rather than probabilities.")
-    if 'surf' in sys.argv:
-        SASA_threshold = 1e-4
-        print("Using surface atoms to find ligands.")
-
-if set_to_use == 'val':
-    print("Performing Metrics on the Validation Set")
-    data_dir = prepend + '/scPDB_data_dir'
-    metric_dir = '/test_metrics/validation'
-elif set_to_use == 'chen':
-    print("Performing Metrics on the Chen Set")    
-    data_dir = prepend + '/benchmark_data_dir/chen'
-    metric_dir = '/test_metrics/chen'
-elif set_to_use ==  'coach420':
-    print("Performing Metrics on the coach420 Set")    
-    data_dir = prepend + '/benchmark_data_dir/coach420'
-    metric_dir = '/test_metrics/coach420'
-elif set_to_use ==  'coach420_dp':
-    print("Performing Metrics on the coach420 DeepPocket Set")    
-    data_dir = prepend + '/benchmark_data_dir/coach420_dp'
-    metric_dir = '/test_metrics/coach420_dp'
-elif set_to_use == 'holo4k':
-    print("Performing Metrics on the holo4k Set")    
-    data_dir = prepend + '/benchmark_data_dir/holo4k'
-    metric_dir = '/test_metrics/holo4k'
-elif set_to_use == 'holo4k_dp':
-    print("Performing Metrics on the holo4k DeepPocket Set")    
-    data_dir = prepend + '/benchmark_data_dir/holo4k_dp'
-    metric_dir = '/test_metrics/holo4k_dp'
-elif set_to_use == 'sc6k':
-    print("Performing Metrics on the sc6k Set")    
-    data_dir = prepend + '/benchmark_data_dir/sc6k'
-    metric_dir = '/test_metrics/sc6k'
-else:
-    raise ValueError("Expected one of {'val','chen','coach420','coach420_dp','holo4k','holo4k_dp','sc6k'} as set_to_use but got:", str(set_to_use))
-
-#######################################################################################
-if compute_optimal:
-    all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
-    all_label_path = prepend + metric_dir + '/all_labels/'
-    all_probs  = np.load(all_prob_path + "all_probs.npz")['arr_0']
-    all_labels = np.load(all_label_path + "all_labels.npz")['arr_0']
-    start = time.time()
-
-    binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
-    # Compute roc, auc and optimal threshold
-    all_probs = np.array(all_probs, dtype=object)
-
-    fpr = dict()
-    tpr = dict()
-    thresholds = dict()
-    roc_auc = dict()
-    n_classes = 2
-
-    for i in range(n_classes):
-        fpr[i], tpr[i], thresholds[i] = roc_curve(binarized_labels[:, i],all_probs[:,i])
-        roc_auc[i] = auc(fpr[i], tpr[i])
-
-    # Compute micro-average ROC curve and ROC area
-    fpr["micro"], tpr["micro"], _ = roc_curve(binarized_labels.ravel(), all_probs.ravel())
-    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
-
-    # First aggregate all false positive rates
-    all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
-
-    # Then interpolate all ROC curves at this points
-    mean_tpr = np.zeros_like(all_fpr)
-    for i in range(n_classes):
-        mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
-
-    # Finally average it and compute AUC
-    mean_tpr /= n_classes
-
-    fpr["macro"] = all_fpr
-    tpr["macro"] = mean_tpr
-    roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
-
-    roc_path = prepend + metric_dir + '/roc_curves/' + model_name
-
-    if not os.path.isdir(roc_path):
-        os.makedirs(roc_path)
-
-    # Find optimal threshold
-    gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
-    ix = np.argmax(gmeans)
-    optimal_threshold = thresholds[1][ix]
-    threshold_lst.insert(0, optimal_threshold)
-
-    print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
-    print("Micro Averaged AUC:", roc_auc["micro"])
-    print("Macro Averaged AUC:", roc_auc["macro"])
-    print("Negative Class AUC:", roc_auc[0])
-    print("Positive Class AUC:", roc_auc[1])
-
-    # np.savez(roc_path + "/roc_auc", roc_auc)
-    # np.savez(roc_path + "/tpr", tpr)
-    # np.savez(roc_path + "/fpr", fpr)
-    # np.savez(roc_path + "/thresholds", thresholds)
-    print("Done. {}".format(time.time()- start))
-    
-#######################################################################################
-
 def extract_multi(metric_array):
     success_rate = np.mean(np.concatenate(metric_array) < 4)
     mean = np.nanmean(np.concatenate(metric_array))
         
     return success_rate, mean
-
 #######################################################################################
-for eps in eps_list:
-    for top_n_plus in top_n_list:
-        print(f"Calculating n+{top_n_plus} metrics for {threshold} threshold.", flush=True)
-        start = time.time()
-        path_to_mol2= data_dir + '/mol2/'
-        path_to_labels=prepend + metric_dir + '/labels/'
-        DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD, no_prediction_count, names = compute_metrics_for_all(path_to_mol2,path_to_labels,top_n_plus=top_n_plus, threshold=threshold, eps=eps, SASA_threshold=SASA_threshold)
-        # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
-        #     print(x)
+# model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("test_set", choices=["val", "coach420", "coach420_dp", "holo4k", "holo4k_dp"], help="Test set.")
+    parser.add_argument("model_name", help="Model file path.")
+    parser.add_argument("-c", "--clustering_method", default="louvain", choices=["meanshift, dbscan, louvain, linkage"], help="Clustering method.")
+    parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", help="Distance thresholds for clustering.")
+    parser.add_argument("-p", "--prob_threshold", type=float, help="Probability threshold for atom classification.")
+    parser.add_argument("-n", "--top_n_plus", type=int, nargs="+", default=[0,2,10], help="Number of additional sites to consider.")
+    parser.add_argument("-o", "--compute_optimal", action="store_true", help="Option to compute optimal threshold.")
+    parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
+    parser.add_argument("-su", "--use_surface", action="store_true", help="Option to use surface atoms for DCA and DCC_lig.")
+    parser.add_argument("-a", "--aggregation_function", default="mean", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
 
+    args = parser.parse_args()
+    non_path_args = [sys.argv[1]] + sys.argv[3:]
+    argstring='_'.join(non_path_args).replace('-','')
+
+    model_name = args.model_name
+
+    prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
+    # 4.5 was found to be ebst on validation labels with threshold = 0.4
+    eps_list = args.dist_thresholds
+    threshold = args.prob_threshold
+    method = args.clustering_method
+    compute_optimal = args.compute_optimal
+    top_n_list=args.top_n_plus
+    score_type = args.aggregation_function
+    SASA_threshold = None
+
+    is_label=args.use_labels
+    if is_label:
+        print("Using labels rather than probabilities.")
+    if args.use_surface:
+        SASA_threshold = 1e-4
+        print("Using surface atoms to find ligands.")
+
+    set_to_use = args.test_set
+    if set_to_use == 'val':
+        print("Performing Metrics on the Validation Set")
+        data_dir = prepend + '/scPDB_data_dir'
+        metric_dir = '/test_metrics/validation'
+    elif set_to_use ==  'coach420':
+        print("Performing Metrics on the coach420 Set")    
+        data_dir = prepend + '/benchmark_data_dir/coach420'
+        metric_dir = '/test_metrics/coach420'
+    elif set_to_use ==  'coach420_dp':
+        print("Performing Metrics on the coach420 DeepPocket Set")    
+        data_dir = prepend + '/benchmark_data_dir/coach420_dp'
+        metric_dir = '/test_metrics/coach420_dp'
+    elif set_to_use == 'holo4k':
+        print("Performing Metrics on the holo4k Set")    
+        data_dir = prepend + '/benchmark_data_dir/holo4k'
+        metric_dir = '/test_metrics/holo4k'
+    elif set_to_use == 'holo4k_dp':
+        print("Performing Metrics on the holo4k DeepPocket Set")    
+        data_dir = prepend + '/benchmark_data_dir/holo4k_dp'
+        metric_dir = '/test_metrics/holo4k_dp'
+    else:
+        raise ValueError("Expected one of {'val','coach420','coach420_dp','holo4k','holo4k_dp'} as set_to_use but got:", str(set_to_use))
+
+    #######################################################################################
+    if compute_optimal:
+        all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
+        all_label_path = prepend + metric_dir + '/all_labels/'
+        all_probs  = np.load(all_prob_path + "all_probs.npz")['arr_0']
+        all_labels = np.load(all_label_path + "all_labels.npz")['arr_0']
+        start = time.time()
+
+        binarized_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
+        # Compute roc, auc and optimal threshold
+        all_probs = np.array(all_probs, dtype=object)
+
+        fpr = dict()
+        tpr = dict()
+        thresholds = dict()
+        roc_auc = dict()
+        n_classes = 2
+
+        for i in range(n_classes):
+            fpr[i], tpr[i], thresholds[i] = roc_curve(binarized_labels[:, i],all_probs[:,i])
+            roc_auc[i] = auc(fpr[i], tpr[i])
+
+        # Compute micro-average ROC curve and ROC area
+        fpr["micro"], tpr["micro"], _ = roc_curve(binarized_labels.ravel(), all_probs.ravel())
+        roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+        # First aggregate all false positive rates
+        all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+
+        # Then interpolate all ROC curves at this points
+        mean_tpr = np.zeros_like(all_fpr)
+        for i in range(n_classes):
+            mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+
+        # Finally average it and compute AUC
+        mean_tpr /= n_classes
+
+        fpr["macro"] = all_fpr
+        tpr["macro"] = mean_tpr
+        roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+        roc_path = prepend + metric_dir + '/roc_curves/' + model_name
+
+        if not os.path.isdir(roc_path):
+            os.makedirs(roc_path)
+
+        # Find optimal threshold
+        gmeans = np.sqrt(tpr[1] * (1-fpr[1]))
+        ix = np.argmax(gmeans)
+        optimal_threshold = thresholds[1][ix]
+        threshold_lst.insert(0, optimal_threshold)
+
+        print('Best Threshold=%f, G-Mean=%.3f' % (optimal_threshold, gmeans[ix]))
+        print("Micro Averaged AUC:", roc_auc["micro"])
+        print("Macro Averaged AUC:", roc_auc["macro"])
+        print("Negative Class AUC:", roc_auc[0])
+        print("Positive Class AUC:", roc_auc[1])
+
+        # np.savez(roc_path + "/roc_auc", roc_auc)
+        # np.savez(roc_path + "/tpr", tpr)
+        # np.savez(roc_path + "/fpr", fpr)
+        # np.savez(roc_path + "/thresholds", thresholds)
         print("Done. {}".format(time.time()- start))
         
-        overlap_path = prepend + metric_dir + '/overlaps/' + model_name
-        if not os.path.isdir(overlap_path):
-            os.makedirs(overlap_path)
-        
-        if is_label:
-            np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD,names=names)
-        else:
-            np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD, names=names)
+    #######################################################################################
 
-        VO = volumetric_overlaps
-        SCD = np.array(SCD)
 
-        print("-----------------------------------------------------------------------------------", flush=True)
-        print("Cutoff (Prediction Threshold):", threshold)
-        print("EPS:", eps)
-        print("top n +", top_n_plus, "prediction")
-        print("-----------------------------------------------------------------------------------", flush=True)
-        print("Number of systems with no predictions:", np.sum(no_prediction_count), flush=True)
-        # print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
-        # print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
-        # print("Average DCA:", np.nanmean(DCA), flush=True)
-        # print("Average VO:", np.nanmean(volumetric_overlaps), flush=True)
-        DCC_lig_succ, DCC_lig_mean = extract_multi(DCC_lig)
-        DCC_site_succ, DCC_site_mean = extract_multi(DCC_site)
-        DCA_succ, DCA_mean = extract_multi(DCA)
 
-        print(f"Average DCC_lig: {DCC_lig_mean}", flush=True)
-        print(f"DCC_lig Success: {DCC_lig_succ}", flush=True)
+    #######################################################################################
+    outdir = f"{prepend}{metric_dir}/clustering/{model_name}"
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+    outfile = f"{outdir}/{argstring}.dat"
+    if os.path.exists(outfile):
+        os.remove(outfile)
+    out = open(outfile, 'a')
+    for eps in eps_list:
+        for top_n_plus in top_n_list:
+            print(f"Calculating n+{top_n_plus} metrics for {threshold} threshold with distance cutoff {eps}.", flush=True)
+            out.write(f"Calculating n+{top_n_plus} metrics for {threshold} threshold with distance cutoff {eps}.")
+            start = time.time()
+            path_to_mol2= data_dir + '/mol2/'
+            path_to_labels=prepend + metric_dir + '/labels/'
+            DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD, no_prediction_count, names = compute_metrics_for_all(
+                path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, 
+                score_type=score_type, SASA_threshold=SASA_threshold)
+            # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
+            #     print(x)
 
-        print(f"Average DCC_site: {DCC_site_mean}", flush=True)
-        print(f"DCC_site Success: {DCC_site_succ}", flush=True)
+            print("Done. {}".format(time.time()- start))
+            out.write("Done. {}".format(time.time()- start))
+            
+            overlap_path = prepend + metric_dir + '/overlaps/' + model_name
+            if not os.path.isdir(overlap_path):
+                os.makedirs(overlap_path)
+            
+            if is_label:
+                np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD,names=names)
+            else:
+                np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD, names=names)
 
-        print(f"Average DCA: {DCA_mean}", flush=True)
-        print(f"DCA Success: {DCA_succ}", flush=True)
+            VO = volumetric_overlaps
+            SCD = np.array(SCD)
 
-        print(f"Average VO: {np.nanmean(np.concatenate(VO))}", flush=True)
-        print(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}", flush=True)
+            print("-----------------------------------------------------------------------------------", flush=True)
+            print(f"Method: {method}")
+            print(f"Cutoff (Prediction Threshold): {threshold}")
+            print(f"EPS: {eps}")
+            print(f"top n + {top_n_plus} prediction")
+            print("-----------------------------------------------------------------------------------", flush=True)
+            print(f"Number of systems with no predictions: {np.sum(no_prediction_count)}", flush=True)
 
-        print(f"Average SCD: {np.nanmean(SCD)}", flush=True)
-        print(f"Exact Num Sites: {np.mean(SCD == 0)}", flush=True)
-        print(f"Num Sites Within 1: {np.mean(np.abs(SCD) <= 1)}", flush=True)
-        #######################################################################################
+            out.write(f"Method: {method}")
+            out.write("-----------------------------------------------------------------------------------")
+            out.write(f"Cutoff (Prediction Threshold): {threshold}")
+            out.write(f"EPS: {eps}")
+            out.write(f"top n + {top_n_plus} prediction")
+            out.write("-----------------------------------------------------------------------------------")
+            out.write(f"Number of systems with no predictions: {np.sum(no_prediction_count)}")
+            # print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
+            # print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
+            # print("Average DCA:", np.nanmean(DCA), flush=True)
+            # print("Average VO:", np.nanmean(volumetric_overlaps), flush=True)
+            DCC_lig_succ, DCC_lig_mean = extract_multi(DCC_lig)
+            DCC_site_succ, DCC_site_mean = extract_multi(DCC_site)
+            DCA_succ, DCA_mean = extract_multi(DCA)
+
+            print(f"Average DCC_lig: {DCC_lig_mean}", flush=True)
+            print(f"DCC_lig Success: {DCC_lig_succ}", flush=True)
+
+            print(f"Average DCC_site: {DCC_site_mean}", flush=True)
+            print(f"DCC_site Success: {DCC_site_succ}", flush=True)
+
+            print(f"Average DCA: {DCA_mean}", flush=True)
+            print(f"DCA Success: {DCA_succ}", flush=True)
+
+            print(f"Average VO: {np.nanmean(np.concatenate(VO))}", flush=True)
+            print(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}", flush=True)
+
+            print(f"Average SCD: {np.nanmean(SCD)}", flush=True)
+            print(f"Exact Num Sites: {np.mean(SCD == 0)}", flush=True)
+            print(f"Num Sites Within 1: {np.mean(np.abs(SCD) <= 1)}", flush=True)
+
+            out.write(f"Average DCC_lig: {DCC_lig_mean}")
+            out.write(f"DCC_lig Success: {DCC_lig_succ}")
+
+            out.write(f"Average DCC_site: {DCC_site_mean}")
+            out.write(f"DCC_site Success: {DCC_site_succ}")
+
+            out.write(f"Average DCA: {DCA_mean}")
+            out.write(f"DCA Success: {DCA_succ}")
+
+            out.write(f"Average VO: {np.nanmean(np.concatenate(VO))}")
+            out.write(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}")
+
+            out.write(f"Average SCD: {np.nanmean(SCD)}")
+            out.write(f"Exact Num Sites: {np.mean(SCD == 0)}")
+            out.write(f"Num Sites Within 1: {np.mean(np.abs(SCD) <= 1)}")
+            #######################################################################################
+    out.close()
