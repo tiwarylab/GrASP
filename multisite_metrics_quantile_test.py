@@ -287,16 +287,26 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         Jaccard similarity between predicted site convex hull and true site convex hull. 
 
     """
-    # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
-    # bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
-    # bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, bw=eps, score_type=score_type)
-    bind_coords, sorted_ids, _ = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, score_type=score_type)
-    #bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
+    "meanshift, dbscan, louvain, linkage"
+    if method == "meanshift":
+        bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
+    elif method == "dbscan":
+        bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
+    elif method == "louvain":
+        bind_coords, sorted_ids, _ = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, score_type=score_type)
+    elif method == "linkage":
+        bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
     
     if surf_mask is not None:
-        surf_coords, surf_ids, _ = cluster_atoms_louvain(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold, cutoff=eps, score_type=score_type)
-        #surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
-
+        if method == "meanshift":
+            surf_coords, surf_ids, _ = cluster_atoms(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, cluster_all=cluster_all, score_type=score_type)
+        elif method == "dbscan":
+            surf_coords, surf_ids, _ = cluster_atoms_DBSCAN(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, eps=eps, score_type=score_type)
+        elif method == "louvain":
+            surf_coords, surf_ids, _ = cluster_atoms_louvain(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold, cutoff=eps, score_type=score_type)
+        elif method == "linkage":
+            surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
+        
     true_hull_list = [ConvexHull(true_points) for true_points in site_coords_list]
     true_center_list = [hull_center(true_hull) for true_hull in true_hull_list]
     ligand_center_list = [center_of_mass(lig_coord_list[i], ligand_mass_list[i]) for i in range(len(lig_coord_list))]
@@ -446,7 +456,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_dp", "holo4k", "holo4k_dp"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
-    parser.add_argument("-c", "--clustering_method", default="louvain", choices=["meanshift, dbscan, louvain, linkage"], help="Clustering method.")
+    parser.add_argument("-c", "--clustering_method", default="louvain", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", help="Distance thresholds for clustering.")
     parser.add_argument("-p", "--prob_threshold", type=float, help="Probability threshold for atom classification.")
     parser.add_argument("-n", "--top_n_plus", type=int, nargs="+", default=[0,2,10], help="Number of additional sites to consider.")
