@@ -307,8 +307,6 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
 
     # New metric, site count difference: total predicted sites - total true sites
     n_predicted = np.sum(np.unique(sorted_ids) > -1)
-    n_true = len(site_coords_list)
-    SCD = n_predicted-n_true
 
     if len(predicted_center_list) > 0:
         DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])            
@@ -369,7 +367,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
                 volumetric_overlaps.append(np.nan)   
         volumetric_overlaps = np.array(volumetric_overlaps)
 
-        return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD
+        return DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted
 
     else:
         nan_arr =  np.empty(len(true_center_list))
@@ -417,14 +415,14 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             if SASA_threshold is not None:
                 surf_mask = SASAs > SASA_threshold
-                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
             else:
-                DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, cluster_all=cluster_all, adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
-            return DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD, no_prediction_count
+            return DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted, no_prediction_count
 
         except Exception as e:
             print("ERROR")
@@ -433,9 +431,9 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
     # DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, no_prediction_count = helper('1zis_0.npy')
     # print(DCC_site_list, DCA_list)
     r = Parallel(n_jobs=15)(delayed(helper)(file) for file in tqdm(os.listdir(path_to_labels)[:],  position=0, leave=True))
-    DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCD, no_prediction_count = zip(*r)
+    DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, n_predicted, no_prediction_count = zip(*r)
     names = [file for file in os.listdir(path_to_labels)]
-    return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, SCD, no_prediction_count, names
+    return DCC_lig_list, DCC_site_list, DCA_list, volumetric_overlaps_list, n_predicted, no_prediction_count, names
 
 def extract_multi(metric_array):
     success_rate = np.mean(np.concatenate(metric_array) < 4)
@@ -587,7 +585,7 @@ if __name__ == "__main__":
             start = time.time()
             path_to_mol2= data_dir + '/mol2/'
             path_to_labels=prepend + metric_dir + '/labels/'
-            DCC_lig, DCC_site, DCA, volumetric_overlaps, SCD, no_prediction_count, names = compute_metrics_for_all(
+            DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted, no_prediction_count, names = compute_metrics_for_all(
                 path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, 
                 score_type=score_type, SASA_threshold=SASA_threshold)
             # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
@@ -601,12 +599,12 @@ if __name__ == "__main__":
                 os.makedirs(overlap_path)
             
             if is_label:
-                np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD,names=names)
+                np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, n_predicted=n_predicted,names=names)
             else:
-                np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, SCD=SCD, names=names)
+                np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, n_predicted=n_predicted, names=names)
 
             VO = volumetric_overlaps
-            SCD = np.array(SCD)
+            n_predicted = np.array(n_predicted)
 
             print("-----------------------------------------------------------------------------------", flush=True)
             print(f"Method: {method}")
@@ -643,9 +641,7 @@ if __name__ == "__main__":
             print(f"Average VO: {np.nanmean(np.concatenate(VO))}", flush=True)
             print(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}", flush=True)
 
-            print(f"Average SCD: {np.nanmean(SCD)}", flush=True)
-            print(f"Exact Num Sites: {np.mean(SCD == 0)}", flush=True)
-            print(f"Num Sites Within 1: {np.mean(np.abs(SCD) <= 1)}", flush=True)
+            print(f"Average n_predicted: {np.nanmean(n_predicted)}", flush=True)
 
             out.write(f"Average DCC_lig: {DCC_lig_mean}")
             out.write(f"DCC_lig Success: {DCC_lig_succ}")
@@ -659,8 +655,6 @@ if __name__ == "__main__":
             out.write(f"Average VO: {np.nanmean(np.concatenate(VO))}")
             out.write(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}")
 
-            out.write(f"Average SCD: {np.nanmean(SCD)}")
-            out.write(f"Exact Num Sites: {np.mean(SCD == 0)}")
-            out.write(f"Num Sites Within 1: {np.mean(np.abs(SCD) <= 1)}")
+            out.write(f"Average n_predicted: {np.nanmean(n_predicted)}")
             #######################################################################################
     out.close()
