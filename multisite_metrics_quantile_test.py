@@ -426,10 +426,12 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             if SASA_threshold is not None:
                 surf_mask = SASAs > SASA_threshold
                 DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
-                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, score_type=score_type, cluster_all=cluster_all, 
+                 adj_matrix=adj_matrix, surf_mask=surf_mask)
             else:
                 DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
-                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, cluster_all=cluster_all, adj_matrix=adj_matrix)
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, score_type=score_type, cluster_all=cluster_all, 
+                 adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             return DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted, no_prediction_count
@@ -591,7 +593,7 @@ if __name__ == "__main__":
     for eps in eps_list:
         for top_n_plus in top_n_list:
             print(f"Calculating n+{top_n_plus} metrics for {threshold} threshold with distance cutoff {eps}.", flush=True)
-            out.write(f"Calculating n+{top_n_plus} metrics for {threshold} threshold with distance cutoff {eps}.")
+            out.write(f"Calculating n+{top_n_plus} metrics for {threshold} threshold with distance cutoff {eps}.\n")
             start = time.time()
             path_to_mol2= data_dir + '/mol2/'
             path_to_labels=prepend + metric_dir + '/labels/'
@@ -602,7 +604,7 @@ if __name__ == "__main__":
             #     print(x)
 
             print("Done. {}".format(time.time()- start))
-            out.write("Done. {}".format(time.time()- start))
+            out.write("Done. {}\n".format(time.time()- start))
             
             overlap_path = prepend + metric_dir + '/overlaps/' + model_name
             if not os.path.isdir(overlap_path):
@@ -624,13 +626,13 @@ if __name__ == "__main__":
             print("-----------------------------------------------------------------------------------", flush=True)
             print(f"Number of systems with no predictions: {np.sum(no_prediction_count)}", flush=True)
 
-            out.write(f"Method: {method}")
-            out.write("-----------------------------------------------------------------------------------")
-            out.write(f"Cutoff (Prediction Threshold): {threshold}")
-            out.write(f"EPS: {eps}")
-            out.write(f"top n + {top_n_plus} prediction")
-            out.write("-----------------------------------------------------------------------------------")
-            out.write(f"Number of systems with no predictions: {np.sum(no_prediction_count)}")
+            out.write(f"Method: {method}\n")
+            out.write("-----------------------------------------------------------------------------------\n")
+            out.write(f"Cutoff (Prediction Threshold): {threshold}\n")
+            out.write(f"EPS: {eps}\n")
+            out.write(f"top n + {top_n_plus} prediction\n")
+            out.write("-----------------------------------------------------------------------------------\n")
+            out.write(f"Number of systems with no predictions: {np.sum(no_prediction_count)}\n")
             # print("Average DCC_lig:", np.nanmean(DCC_lig), flush=True)
             # print("Average DCC_site:", np.nanmean(DCC_site), flush=True)
             # print("Average DCA:", np.nanmean(DCA), flush=True)
@@ -653,18 +655,18 @@ if __name__ == "__main__":
 
             print(f"Average n_predicted: {np.nanmean(n_predicted)}", flush=True)
 
-            out.write(f"Average DCC_lig: {DCC_lig_mean}")
-            out.write(f"DCC_lig Success: {DCC_lig_succ}")
+            out.write(f"Average DCC_lig: {DCC_lig_mean}\n")
+            out.write(f"DCC_lig Success: {DCC_lig_succ}\n")
 
-            out.write(f"Average DCC_site: {DCC_site_mean}")
-            out.write(f"DCC_site Success: {DCC_site_succ}")
+            out.write(f"Average DCC_site: {DCC_site_mean}\n")
+            out.write(f"DCC_site Success: {DCC_site_succ}\n")
 
-            out.write(f"Average DCA: {DCA_mean}")
-            out.write(f"DCA Success: {DCA_succ}")
+            out.write(f"Average DCA: {DCA_mean}\n")
+            out.write(f"DCA Success: {DCA_succ}\n")
 
-            out.write(f"Average VO: {np.nanmean(np.concatenate(VO))}")
-            out.write(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}")
+            out.write(f"Average VO: {np.nanmean(np.concatenate(VO))}\n")
+            out.write(f"Average VO (DCC_site Success): {np.nanmean(np.concatenate(VO)[np.concatenate(DCC_site) < 4])}\n")
 
-            out.write(f"Average n_predicted: {np.nanmean(n_predicted)}")
+            out.write(f"Average n_predicted: {np.nanmean(n_predicted)}\n")
             #######################################################################################
     out.close()
