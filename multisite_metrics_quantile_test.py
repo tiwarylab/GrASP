@@ -316,7 +316,10 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(surf_coords, surf_ids, site_coords_list, top_n_plus)
 
     # New metric, site count difference: total predicted sites - total true sites
-    n_predicted = np.sum(np.unique(sorted_ids) > -1)
+    if type(sorted_ids) == type(None):
+        n_predicted = 0
+    else:
+        n_predicted = np.sum(np.unique(sorted_ids) > -1)
 
     if len(predicted_center_list) > 0:
         DCC_site_matrix = np.zeros([len(true_center_list), len(predicted_center_list)])            
