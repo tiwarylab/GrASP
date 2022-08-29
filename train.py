@@ -106,9 +106,6 @@ def main(node_noise_variance : float, training_split='cv'):
     class_loss_weight = args.class_loss_weight#[0.8,1.2]
     label_smoothing = args.label_smoothing#0.2
     head_loss_weight = args.head_loss_weight
-
-    if training_split not in ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k']:
-        raise ValueError("Expected training_split to be one of ['cv', 'train_full', 'chen', 'coach420', 'holo4k', 'sc6k'] but got", training_split)
     
     num_cpus = 8
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -174,14 +171,15 @@ def main(node_noise_variance : float, training_split='cv'):
         gen = zip([data_set], [0], [0])
 
     else:
-        if training_split == 'chen':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_chen', dtype=str)
-        elif training_split == 'coach420':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_coach420', dtype=str)
+        train_prefix = '/splits/train_ids_'
+        if training_split == 'coach420':
+            train_names = np.loadtxt(prepend + f'{train_prefix}coach420_uniprot', dtype=str)
+        elif training_split == 'coach420_mlig':
+            train_names = np.loadtxt(prepend + f'{train_prefix}coach420(mlig)_uniprot', dtype=str)
         elif training_split == 'holo4k':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_holo4k', dtype=str)
-        elif training_split == 'sc6k':
-            train_names = np.loadtxt(prepend + '/splits/train_ids_sc6k', dtype=str)
+            train_names = np.loadtxt(prepend + f'{train_prefix}holo4k_uniprot', dtype=str)
+        elif training_split == 'holo4k_mlig':
+            train_names = np.loadtxt(prepend + f'{train_prefix}holo4k(mlig)_uniprot', dtype=str)
         train_indices = []
         for idx, name in enumerate(data_set.raw_file_names):
             if name.split('_')[0] in train_names:
@@ -347,7 +345,7 @@ def main(node_noise_variance : float, training_split='cv'):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "train_full", "chen", "coach420", "holo4k", "sc6k"], help="Training set.")
+    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Training set.")
     parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
     parser.add_argument("-m", "--model", default="hybrid", choices=["hybrid", "transformer", "graphnorm", "transformer_gn"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
