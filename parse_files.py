@@ -188,7 +188,7 @@ def extract_residues_p2rank(mol_directory, univ_extension='pdb'):
             com_string = ' '.join(com.astype(str).tolist())
             not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
             if not_protruding:
-                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
                 lig_ind += 1
 
 
@@ -203,7 +203,7 @@ def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='pdb'
             com_string = ' '.join(com.astype(str).tolist())
             not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
             if not_protruding:
-                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
                 lig_ind += 1
 
 
