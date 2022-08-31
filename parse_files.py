@@ -254,19 +254,18 @@ def process_p2rank_set(path, data_dir="benchmark_data_dir", min_size=256):
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_p2rank(f'{mol2_dir}{structure_name}') # parsing pdb avoids selection issues
 
-        n_ligands = np.sum('ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}'))
+        n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}')])
         if n_ligands > 0:
             label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+            if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
+            if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
+            process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
         else:
             with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
                 f.write(f'{structure_name}\n')
                 
         convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
-        if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
-        if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
-        process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
-        # break
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
     except Exception as e:  
@@ -283,19 +282,18 @@ def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir", min_size
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames) # parsing pdb avoids selection issues
 
-        n_ligands = np.sum('ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}'))
+        n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}')])
         if n_ligands > 0:
             label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+            if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
+            if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
+            process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
         else:
             with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
                 f.write(f'{structure_name}\n')
 
         convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
-        if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
-        if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
-        process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
-        # break
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
     except Exception as e:  
