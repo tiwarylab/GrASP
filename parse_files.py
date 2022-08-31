@@ -249,13 +249,15 @@ def process_p2rank_set(path, data_dir="benchmark_data_dir", min_size=256):
     try:
         prepend = os.getcwd()
         structure_name = path.split('/')[-1].split('.')[0]
-        mol2_dir = f'./{data_dir}/ready_to_parse_mol2/'
+        mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
         protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_p2rank(f'{mol2_dir}{structure_name}') # parsing pdb avoids selection issues
         label_sites_given_ligands(f'{mol2_dir}{structure_name}')
         convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
+        if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
+        if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
         process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
         # break
     except AssertionError as e:
@@ -269,13 +271,15 @@ def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir", min_size
     try:
         prepend = os.getcwd()
         structure_name = path.split('/')[-1].split('.')[0]
-        mol2_dir = f'./{data_dir}/ready_to_parse_mol2/'
+        mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
         protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames) # parsing pdb avoids selection issues
         label_sites_given_ligands(f'{mol2_dir}{structure_name}')
         convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
+        if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
+        if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
         process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
         # break
     except AssertionError as e:
@@ -285,7 +289,7 @@ def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir", min_size
         raise e
 
 
-if __name__ == "__main__":   
+if __name__ == "__main__":
     num_cores = 24
     prepend = os.getcwd()
     from joblib.externals.loky import set_loky_pickler
