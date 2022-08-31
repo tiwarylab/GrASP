@@ -253,7 +253,14 @@ def process_p2rank_set(path, data_dir="benchmark_data_dir", min_size=256):
         protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_p2rank(f'{mol2_dir}{structure_name}') # parsing pdb avoids selection issues
-        label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+
+        n_ligands = np.sum('ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}'))
+        if n_ligands > 0:
+            label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+        else:
+            with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
+                f.write(f'{structure_name}\n')
+                
         convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
         if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
@@ -275,7 +282,14 @@ def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir", min_size
         protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames) # parsing pdb avoids selection issues
-        label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+
+        n_ligands = np.sum('ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}'))
+        if n_ligands > 0:
+            label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+        else:
+            with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
+                f.write(f'{structure_name}\n')
+
         convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
         if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
@@ -316,16 +330,20 @@ if __name__ == "__main__":
 
     elif dataset == "coach420":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/coach420.ds')
+        os.remove(f'{prepend}/benchmark_data_dir/coach420/no_ligands.txt')
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/coach420', min_size=5) for i in tqdm(full_df.index))
     
     elif dataset == "coach420_mlig":
         full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/coach420(mlig).ds', skiprows=4)
+        os.remove(f'{prepend}/benchmark_data_dir/coach420_mlig/no_ligands.txt')
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig', min_size=5) for i in tqdm(full_df.index))
     
     elif dataset == "holo4k":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds')
+        os.remove(f'{prepend}/benchmark_data_dir/holo4k/no_ligands.txt')
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k', min_size=5) for i in tqdm(full_df.index))
     
     elif dataset == "holo4k_mlig":
         full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2)
+        os.remove(f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt')
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig', min_size=5) for i in tqdm(full_df.index))
