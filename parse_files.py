@@ -330,20 +330,24 @@ if __name__ == "__main__":
 
     elif dataset == "coach420":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/coach420.ds')
-        os.remove(f'{prepend}/benchmark_data_dir/coach420/no_ligands.txt')
+        nolig_file = f'{prepend}/benchmark_data_dir/coach420/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/coach420', min_size=5) for i in tqdm(full_df.index))
     
     elif dataset == "coach420_mlig":
         full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/coach420(mlig).ds', skiprows=4)
-        os.remove(f'{prepend}/benchmark_data_dir/coach420_mlig/no_ligands.txt')
+        nolig_file = f'{prepend}/benchmark_data_dir/coach420_mlig/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig', min_size=5) for i in tqdm(full_df.index))
     
     elif dataset == "holo4k":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds')
-        os.remove(f'{prepend}/benchmark_data_dir/holo4k/no_ligands.txt')
+        nolig_file = f'{prepend}/benchmark_data_dir/holo4k/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k', min_size=5) for i in tqdm(full_df.index))
     
     elif dataset == "holo4k_mlig":
         full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2)
-        os.remove(f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt')
+        nolig_file = f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig', min_size=5) for i in tqdm(full_df.index))
