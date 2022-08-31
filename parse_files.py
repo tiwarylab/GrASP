@@ -153,7 +153,14 @@ def convert_all_pdb(structure_name, out_directory, addH=True, cleanup=True):
             os.remove(f'{output_path}/{file}')
 
 
-def load_ligand_list(file, skiprows):
+def load_p2rank_set(file):
+    df = pd.read_csv(file, sep='\s+', names=['path'], index_col=False)
+    df['path'] = ['benchmark_data_dir/'+'/unprocessed_pdb/'.join(file.split('/')) for file in df['path']]
+    
+    return df
+
+
+def load_p2rank_mlig(file, skiprows):
     df = pd.read_csv(file, sep='\s+', names=['path', 'ligands'], index_col=False, skiprows=skiprows)
     df = df[df['ligands'] != '<CONFLICTS>']
     df['path'] = ['benchmark_data_dir/'+'/unprocessed_pdb/'.join(file.split('/')) for file in df['path']]
@@ -170,34 +177,34 @@ def write_mlig(df, out_file):
             f.write(f'{val[0]}  {",".join(val[1])}\n')
 
 
-# remake this with p2rank criteria
-def extract_ligands(mol_directory):
-    univ = mda.Universe(f'{mol_directory}/system.mol2')
-    prot = mda.Universe(f'{mol_directory}/protein.mol2')
+def extract_residues_p2rank(mol_directory, univ_extension='pdb'):
+    univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
     lig_ind = 0
-    for frag in univ.atoms.fragments:
-        if  3 < frag.n_atoms < 256:
-            frag_dist = np.min(distance_array(frag.positions, prot.select_atoms("not type H").positions))
-            if frag_dist <= 6.5: 
-                write_fragment(frag, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+
+    sel = univ.select_atoms('record_type HETATM and around 4 protein')
+    for res in sel.residues:
+        if (res.resname[:3] not in exclusion_list) and (res.atoms.n_atoms >= 5):
+            com = res.atoms.center_of_mass()
+            com_string = ' '.join(com.astype(str).tolist())
+            not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
+            if not_protruding:
+                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
                 lig_ind += 1
 
-# remake this with p2rank criteria
-def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='mol2', prot_extension='mol2'):
-    univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
-    prot = mda.Universe(f'{mol_directory}/protein.{prot_extension}')
-    if univ_extension == 'mol2': add_chains_from_frags(univ)
 
+def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='pdb'):
+    univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
     lig_ind = 0
-    for res in univ.atoms.residues:
-        if (res.resname[:3] in lig_resnames) and (res.resname[:3] not in allowed_residues):
-            chains = np.unique(res.atoms.chainIDs)
-            for chain in chains: # this catches mol2 files where a residue is multiple fragments in error
-                res_atoms = res.atoms.select_atoms(f'chainID {chain}')
-                res_dist = np.min(distance_array(res_atoms.positions, prot.select_atoms("not type H").positions))
-                if res_dist <= 6.5: 
-                    write_fragment(res_atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
-                    lig_ind += 1
+
+    sel = univ.select_atoms('record_type HETATM and around 4 protein')
+    for res in sel.residues:
+        if (res.resname[:3] not in exclusion_list) and (res.resname[:3] in lig_resnames) and (res.atoms.n_atoms >= 5):
+            com = res.atoms.center_of_mass()
+            com_string = ' '.join(com.astype(str).tolist())
+            not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
+            if not_protruding:
+                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.mol2')
+                lig_ind += 1
 
 
 def process_train_openbabel(i, file, output_dir):
@@ -238,14 +245,34 @@ def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unpr
         raise e
         
 
-def process_mlig(path, lig_resnames, data_dir="benchmark_data_dir", min_size=256):
+def process_p2rank_set(path, data_dir="benchmark_data_dir", min_size=256):
     try:
         prepend = os.getcwd()
         structure_name = path.split('/')[-1].split('.')[0]
         mol2_dir = f'./{data_dir}/ready_to_parse_mol2/'
         protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
-        extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames, univ_extension='pdb') # parsing pdb avoids selection issues
+        extract_residues_p2rank(f'{mol2_dir}{structure_name}') # parsing pdb avoids selection issues
+        label_sites_given_ligands(f'{mol2_dir}{structure_name}')
+        convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
+        
+        process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
+        # break
+    except AssertionError as e:
+        print("Failed to find ligand in", structure_name)
+    except Exception as e:  
+        # print(e)
+        raise e
+
+
+def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir", min_size=256):
+    try:
+        prepend = os.getcwd()
+        structure_name = path.split('/')[-1].split('.')[0]
+        mol2_dir = f'./{data_dir}/ready_to_parse_mol2/'
+        protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
+        shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
+        extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames) # parsing pdb avoids selection issues
         label_sites_given_ligands(f'{mol2_dir}{structure_name}')
         convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
         
@@ -275,19 +302,26 @@ if __name__ == "__main__":
         Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
+
     elif dataset == "train_classic":
         print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
         Parallel(n_jobs=num_cores)(delayed(process_train_classic)(i, filename, 'data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
         # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
         #     process_train(i,filename, 'regular_data_dir')
+
     elif dataset == "coach420":
-        pass
+        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/coach420.ds')
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/coach420', min_size=5) for i in tqdm(full_df.index))
+    
     elif dataset == "coach420_mlig":
-        full_df = load_ligand_list(f'{prepend}/benchmark_data_dir/coach420(mlig)-deeppocket.ds', skiprows=2)
-        Parallel(n_jobs=num_cores)(delayed(process_mlig)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420', min_size=4) for i in tqdm(full_df.index))
+        full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/coach420(mlig).ds', skiprows=4)
+        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig', min_size=5) for i in tqdm(full_df.index))
+    
     elif dataset == "holo4k":
-        pass
+        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds')
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k', min_size=5) for i in tqdm(full_df.index))
+    
     elif dataset == "holo4k_mlig":
-        full_df = load_ligand_list(f'{prepend}/benchmark_data_dir/holo4k(mlig)-deeppocket.ds', skiprows=2)
-        Parallel(n_jobs=num_cores)(delayed(process_mlig)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k', min_size=4) for i in tqdm(full_df.index))
+        full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2)
+        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig', min_size=5) for i in tqdm(full_df.index))
