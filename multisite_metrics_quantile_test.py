@@ -459,7 +459,7 @@ def extract_multi(metric_array):
 # model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("test_set", choices=["val", "coach420", "coach420_dp", "holo4k", "holo4k_dp"], help="Test set.")
+    parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
     parser.add_argument("-c", "--clustering_method", default="louvain", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", help="Distance thresholds for clustering.")
@@ -502,20 +502,20 @@ if __name__ == "__main__":
         print("Performing Metrics on the coach420 Set")    
         data_dir = prepend + '/benchmark_data_dir/coach420'
         metric_dir = '/test_metrics/coach420'
-    elif set_to_use ==  'coach420_dp':
+    elif set_to_use ==  'coach420_mlig':
         print("Performing Metrics on the coach420 DeepPocket Set")    
-        data_dir = prepend + '/benchmark_data_dir/coach420_dp'
-        metric_dir = '/test_metrics/coach420_dp'
+        data_dir = prepend + '/benchmark_data_dir/coach420_mlig'
+        metric_dir = '/test_metrics/coach420_mlig'
     elif set_to_use == 'holo4k':
         print("Performing Metrics on the holo4k Set")    
         data_dir = prepend + '/benchmark_data_dir/holo4k'
         metric_dir = '/test_metrics/holo4k'
-    elif set_to_use == 'holo4k_dp':
+    elif set_to_use == 'holo4k_mlig':
         print("Performing Metrics on the holo4k DeepPocket Set")    
-        data_dir = prepend + '/benchmark_data_dir/holo4k_dp'
-        metric_dir = '/test_metrics/holo4k_dp'
+        data_dir = prepend + '/benchmark_data_dir/holo4k_mlig'
+        metric_dir = '/test_metrics/holo4k_mlig'
     else:
-        raise ValueError("Expected one of {'val','coach420','coach420_dp','holo4k','holo4k_dp'} as set_to_use but got:", str(set_to_use))
+        raise ValueError("Expected one of {'val','coach420','coach420_mlig','holo4k','holo4k_mlig'} as set_to_use but got:", str(set_to_use))
 
     #######################################################################################
     if compute_optimal:
