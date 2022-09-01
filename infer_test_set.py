@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from GASP_dataset import GASPData 
-from atom_wise_models import Hybrid_1g12_self_edges
+from atom_wise_models import Hybrid_1g12_self_edges_transformer_GN
 
 prepend = str(os.getcwd())
 
@@ -55,7 +55,7 @@ prepend = str(os.getcwd())
 
 # Model trained exclusively on the holo4k split: "holo4k/trained_model_1656153741.4964042/epoch_49"
 model_name = sys.argv[2]
-model = Hybrid_1g12_self_edges(input_dim = 88)
+model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 88)
 
 
 model_path = prepend + "/trained_models/" + model_name
@@ -136,18 +136,18 @@ else:
         print("Initializing coach420 Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/coach420'
         metric_dir = '/test_metrics/coach420'
-    elif set_to_use ==  'coach420_dp':
-        print("Initializing coach420 DeepPocket Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/coach420_dp'
-        metric_dir = '/test_metrics/coach420_dp'
+    elif set_to_use ==  'coach420_mlig':
+        print("Initializing coach420 Mlig Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/coach420_mlig'
+        metric_dir = '/test_metrics/coach420_mlig'
     elif set_to_use == 'holo4k':
         print("Initializing holo4k Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/holo4k'
         metric_dir = '/test_metrics/holo4k'
-    elif set_to_use == 'holo4k_dp':
-        print("Initializing holo4k DeepPocket Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/holo4k_dp'
-        metric_dir = '/test_metrics/holo4k_dp'
+    elif set_to_use == 'holo4k_mlig':
+        print("Initializing holo4k Mlig Set")    
+        path_to_dataset = prepend + '/benchmark_data_dir/holo4k_mlig'
+        metric_dir = '/test_metrics/holo4k_mlig'
     elif set_to_use == 'sc6k':
         print("Initializing sc6k Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/sc6k'
