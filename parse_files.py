@@ -57,7 +57,10 @@ def label_sites_given_ligands(path_to_mol2, extension='mol2'):
             this_ligands_site = protein.select_atoms(site_selection_str)
             all_sites += this_ligands_site
             ligand_idx = int(re.findall("\d+",file_path.split('/')[-1])[0])
-            this_ligands_site.atoms.write(os.path.join(path_to_mol2, f"site_for_ligand_{ligand_idx}.{extension}"))
+            try:
+                this_ligands_site.atoms.write(os.path.join(path_to_mol2, f"site_for_ligand_{ligand_idx}.{extension}"))
+            except IndexError as e:
+                print(f'Unable to write site for {file_path}')
 
         else:
             # This is an unexpected file
@@ -179,6 +182,7 @@ def write_mlig(df, out_file):
 
 def extract_residues_p2rank(mol_directory, univ_extension='pdb'):
     univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
+    univ.dimensions = None # this prevents PBC bugs in distance calculation
     lig_ind = 0
 
     sel = univ.select_atoms('record_type HETATM and around 4 protein')
@@ -194,6 +198,7 @@ def extract_residues_p2rank(mol_directory, univ_extension='pdb'):
 
 def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='pdb'):
     univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
+    univ.dimensions = None # this prevents PBC bugs in distance calculation
     lig_ind = 0
 
     sel = univ.select_atoms('record_type HETATM and around 4 protein')
