@@ -101,7 +101,7 @@ def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_s
     # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
-def cluster_atoms_louvain(all_coords,adj_matrix, predicted_probs, threshold=.5, cutoff=5, score_type='mean'):
+def cluster_atoms_louvain(all_coords,adj_matrix, predicted_probs, threshold=.5, cutoff=5, resolution=0.05, score_type='mean'):
     predicted_labels=predicted_probs[:,1] > threshold
     
     G = nx.from_scipy_sparse_array(adj_matrix, edge_attribute="distance")
@@ -122,7 +122,7 @@ def cluster_atoms_louvain(all_coords,adj_matrix, predicted_probs, threshold=.5, 
             G.remove_edge(u,v)
 
     
-    communities = louvain_communities(G, resolution=0.05, weight=None)
+    communities = louvain_communities(G, resolution=resolution, weight=None)
     
         
     assignment_dict = {}
@@ -240,7 +240,7 @@ def hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus):
 
     return predicted_points_list, predicted_hull_list, predicted_center_list
 
-def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, method="louvain", score_type="mean", cluster_all=False, adj_matrix=None, surf_mask=None):
+def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", cluster_all=False, adj_matrix=None, surf_mask=None):
     """Cluster multiple binding sites and calculate distance from true site center, distance from ligand and volumetric overlap with true site 
 
     Parameters
@@ -293,7 +293,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
     elif method == "dbscan":
         bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
     elif method == "louvain":
-        bind_coords, sorted_ids, _ = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, score_type=score_type)
+        bind_coords, sorted_ids, _ = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, resolution=resolution, score_type=score_type)
     elif method == "linkage":
         bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
     
@@ -303,7 +303,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         elif method == "dbscan":
             surf_coords, surf_ids, _ = cluster_atoms_DBSCAN(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, eps=eps, score_type=score_type)
         elif method == "louvain":
-            surf_coords, surf_ids, _ = cluster_atoms_louvain(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold, cutoff=eps, score_type=score_type)
+            surf_coords, surf_ids, _ = cluster_atoms_louvain(prot_coords[surf_mask], adj_matrix[surf_mask].T[surf_mask].T, predicted_probs[surf_mask], threshold=threshold, cutoff=eps, resolution=resolution, score_type=score_type)
         elif method == "linkage":
             surf_coords, surf_ids, _ = cluster_atoms_linkage(prot_coords[surf_mask], predicted_probs[surf_mask], threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
         
@@ -389,7 +389,7 @@ def multi_site_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_
         return nan_arr, nan_arr, nan_arr, nan_arr, np.nan
 
 
-def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, method="louvain", score_type="mean", cluster_all=False, SASA_threshold=None):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05, method="louvain", score_type="mean", cluster_all=False, SASA_threshold=None):
     DCC_lig_list = []
     DCC_site_list = []
     DCA_list = []
@@ -428,13 +428,13 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             if SASA_threshold is not None:
                 surf_mask = SASAs > SASA_threshold
-                DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
-                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, score_type=score_type, cluster_all=cluster_all, 
-                 adj_matrix=adj_matrix, surf_mask=surf_mask)
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multisite_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
+                  cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
             else:
-                DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multi_site_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
-                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, score_type=score_type, cluster_all=cluster_all, 
-                 adj_matrix=adj_matrix)
+                DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multisite_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
+                 probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
+                  cluster_all=cluster_all, adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             return DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted, no_prediction_count
@@ -469,6 +469,7 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
     parser.add_argument("-su", "--use_surface", action="store_true", help="Option to use surface atoms for DCA and DCC_lig.")
     parser.add_argument("-a", "--aggregation_function", default="mean", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
+    parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
 
     args = parser.parse_args()
     non_path_args = [sys.argv[1]] + sys.argv[3:]
@@ -480,6 +481,7 @@ if __name__ == "__main__":
     # 4.5 was found to be ebst on validation labels with threshold = 0.4
     eps_list = args.dist_thresholds
     threshold = args.prob_threshold
+    resolution = args.louvain_resolution
     method = args.clustering_method
     compute_optimal = args.compute_optimal
     top_n_list=args.top_n_plus
@@ -601,8 +603,8 @@ if __name__ == "__main__":
             path_to_mol2= data_dir + '/mol2/'
             path_to_labels=prepend + metric_dir + '/labels/'
             DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted, no_prediction_count, names = compute_metrics_for_all(
-                path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, method=method, 
-                score_type=score_type, SASA_threshold=SASA_threshold)
+                path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution,
+                 method=method, score_type=score_type, SASA_threshold=SASA_threshold)
             # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
             #     print(x)
 
