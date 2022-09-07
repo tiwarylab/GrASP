@@ -12,6 +12,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     import numpy as np
     from pathlib import Path
     import scipy
+    from glob import glob
     from fast_distance_computation import get_distance_matrix
 
     from rdkit import Chem
