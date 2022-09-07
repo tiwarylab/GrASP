@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import os
-import sys
+import argparse
 import numpy as np
 from datetime import datetime
 import time
@@ -54,13 +54,18 @@ prepend = str(os.getcwd())
 # model = Hybrid_1g12_self_edges(input_dim = 88)
 
 # Model trained exclusively on the holo4k split: "holo4k/trained_model_1656153741.4964042/epoch_49"
-model_name = sys.argv[2]
+parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("test_set", choices=["coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
+parser.add_argument("model_path", help="Path to the model from ./trained_models/")
+parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+args = parser.parse_args()
+model_name = args.model_path
 model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 88)
 
-
 model_path = prepend + "/trained_models/" + model_name
-set_to_use = sys.argv[1]      # one of {'val','chen','coach420','holo4k','sc6k'}
-# set_to_use = 'chen'
+set_to_use = args.test_set
+
+label_midpoint, label_slope = args.sigmoid_params
 
 # model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
 # model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
@@ -123,7 +128,7 @@ if set_to_use == 'val':
     path_to_dataset = prepend + '/scPDB_data_dir'
     metric_dir = '/test_metrics/validation'
 
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5)
+    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, label_midpoint=label_midpoint, label_slope=label_slope)
     train_mask, val_mask = k_fold(data_set, prepend, 0) 
     val_set     = data_set[val_mask]
     val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
@@ -154,7 +159,7 @@ else:
         metric_dir = '/test_metrics/sc6k'
     else:
         raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5)
+    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, label_midpoint=label_midpoint, label_slope=label_slope)
     data_set.process()
     val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
