@@ -171,7 +171,7 @@ all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
 
 prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
-label_path = prepend + metric_dir + '/labels/'
+label_path = prepend + metric_dir + '/labels/' + model_name + '/'
 surface_path = prepend + metric_dir + '/SASAs/'
 
 if not os.path.isdir(prob_path):
