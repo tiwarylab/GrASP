@@ -202,10 +202,11 @@ with torch.no_grad():
         bl = loss.detach().cpu().item()
         
         labels = batch.y.detach().cpu()
+        hard_labels = (labels >= .5).astype('float')
         SASAs = batch.x[:,63].detach().cpu()
         
-        ba = accuracy_score(labels, preds)
-        bm = mcc(labels, preds)
+        ba = accuracy_score(hard_labels, preds)
+        bm = mcc(hard_labels, preds)
 
         test_batch_loss += bl
         test_batch_acc  += ba
@@ -248,7 +249,7 @@ if not os.path.isdir(all_label_path):
 np.savez(all_prob_path + 'all_probs', all_probs)
 np.savez(all_label_path + 'all_labels', all_labels)
 
-all_labels = np.array([[0,1] if x == 1 else [1,0] for x in all_labels])
+all_labels = (all_labels >= .5).astype('float')
 
 fpr = dict()
 tpr = dict()

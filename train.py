@@ -309,6 +309,7 @@ def main(node_noise_variance : float, training_split='cv'):
                         loss = loss_fn(out,y)
                         probs = out.softmax(dim=-1).detach().cpu().numpy()
                         preds = np.argmax(probs, axis=1)
+                        labels = (labels >= .5).astype('float') # converting to binary labels for metrics
                         bl = loss.detach().cpu().item()
 
                         ba = accuracy_score(labels, preds)
@@ -356,7 +357,7 @@ if __name__ == "__main__":
     parser.add_argument("-cw", "--class_loss_weight", type=float, nargs=2, default=[1.0, 1.0], help="Loss weight for [negative, positive] classes.")
     parser.add_argument("-ls", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
     parser.add_argument("-hw", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
-    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default= [6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
     model_id = f'{argstring}_{str(job_start_time)}'
