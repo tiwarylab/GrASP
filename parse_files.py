@@ -245,7 +245,7 @@ def process_train_p2rank(i, file, output_dir, min_size=98):
 
         rebond_mol2(i,f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file}/protein.mol2', structure_name, f'{prepend}/{output_dir}/ready_to_parse_mol2/',addH=True, min_size=min_size)
         
-        for file_path in glob(f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file }/*'):
+        for file_path in glob(f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file}/*'):
             if 'ligand' in file_path:
                 prot_univ = mda.Universe(f'{prepend}/{output_dir}/ready_to_parse_mol2/protein.mol2') 
                 lig_univ = mda.Universe(file_path)
