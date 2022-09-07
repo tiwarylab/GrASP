@@ -131,16 +131,16 @@ def protein2mol2(pdb_file, structure_name, out_directory, min_size=256, addH=Tru
         mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
 
 
-def rebond_mol2(i, infile, structure_name, outfile, addH=False, strip_size=256):
+def rebond_mol2(i, infile, structure_name, outfile, addH=False, min_size=256, cleanup=True):
     obConversion = openbabel.OBConversion()
     obConversion.SetInAndOutFormats("mol2", "pdb")
 
     mol = openbabel.OBMol()
     obConversion.ReadFile(mol, infile)
     mol.DeleteHydrogens()
-    mol.StripSalts(strip_size)
+    mol.StripSalts(min_size)
     obConversion.WriteFile(mol, 'temp{}.pdb'.format(i))
-    pdb2mol2('temp{}.pdb'.format(i), structure_name, outfile, addH=addH)
+    pdb2mol2('temp{}.pdb'.format(i), structure_name, outfile, addH=addH, cleanup=cleanup)
 
     # Delete mol2 file
     os.remove('temp{}.pdb'.format(i))
@@ -212,8 +212,65 @@ def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='pdb'
                 lig_ind += 1
 
 
+def check_p2rank_criteria(prot_univ, lig_univ):
+    prot_univ.add_TopologyAttr('record_type')
+    prot_univ.atoms.record_types = 'protein'
+    lig_univ.add_TopologyAttr('record_type')
+    lig_univ.atoms.record_types = 'ligand'
+
+
+    univ = mda.Merge(prot_univ.atoms, lig_univ.atoms)
+    univ.dimensions = None # this prevents PBC bugs in distance calculation
+
+    valid_resnames = np.all([res.resname not in exclusion_list for res in lig_univ.residues])
+    not_prot = np.all([res.resname not in allowed_residues for res in lig_univ.residues])
+    nearby = univ.select_atoms('record_type ligand and around 4 protein').n_atoms > 0
+    if valid_resnames and not_prot and nearby and (lig_univ.atoms.n_atoms >= 5):
+        com = lig_univ.atoms.center_of_mass()
+        com_string = ' '.join(com.astype(str).tolist())
+        not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
+        if not_protruding:
+            return True
+
+    return False
+
+
+def process_train_p2rank(i, file, output_dir, min_size=98): 
+    try:
+        prepend = os.getcwd()
+        structure_name = file
+
+        if not os.path.isdir(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name)): 
+            os.makedirs(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name))
+
+        rebond_mol2(i,f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file}/protein.mol2', structure_name, f'{prepend}/{output_dir}/ready_to_parse_mol2/',addH=True, min_size=min_size)
+        
+        for file_path in glob(f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file }/*'):
+            if 'ligand' in file_path:
+                prot_univ = mda.Universe(f'{prepend}/{output_dir}/ready_to_parse_mol2/protein.mol2') 
+                lig_univ = mda.Universe(file_path)
+                passing_p2rank = check_p2rank_criteria(prot_univ, lig_univ)
+                if passing_p2rank:
+                    shutil.copyfile(file_path, f'{prepend}/{output_dir}/ready_to_parse_mol2/{file}/{file_path.split("/")[-1]}')
+        
+        n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{prepend}/{output_dir}/ready_to_parse_mol2/{file}/')])
+        if n_ligands > 0:
+            label_sites_given_ligands(f'{prepend}/{output_dir}/ready_to_parse_mol2/{structure_name}')
+            if not os.path.isdir(f'{prepend}/{output_dir}/raw'): os.makedirs(f'{prepend}/{output_dir}/raw')
+            if not os.path.isdir(f'{prepend}/{output_dir}/mol2'): os.makedirs(f'{prepend}/{output_dir}/mol2')
+            process_system(f'{prepend}/{output_dir}/ready_to_parse_mol2/{structure_name}', save_directory=f'./{output_dir}')
+        else:
+            with open(f'{prepend}/{output_dir}/no_ligands.txt', 'a') as f:
+                f.write(f'{structure_name}\n')
+        
+    except AssertionError as e: 
+        print("Failed to find ligand in", file)
+    except Exception as e:
+        # print("ERROR", file, e)
+        raise e
+
 def process_train_openbabel(i, file, output_dir):
-    strip_size = 98 # Max number of atoms in a ligand in scPDB excluding hydrogens
+    min_size = 98 # Max number of atoms in a ligand in scPDB excluding hydrogens
     
     try:
         prepend = os.getcwd()
@@ -222,7 +279,7 @@ def process_train_openbabel(i, file, output_dir):
             os.makedirs(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name))
         # print(os.path.join(prepend, '/scPDB_data_dir/unprocessed_mol2/',file,'/protein.mol2'))
         # print(prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2')
-        rebond_mol2(i,prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/",addH=True, strip_size=strip_size)
+        rebond_mol2(i,prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/",addH=True, min_size=min_size)
         
         for file_path in glob(prepend + '/scPDB_data_dir/unprocessed_mol2/' + file + '/*'):
             if 'ligand' in file_path:
@@ -313,11 +370,20 @@ if __name__ == "__main__":
     from joblib import Parallel, delayed
 
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("dataset", choices=["train_openbabel", "train_classic", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Dataset to prepare.")
+    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Dataset to prepare.")
     args = parser.parse_args()
     dataset = args.dataset
  
-    if dataset == "train_openbabel":
+    if dataset == "train_p2rank":
+        print("Parsing the standard train set with p2rank criteria")
+        nolig_file = f'{prepend}/scPDB_data_dir/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
+        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
+        Parallel(n_jobs=num_cores)(delayed(process_train_p2rank)(i, filename, 'scPDB_data_dir', min_size=5) for i, filename in enumerate(tqdm(mol2_files[:]))) 
+        # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
+        #     process_train(i,filename, 'regular_data_dir')
+
+    elif dataset == "train_openbabel":
         print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
         Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
