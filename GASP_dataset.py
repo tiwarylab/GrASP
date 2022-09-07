@@ -10,8 +10,10 @@ from torch_geometric.data import Data, Dataset
 from torch_geometric.utils import from_scipy_sparse_matrix
 
 class GASPData(Dataset):
-    def __init__(self, root, num_cpus, cutoff=5, force_process=False):
+    def __init__(self, root, num_cpus, cutoff=5, label_midpoint=6.5, label_slope=1, force_process=False):
         self.cutoff=cutoff
+        self.label_midpoint = label_midpoint
+        self.label_slope = label_slope
         self.force_process=force_process
         self.num_cpus = num_cpus
         
@@ -67,7 +69,8 @@ class GASPData(Dataset):
         edge_attr = torch.FloatTensor([[(cutoff - G[edge[0].item()][edge[1].item()]['weight'])/cutoff] + G[edge[0].item()][edge[1].item()]['bond_type'] for edge in edge_index.T])          
         
         # Convert Labels from one-hot to 1D target
-        y = torch.LongTensor([0 if label[0] == 1 else 1 for label in arr['class_array']] )
+        distance_to_ligand = arr['ligand_distance_array']
+        y = torch.LongTensor(self.distance_sigmoid(distance_to_ligand))
         # print("0.6")
         # print("TIME TO GET OBJ: {}".format(time.time()- start))
         to_save = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
@@ -93,6 +96,12 @@ class GASPData(Dataset):
             print(self.cutoff)
             self.process_helper(self.processed_dir, self.raw_paths[idx], idx, cutoff=self.cutoff)
             return torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx))), self.raw_file_names[idx]
+
+    def distance_sigmoid(self, data):
+        x = -self.label_slope*(data-self.midpoint)
+        sigmoid = 1/(1 + np.exp(-x))
+        
+        return sigmoid
 
 # from torch_geometric.data import HeteroData
 

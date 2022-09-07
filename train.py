@@ -106,6 +106,8 @@ def main(node_noise_variance : float, training_split='cv'):
     class_loss_weight = args.class_loss_weight#[0.8,1.2]
     label_smoothing = args.label_smoothing#0.2
     head_loss_weight = args.head_loss_weight
+    label_midpoint, label_slope = args.sigmoid_params
+    
     
     num_cpus = 8
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -152,7 +154,7 @@ def main(node_noise_variance : float, training_split='cv'):
     
     head_loss_weight = torch.tensor(head_loss_weight).to(device)
     
-    data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
+    data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5, label_midpoint=label_midpoint, label_slope=label_slope)
     
     do_validation = False
     if training_split == 'cv':
@@ -354,6 +356,7 @@ if __name__ == "__main__":
     parser.add_argument("-cw", "--class_loss_weight", type=float, nargs=2, default=[1.0, 1.0], help="Loss weight for [negative, positive] classes.")
     parser.add_argument("-ls", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
     parser.add_argument("-hw", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
+    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default= [6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
     model_id = f'{argstring}_{str(job_start_time)}'

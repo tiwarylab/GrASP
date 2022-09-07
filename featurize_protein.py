@@ -7,6 +7,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # I really wish I didn't have to do this but the way some of these paackages pickle I have no other way. If you know a better alternative feel free to reach out
     import re
     import MDAnalysis as mda
+    from MDAnalysis.analysis.distances import distance_array
     from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
     import numpy as np
     from pathlib import Path
@@ -216,42 +217,20 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         raise ValueError ("Adjacency matrix shape ({}) did not match feature array shape ({}). {}".format(np.array(trimmed).shape, np.array(feature_array).shape, structure_name))
 
     # Classes
-    site = mda.Universe(path_to_files + '/site.mol2', format='mol2')
-    res_names = site.residues.resnames
-    new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
-    site.residues.resnames = new_names
-    site = site.select_atoms(selection_str).select_atoms("not type H")
+    lig_coord_list = []
+    for file_path in glob(f'{path_to_files}/*'):
+        if 'ligand' in file_path and not 'site' in file_path:
+            lig_univ = mda.Universe(file_path)
+            lig_coord_list.append(lig_univ.select_atoms('not type H').positions)
 
-    site.ids = np.arange(0,len(site.atoms))
-
-    binding_site_lst = []
-
-    # Sometimes the site atoms are not found in the protein. This happens when they're a part of a nonstandard residues.
-    # For now, we'll skip them and keep a count of how many there are
-    for atom in site.atoms:
-        try:
-            x, y, z = atom.position                                                                       # Get the coordinates of each atom of the binding site
-            binding_site_lst.append(protein.select_atoms("point {} {} {} 0.1".format(x, y, z))[0].id)      # Select that atom in the whole protein
-        except Exception as e:
-            print(atom)
-            print("Binding site atom not found in filtered protein. Was it dropped? \n Filename:", str(path_to_files))
-            # return -1
-
-    if binding_site_lst == []:
-        print(site.atoms)
-        raise Exception("Binding Site Not Found")
-
-    mask = np.ones(len(protein.atoms), bool)                                                         # Inverse of the atoms in the binding site
-    mask[binding_site_lst] = False
-
-    classes = np.zeros((len(protein.atoms),2))
-    classes[binding_site_lst, 1] = 1                                                                    # Set all atoms in the binding site to class 2
-    classes[mask, 0] = 1                                                                                # Set all atoms not in the binding site to class 1
+    prot_coords = protein.positions
+    all_lig_coords = np.row_stack(lig_coord_list)
+    distance_to_ligand = np.min(distance_array(prot_coords, all_lig_coords), axis=1)
 
     # Creating edge_attributes dictionary. Only holds bond types, weights are stored in trimmed
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
 
-    np.savez_compressed(save_directory + '/raw/' + structure_name, adj_matrix = trimmed, feature_matrix = feature_array, class_array = classes, edge_attributes = edge_attributes)
+    np.savez_compressed(save_directory + '/raw/' + structure_name, adj_matrix = trimmed, feature_matrix = feature_array, ligand_distance_array = distance_to_ligand, edge_attributes = edge_attributes)
     protein.atoms.write(save_directory + '/mol2/' + str(structure_name) +'.mol2')
 
     return None
