@@ -611,14 +611,13 @@ if __name__ == "__main__":
             print("Done. {}".format(time.time()- start))
             out.write("Done. {}\n".format(time.time()- start))
             
-            overlap_path = prepend + metric_dir + '/overlaps/' + model_name
+            overlap_path = f"{prepend}{metric_dir}/overlaps/{model_name}"
             if not os.path.isdir(overlap_path):
                 os.makedirs(overlap_path)
             
-            if is_label:
-                np.savez(overlap_path + '_label_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, n_predicted=n_predicted,names=names)
-            else:
-                np.savez(overlap_path + '_overlaps_for_threshold_{}.npz'.format(threshold), DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, n_predicted=n_predicted, names=names)
+
+            np.savez(f"{overlap_path}/{argstring}.npz", DCC_lig = DCC_lig, DCC_site = DCC_site, DCA = DCA, volumetric_overlaps = volumetric_overlaps, n_predicted=n_predicted,names=names)
+
 
             VO = volumetric_overlaps
             n_predicted = np.array(n_predicted)
