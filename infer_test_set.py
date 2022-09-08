@@ -19,7 +19,7 @@ from sklearn.metrics import matthews_corrcoef as mcc
 from torch.utils.tensorboard import SummaryWriter
 import torch
 
-from GASP_dataset import GASPData 
+from GASP_dataset import GASPData
 from atom_wise_models import Hybrid_1g12_self_edges_transformer_GN
 
 prepend = str(os.getcwd())
@@ -92,6 +92,13 @@ def k_fold(dataset, path, fold_number):
     assert train_mask.sum() > val_mask.sum()
 
     return train_mask, val_mask
+
+
+def distance_sigmoid(data, midpoint, slope):
+    x = -slope*(data-midpoint)
+    sigmoid = torch.sigmoid(x)
+    
+    return sigmoid
 
 
 # Other Parameters
@@ -191,6 +198,7 @@ with torch.no_grad():
     # for batch, name in test_dataloader:
     for batch, name in tqdm(val_dataloader, position=0, leave=True):
         
+        batch.y = distance_sigmoid(batch.y, label_midpoint, label_slope)
         labels = batch.y.to(device)
         assembly_name = name[0][:-4]  
 

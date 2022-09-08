@@ -113,6 +113,14 @@ def initialize_model(supplied_arg):
         raise ValueError("Unknown Model Type:", supplied_arg)
     return model
    
+
+def distance_sigmoid(data, midpoint, slope):
+    x = -slope*(data-midpoint)
+    sigmoid = torch.sigmoid(x)
+    
+    return sigmoid
+
+
 def main(node_noise_variance : float, training_split='cv'):
     # Hyperparameters
     num_epochs = args.num_epochs
@@ -213,6 +221,7 @@ def main(node_noise_variance : float, training_split='cv'):
                 unperturbed_x = torch.cat([data.x.clone().detach().to(device) for data in batch])
                 for data in batch:
                     data.x = data.x + (node_noise_variance**0.5)*torch.randn_like(data.x)
+                    data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
                 labels  = torch.cat([data.y.clone().detach() for data in batch]).cpu().numpy()
                 y       = torch.cat([data.y.to(device) for data in batch])
             
