@@ -12,8 +12,6 @@ from torch_geometric.utils import from_scipy_sparse_matrix
 class GASPData(Dataset):
     def __init__(self, root, num_cpus, cutoff=5, force_process=False):
         self.cutoff=cutoff
-        self.label_midpoint = label_midpoint
-        self.label_slope = label_slope
         self.force_process=force_process
         self.num_cpus = num_cpus
         
