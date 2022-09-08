@@ -14,9 +14,8 @@ from torch_geometric.nn import DataParallel
 
 from sklearn.preprocessing import label_binarize
 from scipy import interp
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_curve, auc, average_precision_score
 from sklearn.metrics import matthews_corrcoef as mcc
-from sklearn.metrics import roc_curve, auc 
 from torch.utils.tensorboard import SummaryWriter
 import torch
 
@@ -166,6 +165,7 @@ else:
 test_epoch_loss = []
 test_epoch_acc = []
 test_epoch_mcc = []
+test_epoch_pr_auc = []
 
 all_probs = torch.Tensor([])
 all_labels = torch.Tensor([])
@@ -187,6 +187,7 @@ with torch.no_grad():
     test_batch_loss = 0.0
     test_batch_acc = 0.0
     test_batch_mcc = 0.0
+    test_batch_pr_auc = 0.0
     # for batch, name in test_dataloader:
     for batch, name in tqdm(val_dataloader, position=0, leave=True):
         
@@ -207,10 +208,12 @@ with torch.no_grad():
         
         ba = accuracy_score(hard_labels, preds)
         bm = mcc(hard_labels, preds)
+        bpr = average_precision_score(hard_labels, probs[:,1])
 
         test_batch_loss += bl
         test_batch_acc  += ba
         test_batch_mcc  += bm
+        test_batch_pr_auc += bpr
         np.save(prob_path + assembly_name, probs.detach().cpu().numpy())
         np.save(label_path + assembly_name, labels.detach().cpu().numpy())
         np.save(surface_path + assembly_name, SASAs.detach().cpu().numpy())
@@ -225,9 +228,11 @@ with torch.no_grad():
     test_epoch_loss.append(test_batch_loss/len(val_dataloader))
     test_epoch_acc.append(test_batch_acc/len(val_dataloader))
     test_epoch_mcc.append(test_batch_mcc/len(val_dataloader))
+    test_epoch_pr_auc.append(test_batch_pr_auc/len(val_dataloader))
     print("Loss: {}".format(test_epoch_loss[-1]))
     print("Accu: {}".format(test_epoch_acc[-1]))
     print("MCC:  {}".format(test_epoch_mcc[-1]))
+    print("PR AUC: {}".format(test_epoch_pr_auc[-1]))
     # writer.add_scalar('Epoch_Loss/test', test_epoch_loss[-1], test_epoch_num)
     # writer.add_scalar('Epoch_Acc/test',  test_epoch_acc[-1],  test_epoch_num)
     # writer.add_scalar('Epoch_Acc/MCC',  test_epoch_mcc[-1],  test_epoch_num)

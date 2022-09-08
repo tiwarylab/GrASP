@@ -26,9 +26,9 @@ from torch_geometric.nn.norm import BatchNorm
 from torch_geometric.utils import dropout_adj, from_scipy_sparse_matrix
 import torch_geometric
 
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score, roc_auc_score, average_precision_score
 from sklearn.metrics import matthews_corrcoef as mcc
+
 
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
@@ -200,11 +200,13 @@ def main(node_noise_variance : float, training_split='cv'):
         training_epoch_acc = []
         training_epoch_mcc = []
         training_epoch_auc = []
+        training_epoch_pr_auc = []
 
         val_epoch_loss = []
         val_epoch_acc = []
         val_epoch_mcc = []
         val_epoch_auc = []
+        val_epoch_pr_auc = []
 
         writer = SummaryWriter(log_dir='atom_wise_model_logs/' + training_split + '/cv_split_' + str(cv_iteration) + "/" + model_id)
         train_batch_num, val_batch_num = 0,0
@@ -220,6 +222,7 @@ def main(node_noise_variance : float, training_split='cv'):
             training_batch_acc = 0.0
             training_batch_mcc = 0.0
             training_batch_auc = 0.0
+            training_batch_pr_auc = 0.0
             for batch in train_dataloader:
                 batch = list(map(lambda x: x[0].to(device), batch))
                 
@@ -247,20 +250,18 @@ def main(node_noise_variance : float, training_split='cv'):
                 ba = accuracy_score(labels, preds)
                 bm = mcc(labels, preds)
                 bc = roc_auc_score(labels, probs[:,1])
+                bpr = average_precision_score(labels, probs[:,1])
                 training_batch_loss += bl
                 training_batch_acc  += ba
                 training_batch_mcc  += bm
                 training_batch_auc  += bc
-                # if train_batch_num % 10 == 0:
-                #     print("Training Batch Loss:", bl)
-                #     print("Training Batch Accu:", ba)
-                #     print("Training Batch MCC:", bm)
-                #     print("Training Batch AUC:", bc)
-                #     print("That batch took {} seconds.".format(time.time() - start_time))
+                training_batch_pr_auc += bpr
+
                 writer.add_scalar('Batch_Loss/Train', bl, train_batch_num)
                 writer.add_scalar('Batch_ACC/Train',  ba,  train_batch_num)
                 writer.add_scalar('Batch_MCC/Train',  bm,  train_batch_num)
                 writer.add_scalar('Batch_AUC/Train',  bc,  train_batch_num)
+                writer.add_scalar('Batch_PR_AUC/Train', bpr, train_batch_num)
                 train_batch_num += 1
                 
             scheduler.step()
@@ -270,14 +271,17 @@ def main(node_noise_variance : float, training_split='cv'):
             training_epoch_acc.append(training_batch_acc/len(train_dataloader))
             training_epoch_mcc.append(training_batch_mcc/len(train_dataloader))
             training_epoch_auc.append(training_batch_auc/len(train_dataloader))
+            training_epoch_pr_auc.append(training_batch_pr_auc/len(train_dataloader))
             print("Training Epoch {} Loss: {}".format(epoch, training_epoch_loss[-1]))
             print("Training Epoch {} Accu: {}".format(epoch, training_epoch_acc[-1]))
             print("Training Epoch {} MCC: {}".format(epoch, training_epoch_mcc[-1]))
             print("Training Epoch {} AUC: {}".format(epoch, training_epoch_auc[-1]), flush=True)
+            print("Training Epoch {} PR AUC: {}".format(epoch, training_epoch_pr_auc[-1]), flush=True)
             writer.add_scalar('Epoch_Loss/Train', training_epoch_loss[-1], train_epoch_num)
             writer.add_scalar('Epoch_ACC/Train',  training_epoch_acc[-1],  train_epoch_num)
             writer.add_scalar('Epoch_MCC/Train',  training_epoch_mcc[-1],  train_epoch_num)
             writer.add_scalar('Epoch_AUC/Train',  training_epoch_auc[-1],  train_epoch_num)
+            writer.add_scalar('Epoch_PR_AUC/Train', training_epoch_pr_auc[-1], train_epoch_num)
 
             if not os.path.isdir("./trained_models/{}/trained_model_{}/".format(training_split, model_id)):
                 os.makedirs("./trained_models/{}/trained_model_{}/".format(training_split, model_id))
@@ -292,6 +296,7 @@ def main(node_noise_variance : float, training_split='cv'):
                     val_batch_acc = 0.0
                     val_batch_mcc = 0.0
                     val_batch_auc = 0.0
+                    val_batch_pr_auc = 0.0
 
                     for batch in val_dataloader:
                         batch = list(map(lambda x: x[0].to(device), batch))
@@ -315,17 +320,20 @@ def main(node_noise_variance : float, training_split='cv'):
                         ba = accuracy_score(labels, preds)
                         bm = mcc(labels, preds)
                         bc = roc_auc_score(labels, probs[:,1])
+                        bpr = average_precision_score(labels, probs[:,1])
                             
                         val_batch_loss += bl
                         val_batch_acc  += ba
                         val_batch_mcc  += bm
                         val_batch_auc  += bc
+                        val_batch_pr_auc += bpr
                         # print("Validation Batch Loss:", val_batch_loss[-1])
                         # print("Validation Batch Accu:", val_batch_acc[-1
                         writer.add_scalar('Batch_Loss/Val', bl, val_batch_num)
                         writer.add_scalar('Batch_ACC/Val',  ba,  val_batch_num)
                         writer.add_scalar('Batch_MCC/Val',  bm,  val_batch_num)
                         writer.add_scalar('Batch_AUC/Val',  bc,  val_batch_num)
+                        writer.add_scalar('Batch_PR_AUC/Val', bpr, val_batch_num)
                         val_batch_num += 1
 
 
@@ -333,14 +341,17 @@ def main(node_noise_variance : float, training_split='cv'):
                     val_epoch_acc.append(val_batch_acc/len(val_dataloader))
                     val_epoch_mcc.append(val_batch_mcc/len(val_dataloader))
                     val_epoch_auc.append(val_batch_auc/len(val_dataloader))
+                    val_epoch_pr_auc.append(val_batch_pr_auc/len(val_dataloader))
                     print("Validation Epoch {} Loss: {}".format(epoch, val_epoch_loss[-1]))
                     print("Validation Epoch {} Accu: {}".format(epoch, val_epoch_acc[-1]))
                     print("Validation Epoch {} MCC: {}".format(epoch, val_epoch_mcc[-1]))
                     print("Validation Epoch {} AUC: {}".format(epoch, val_epoch_auc[-1]))
+                    print("Validation Epoch {} PR AUC: {}".format(epoch, val_epoch_pr_auc[-1]))
                     writer.add_scalar('Epoch_Loss/Val', val_epoch_loss[-1], val_epoch_num)
                     writer.add_scalar('Epoch_ACC/Val',  val_epoch_acc[-1],  val_epoch_num)
                     writer.add_scalar('Epoch_MCC/Val',  val_epoch_mcc[-1],  val_epoch_num)
                     writer.add_scalar('Epoch_AUC/Val',  val_epoch_auc[-1],  val_epoch_num)
+                    writer.add_scalar('Epoch_PR_AUC/Val',  val_epoch_pr_auc[-1],  val_epoch_num)
 
                     val_epoch_num += 1
 
