@@ -96,7 +96,22 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
 
     return (dataset[train_mask], dataset[val_mask], i)
 
-
+def initialize_model(supplied_arg):
+    if  supplied_arg == 'hybrid':
+        print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, traditional")
+        model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer':
+        print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
+        model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'graphnorm':
+        print("Using Hybrid_1g12_self_edges with GraphNorm.")
+        model = Hybrid_1g12_GN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer_gn':
+        print("Using Hybrid_1g12_self_edges with GraphNorm, transformer style")
+        model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+    else:
+        raise ValueError("Unknown Model Type:", supplied_arg)
+    return model
    
 def main(node_noise_variance : float, training_split='cv'):
     # Hyperparameters
@@ -111,44 +126,6 @@ def main(node_noise_variance : float, training_split='cv'):
     
     num_cpus = 8
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # print('The model will be using {} gpus.'.format(world_size))
-    # print("The model will be using {} cpus.".format(num_cpus), flush=True)
-
-    # print("Loss Weighting:", str(class_loss_weight))
-    # print("Weighted Cross Entropy Loss Function Weight:", head_loss_weight[0])
-    # print("Reconstruction (MSE) Loss Function Weight:  ", head_loss_weight[1])
-
-    # model = Two_Track_GATModel(input_dim=88, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean")
-    # model =   Hybrid_1g8_noisy(input_dim=88, node_noise_variance=node_noise_variance, edge_noise_variance=edge_noise_variance)
-    # if str(sys.argv[3]) == "Hybrid_1g12_self_edges":
-    #     print("Using Hybrid_1g12_self_edges")
-    #     model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    # elif str(sys.argv[3]) == "Hybrid_1g12_self_edges_dropped_bn":
-    #     print("Using Hybrid_1g12_self_edges_dropped_bn")
-    #     model = Hybrid_1g12_self_edges_dropped_bn(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    # elif str(sys.argv[3]) == "Hybrid_1g12_self_edges_transformer_style":
-    #     print("Using Hybrid_1g12_self_edges_transformer_style")
-    #     model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    
-    if args.model == 'hybrid':
-            print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, traditional")
-            model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    elif args.model == 'transformer':
-        print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
-        model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    elif args.model == 'graphnorm':
-        print("Using Hybrid_1g12_self_edges with GraphNorm.")
-        model = Hybrid_1g12_GN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    elif args.model == 'transformer_gn':
-        print("Using Hybrid_1g12_self_edges with GraphNorm, transformer style")
-        model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
-    else:
-        raise ValueError("Unknown Model Type:", args.model)
-    model =  DataParallel(model)
-    model.to(device)
-    
-    optimizer = optim.Adam(model.parameters(), lr = learning_rate)
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
     
     loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(class_loss_weight), device=device)
     
@@ -157,11 +134,12 @@ def main(node_noise_variance : float, training_split='cv'):
     data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5, label_midpoint=label_midpoint, label_slope=label_slope)
     
     do_validation = False
-    if training_split == 'cv':
+    if training_split == 'cv' or training_split == 'cv_full':
         do_validation = True
         val_paths = []
         train_paths = []
-        for fold_number in range(1):
+        
+        for fold_number in range(1 if training_split == 'cv' else 10):
             val_paths.append(prepend + "/splits/test_ids_fold"  + str(fold_number))
             train_paths.append(prepend + "/splits/train_ids_fold" + str(fold_number))
         data_points = zip(train_paths,val_paths)
@@ -191,8 +169,14 @@ def main(node_noise_variance : float, training_split='cv'):
         gen = zip([data_set[train_mask]],[data_set[torch.zeros(len(data_set),dtype=torch.bool)]],[0])
         # print(gen)
 
-    # Set to one temporarily to avoid doing full cv
     for train_set, val_set, cv_iteration in gen:
+        model = initialize_model(args.model)
+        model =  DataParallel(model)
+        model.to(device)
+        
+        optimizer = optim.Adam(model.parameters(), lr = learning_rate)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95, verbose=True)
+        
         train_dataloader = DataListLoader(train_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
         if do_validation: val_dataloader = DataListLoader(val_set, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_cpus)
         # Track Training Statistics
@@ -283,9 +267,9 @@ def main(node_noise_variance : float, training_split='cv'):
             writer.add_scalar('Epoch_AUC/Train',  training_epoch_auc[-1],  train_epoch_num)
             writer.add_scalar('Epoch_PR_AUC/Train', training_epoch_pr_auc[-1], train_epoch_num)
 
-            if not os.path.isdir("./trained_models/{}/trained_model_{}/".format(training_split, model_id)):
-                os.makedirs("./trained_models/{}/trained_model_{}/".format(training_split, model_id))
-            torch.save(model.module.state_dict(), "./trained_models/{}/trained_model_{}/epoch_{}".format(training_split, model_id, train_epoch_num))
+            if not os.path.isdir("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id,cv_iteration)):
+                os.makedirs("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id,cv_iteration))
+            torch.save(model.module.state_dict(), "./trained_models/{}/trained_model_{}/cv_{}/epoch_{}".format(training_split, model_id, cv_iteration, train_epoch_num))
             
             train_epoch_num += 1
 
@@ -359,7 +343,7 @@ def main(node_noise_variance : float, training_split='cv'):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Training set.")
+    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Training set.")
     parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
     parser.add_argument("-m", "--model", default="hybrid", choices=["hybrid", "transformer", "graphnorm", "transformer_gn"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
