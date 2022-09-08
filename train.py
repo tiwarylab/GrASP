@@ -139,7 +139,7 @@ def main(node_noise_variance : float, training_split='cv'):
     
     head_loss_weight = torch.tensor(head_loss_weight).to(device)
     
-    data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5, label_midpoint=label_midpoint, label_slope=label_slope)
+    data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
     
     do_validation = False
     if training_split == 'cv' or training_split == 'cv_full':

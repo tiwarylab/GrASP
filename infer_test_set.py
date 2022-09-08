@@ -134,7 +134,7 @@ if set_to_use == 'val':
     path_to_dataset = prepend + '/scPDB_data_dir'
     metric_dir = '/test_metrics/validation'
 
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, label_midpoint=label_midpoint, label_slope=label_slope)
+    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5)
     train_mask, val_mask = k_fold(data_set, prepend, 0) 
     val_set     = data_set[val_mask]
     val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
@@ -165,7 +165,7 @@ else:
         metric_dir = '/test_metrics/sc6k'
     else:
         raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, label_midpoint=label_midpoint, label_slope=label_slope)
+    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5)
     data_set.process()
     val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
