@@ -7,3 +7,4 @@ scPRB_raw_data/
 test_probs/
 test_mol/
 mol2_data_atoms_w_atom_feats/
+slurm*.out
