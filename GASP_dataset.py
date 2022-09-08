@@ -70,7 +70,7 @@ class GASPData(Dataset):
         
         # Convert Labels from one-hot to 1D target
         distance_to_ligand = arr['ligand_distance_array']
-        y = torch.LongTensor(self.distance_sigmoid(distance_to_ligand))
+        y = self.distance_sigmoid(torch.FloatTensor(distance_to_ligand))
         # print("0.6")
         # print("TIME TO GET OBJ: {}".format(time.time()- start))
         to_save = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
@@ -98,8 +98,8 @@ class GASPData(Dataset):
             return torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx))), self.raw_file_names[idx]
 
     def distance_sigmoid(self, data):
-        x = -self.label_slope*(data-self.midpoint)
-        sigmoid = 1/(1 + np.exp(-x))
+        x = -self.label_slope*(data-self.label_midpoint)
+        sigmoid = torch.sigmoid(x)
         
         return sigmoid
 
