@@ -44,33 +44,6 @@ job_start_time = time.time()
 prepend = str(os.getcwd())
 
 
-# LabelSmoothing Loss Source: https://stackoverflow.com/questions/55681502/label-smoothing-in-pytorch
-# Available by default in PyTorch 1.10 but there seems to be some conflict between PyTorch 1.10 and PyG.
-class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes, smoothing=0.0, dim=-1, weight = None, device='cpu'):
-        """if smoothing == 0, it's one-hot method
-           if 0 < smoothing < 1, it's smooth method
-        """
-        super(LabelSmoothingLoss, self).__init__()
-        self.confidence = 1.0 - smoothing
-        self.smoothing = smoothing
-        self.weight = weight.to(device)
-        self.cls = classes
-        self.dim = dim
-
-    def forward(self, pred, target):
-        assert 0 <= self.smoothing < 1
-        pred = pred.log_softmax(dim=self.dim)
-
-        if self.weight is not None:
-            pred = pred * self.weight.unsqueeze(0)   
-
-        with torch.no_grad():
-            true_dist = torch.zeros_like(pred)
-            true_dist.fill_(self.smoothing / (self.cls - 1))
-            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
-        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
-
 #ref: https://github.com/pyg-team/pytorch_geometric/blob/master/benchmark/kernel/train_eval.py#L82-L97
 def k_fold(dataset:GASPData,train_path:str, val_path, i):
     val_names    = np.loadtxt(val_path, dtype=str)
@@ -135,7 +108,7 @@ def main(node_noise_variance : float, training_split='cv'):
     num_cpus = 8
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    loss_fn = LabelSmoothingLoss(2, smoothing=label_smoothing, weight=torch.FloatTensor(class_loss_weight), device=device)
+    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing, weight=torch.FloatTensor(class_loss_weight).to(device))
     
     head_loss_weight = torch.tensor(head_loss_weight).to(device)
     
@@ -222,6 +195,7 @@ def main(node_noise_variance : float, training_split='cv'):
                 for data in batch:
                     data.x = data.x + (node_noise_variance**0.5)*torch.randn_like(data.x)
                     data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
+                    data.y = torch.stack([1-data.y, data.y], dim=1)
                 labels  = torch.cat([data.y.clone().detach() for data in batch]).cpu().numpy()
                 y       = torch.cat([data.y.to(device) for data in batch])
             
@@ -236,14 +210,15 @@ def main(node_noise_variance : float, training_split='cv'):
 
                 probs = out.softmax(dim=-1).detach().cpu().numpy()
                 preds = np.argmax(probs, axis=1)
+                hard_labels = np.argmax(labels, axis=1)
 
                 l = loss.detach().cpu().item()
                 
                 bl = l 
-                ba = accuracy_score(labels, preds)
-                bm = mcc(labels, preds)
-                bc = roc_auc_score(labels, probs[:,1])
-                bpr = average_precision_score(labels, probs[:,1])
+                ba = accuracy_score(hard_labels, preds)
+                bm = mcc(hard_labels, preds)
+                bc = roc_auc_score(hard_labels, probs[:,1])
+                bpr = average_precision_score(hard_labels, probs[:,1])
                 training_batch_loss += bl
                 training_batch_acc  += ba
                 training_batch_mcc  += bm
@@ -297,6 +272,7 @@ def main(node_noise_variance : float, training_split='cv'):
                         unperturbed_x = torch.cat([data.x.clone().detach().to(device) for data in batch])
                         for data in batch:
                             data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
+                            data.y = torch.stack([1-data.y, data.y], dim=1)
                         labels  = torch.cat([data.y.clone().detach() for data in batch]).cpu().numpy()
                         y       = torch.cat([data.y.to(device) for data in batch])
                     
@@ -307,13 +283,13 @@ def main(node_noise_variance : float, training_split='cv'):
                         loss = loss_fn(out,y)
                         probs = out.softmax(dim=-1).detach().cpu().numpy()
                         preds = np.argmax(probs, axis=1)
-                        labels = (labels >= .5).astype('float') # converting to binary labels for metrics
+                        hard_labels = np.argmax(labels, axis=1) # converting to binary labels for metrics
                         bl = loss.detach().cpu().item()
 
-                        ba = accuracy_score(labels, preds)
-                        bm = mcc(labels, preds)
-                        bc = roc_auc_score(labels, probs[:,1])
-                        bpr = average_precision_score(labels, probs[:,1])
+                        ba = accuracy_score(hard_labels, preds)
+                        bm = mcc(hard_labels, preds)
+                        bc = roc_auc_score(hard_labels, probs[:,1])
+                        bpr = average_precision_score(hard_labels, probs[:,1])
                             
                         val_batch_loss += bl
                         val_batch_acc  += ba
