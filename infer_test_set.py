@@ -249,7 +249,7 @@ all_probs  =  all_probs.detach().cpu().numpy()
 all_labels = all_labels.detach().cpu().numpy()
 
 all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
-all_label_path = prepend + metric_dir + '/all_labels/'
+all_label_path = prepend + metric_dir + '/all_labels/' + model_name + '/'
 
 if not os.path.isdir(all_prob_path):
     os.makedirs(all_prob_path)
