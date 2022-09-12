@@ -219,8 +219,8 @@ def volumetric_overlap(hull1, hull2):
     
     return jaccard
 
-def hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus):
-    top_ids = np.unique(sorted_ids)[::-1][:len(site_coords_list)+top_n_plus]
+def hulls_from_clusters(bind_coords, sorted_ids, n_sites, top_n_plus):
+    top_ids = np.unique(sorted_ids)[::-1][:n_sites+top_n_plus]
     predicted_points_list = []
     predicted_hull_list = []
     predicted_center_list = []
@@ -240,7 +240,23 @@ def hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus):
 
     return predicted_points_list, predicted_hull_list, predicted_center_list
 
-def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", cluster_all=False, adj_matrix=None, surf_mask=None):
+def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, top_n_plus, type='prob'):
+    top_ids = np.unique(sorted_ids)[::-1][:n_sites+top_n_plus]
+    predicted_center_list = []
+    
+    for c_id in top_ids:
+        if c_id is not None:
+            if c_id >= 0:
+                predicted_points = bind_coords[sorted_ids == c_id]
+                cluster_probs = bind_probs[:,1][sorted_ids == c_id]
+                if type == 'square':
+                    cluster_probs = cluster_probs**2
+                prob_center = center_of_mass(predicted_points, cluster_probs)
+                predicted_center_list.append(prob_center)
+
+    return predicted_center_list
+
+def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, site_coords_list, top_n_plus=0, threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, adj_matrix=None, surf_mask=None):
     """Cluster multiple binding sites and calculate distance from true site center, distance from ligand and volumetric overlap with true site 
 
     Parameters
@@ -289,13 +305,13 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
     """
     "meanshift, dbscan, louvain, linkage"
     if method == "meanshift":
-        bind_coords, sorted_ids, _ = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
+        bind_coords, sorted_ids, all_ids = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
     elif method == "dbscan":
-        bind_coords, sorted_ids, _ = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
+        bind_coords, sorted_ids, all_ids = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
     elif method == "louvain":
-        bind_coords, sorted_ids, _ = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, resolution=resolution, score_type=score_type)
+        bind_coords, sorted_ids, all_ids = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, resolution=resolution, score_type=score_type)
     elif method == "linkage":
-        bind_coords, sorted_ids, _ = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
+        bind_coords, sorted_ids, all_ids = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
     
     if surf_mask is not None:
         if method == "meanshift":
@@ -311,9 +327,13 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
     true_center_list = [hull_center(true_hull) for true_hull in true_hull_list]
     ligand_center_list = [center_of_mass(lig_coord_list[i], ligand_mass_list[i]) for i in range(len(lig_coord_list))]
 
-    predicted_points_list, predicted_hull_list, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, site_coords_list, top_n_plus)
+    n_sites = len(site_coords_list)
+    predicted_points_list, predicted_hull_list, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites, top_n_plus)
     if surf_mask is not None:
-        surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(surf_coords, surf_ids, site_coords_list, top_n_plus)
+        surf_points_list, surf_hull_list, surf_center_list = hulls_from_clusters(surf_coords, surf_ids, n_sites, top_n_plus)
+
+    if centroid_type != "hull":
+        predicted_center_list = center_of_probability(bind_coords, predicted_probs[all_ids > -1], sorted_ids, n_sites, top_n_plus, type=centroid_type)
 
     # New metric, site count difference: total predicted sites - total true sites
     if type(sorted_ids) == type(None):
@@ -389,7 +409,7 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
         return nan_arr, nan_arr, nan_arr, nan_arr, np.nan
 
 
-def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05, method="louvain", score_type="mean", cluster_all=False, SASA_threshold=None):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, SASA_threshold=None):
     DCC_lig_list = []
     DCC_site_list = []
     DCA_list = []
@@ -400,7 +420,7 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
         assembly_name = file.split('.')[-2]
         try:
             trimmed_protein = mda.Universe(path_to_mol2 + assembly_name + '.mol2')
-            labels = np.load(prepend + metric_dir + '/labels/' + assembly_name + '.npy')
+            labels = np.load(prepend + metric_dir + '/labels/' + model_name + '/' + assembly_name + '.npy')
             probs = np.load(prepend + metric_dir + '/probs/' + model_name + '/' + assembly_name + '.npy')
             if SASA_threshold is not None: 
                 SASAs = np.load(prepend + metric_dir + '/SASAs/'  + assembly_name + '.npy')
@@ -430,11 +450,11 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
                 surf_mask = SASAs > SASA_threshold
                 DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multisite_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
-                  cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
+                  centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
             else:
                 DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted = multisite_metrics(trimmed_protein.atoms.positions, lig_coord_list, ligand_mass_list,
                  probs, site_coords_list, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
-                  cluster_all=cluster_all, adj_matrix=adj_matrix)
+                  centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix)
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCC_site)) and np.all(np.isnan(DCA)) and np.all(np.isnan(volumetric_overlaps)): 
                 no_prediction_count += 1
             return DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted, no_prediction_count
@@ -470,6 +490,7 @@ if __name__ == "__main__":
     parser.add_argument("-su", "--use_surface", action="store_true", help="Option to use surface atoms for DCA and DCC_lig.")
     parser.add_argument("-a", "--aggregation_function", default="mean", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
     parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
+    parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square"], help="Type of centroid to use for site center. Not currently supported with -su.")
 
     args = parser.parse_args()
     non_path_args = [sys.argv[1]] + sys.argv[3:]
@@ -487,6 +508,7 @@ if __name__ == "__main__":
     top_n_list=args.top_n_plus
     score_type = args.aggregation_function
     SASA_threshold = None
+    centroid_type = args.centroid_type
 
     is_label=args.use_labels
     if is_label:
@@ -522,7 +544,7 @@ if __name__ == "__main__":
     #######################################################################################
     if compute_optimal:
         all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
-        all_label_path = prepend + metric_dir + '/all_labels/'
+        all_label_path = prepend + metric_dir + '/all_labels/' + model_name + '/'
         all_probs  = np.load(all_prob_path + "all_probs.npz")['arr_0']
         all_labels = np.load(all_label_path + "all_labels.npz")['arr_0']
         start = time.time()
@@ -601,10 +623,10 @@ if __name__ == "__main__":
             out.write(f"Calculating n+{top_n_plus} metrics for {threshold} threshold with distance cutoff {eps}.\n")
             start = time.time()
             path_to_mol2= data_dir + '/mol2/'
-            path_to_labels=prepend + metric_dir + '/labels/'
+            path_to_labels= prepend + metric_dir + '/labels/' + model_name + '/'
             DCC_lig, DCC_site, DCA, volumetric_overlaps, n_predicted, no_prediction_count, names = compute_metrics_for_all(
                 path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution,
-                 method=method, score_type=score_type, SASA_threshold=SASA_threshold)
+                 method=method, score_type=score_type, centroid_type=centroid_type, SASA_threshold=SASA_threshold)
             # for x in [DCC_lig, DCC_site, DCA, volumetric_overlaps, no_prediction_count]:
             #     print(x)
 
