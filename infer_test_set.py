@@ -54,7 +54,7 @@ prepend = str(os.getcwd())
 
 # Model trained exclusively on the holo4k split: "holo4k/trained_model_1656153741.4964042/epoch_49"
 parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("test_set", choices=["coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
+parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
 parser.add_argument("model_path", help="Path to the model from ./trained_models/")
 parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
 args = parser.parse_args()
@@ -139,11 +139,7 @@ if set_to_use == 'val':
     val_set     = data_set[val_mask]
     val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 else:  
-    if set_to_use == 'chen':
-        print("Initializing Chen Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/chen'
-        metric_dir = '/test_metrics/chen'
-    elif set_to_use ==  'coach420':
+    if set_to_use ==  'coach420':
         print("Initializing coach420 Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/coach420'
         metric_dir = '/test_metrics/coach420'
@@ -197,8 +193,8 @@ with torch.no_grad():
     test_batch_pr_auc = 0.0
     # for batch, name in test_dataloader:
     for batch, name in tqdm(val_dataloader, position=0, leave=True):
-        
         batch.y = distance_sigmoid(batch.y, label_midpoint, label_slope)
+        batch.y = torch.stack([1-batch.y, batch.y], dim=1)
         labels = batch.y.to(device)
         assembly_name = name[0][:-4]  
 
@@ -206,17 +202,18 @@ with torch.no_grad():
         probs = F.softmax(out, dim=-1) 
         all_probs = torch.cat((all_probs, probs.detach().cpu()))
         all_labels = torch.cat((all_labels, labels.detach().cpu()))
-        loss = F.nll_loss(torch.log(probs), labels,reduction='sum')         # Cross Entropy
-        preds = np.argmax(out.detach().cpu().numpy(), axis=1) # [1 if x[1] > prediction_threshold else 0 for x in probs]
+        loss_fn = torch.nn.CrossEntropyLoss()
+        loss = loss_fn(out, labels)        # Cross Entropy
+        preds = np.argmax(probs.detach().cpu().numpy(), axis=1) # [1 if x[1] > prediction_threshold else 0 for x in probs]
         bl = loss.detach().cpu().item()
         
         labels = batch.y.detach().cpu()
-        hard_labels = (labels >= .5).astype('float')
+        hard_labels = np.argmax(labels, axis=1)
         SASAs = batch.x[:,63].detach().cpu()
         
         ba = accuracy_score(hard_labels, preds)
         bm = mcc(hard_labels, preds)
-        bpr = average_precision_score(hard_labels, probs[:,1])
+        bpr = average_precision_score(hard_labels, probs.detach().cpu().numpy()[:,1])
 
         test_batch_loss += bl
         test_batch_acc  += ba
@@ -262,7 +259,7 @@ if not os.path.isdir(all_label_path):
 np.savez(all_prob_path + 'all_probs', all_probs)
 np.savez(all_label_path + 'all_labels', all_labels)
 
-all_labels = (all_labels >= .5).astype('float')
+all_hard_labels = (all_labels >= .5).astype('float')
 
 fpr = dict()
 tpr = dict()
@@ -271,11 +268,11 @@ roc_auc = dict()
 n_classes = 2
 
 for i in range(n_classes):
-    fpr[i], tpr[i], thresholds[i] = roc_curve(all_labels[:, i],all_probs[:,i])
+    fpr[i], tpr[i], thresholds[i] = roc_curve(all_hard_labels[:, i],all_probs[:,i])
     roc_auc[i] = auc(fpr[i], tpr[i])
 
 # Compute micro-average ROC curve and ROC area
-fpr["micro"], tpr["micro"], _ = roc_curve(all_labels.ravel(), all_probs.ravel())
+fpr["micro"], tpr["micro"], _ = roc_curve(all_hard_labels.ravel(), all_probs.ravel())
 roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
 
 # First aggregate all false positive rates
