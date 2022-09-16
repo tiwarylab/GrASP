@@ -15,7 +15,7 @@ from glob import glob
 import re
 import argparse
 
-allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL', 'C', 'G', 'A', 'U', 'I', 'DC', 'DG', 'DA', 'DU', 'DT', 'DI']
+allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
 selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)[:-1]]) + "resname " + str(allowed_residues[-1])
 exclusion_list = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
 
@@ -95,7 +95,7 @@ def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='prote
         res_names = univ.residues.resnames
         new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
         univ.residues.resnames = new_names
-        univ = univ.select_atoms(selection_str)
+        univ = univ.select_atoms(f'protein and ({selection_str})')
         mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
 
 
@@ -127,7 +127,7 @@ def protein2mol2(pdb_file, structure_name, out_directory, min_size=256, addH=Tru
         res_names = univ.residues.resnames
         new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
         univ.residues.resnames = new_names
-        univ = univ.select_atoms(selection_str)
+        univ = univ.select_atoms(f'protein and ({selection_str})')
         mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
 
 
