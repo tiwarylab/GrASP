@@ -161,7 +161,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             formal_charge = [rdkit_atom.GetFormalCharge()]
             is_in_ring = [1,0] if rdkit_atom.IsInRing() else [0,1]
             is_aromatic = [1,0] if rdkit_atom.GetIsAromatic() else [0,1]
-            num_radical_electrons = [rdkit_atom.GetNumRadicalElectrons()]
             mass = [rdkit_atom.GetMass()]
             hybridization = hybridization_dict[str(rdkit_atom.GetHybridization())]
             
@@ -176,7 +175,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             assert not np.any(np.isnan(formal_charge))
             assert not np.any(np.isnan(is_in_ring))
             assert not np.any(np.isnan(is_aromatic))
-            assert not np.any(np.isnan(num_radical_electrons))
             assert not np.any(np.isnan(mass))
             assert not np.any(np.isnan(hybridization))
             assert not np.any(np.isnan(acceptor))
@@ -185,8 +183,8 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             assert not np.any(np.isnan(lumped_hydrophobe))
 
             # Warning, any change to SAS's index must be reflected in infer_test_set.py
-            # Add feature vector with                  0-27               28-31        32-40       41               42                  43               44-45        45-46              70             48      72-78        56-57    58-59    60-61     62-63 (64 is degree)
-            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, num_radical_electrons, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
+            # Add feature vector with                  0-27               28-31        32-40       41               42                  43               44-45        46-47      48      72-78        56-57    58-59    60-61     62-63 (64  is degree)
+            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
         except Exception as e:
             print("Error while feautrizing atom for file {}.{}".format(path_to_files,e), flush=True)
             return -2
