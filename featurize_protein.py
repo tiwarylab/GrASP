@@ -132,6 +132,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
     try:
         rdkit_protein_w_H.UpdatePropertyCache(strict=False)
+        Chem.rdmolops.SetHybridization(rdkit_protein_w_H)
     except Exception as e:
         print("Failed to update property cache while processing", path_to_files)
         return
@@ -183,7 +184,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             assert not np.any(np.isnan(lumped_hydrophobe))
 
             # Warning, any change to SAS's index must be reflected in infer_test_set.py
-            # Add feature vector with                  0-27               28-31        32-40       41               42                  43               44-45        46-47      48      72-78        56-57    58-59    60-61     62-63 (64  is degree)
+            # Add feature vector with                  0-27               28-31        32-40       41               42                  43               44-45        46-47      48      49-55        56-57    58-59    60-61     62-63 (64  is degree)
             feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
         except Exception as e:
             print("Error while feautrizing atom for file {}.{}".format(path_to_files,e), flush=True)
