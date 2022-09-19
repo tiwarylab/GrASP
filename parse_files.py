@@ -69,90 +69,55 @@ def label_sites_given_ligands(path_to_mol2, extension='mol2'):
     all_sites.write(os.path.join(path_to_mol2, f"site.{extension}"))
 
 
-def pdb2mol2(pdb_file, structure_name, out_directory, addH=True, out_name='protein', cleanup=True):
-    # print("Starting")
-    output_path = out_directory + structure_name
-    if not os.path.isdir(output_path): os.makedirs(output_path)
-    
-    obConversion = openbabel.OBConversion()
-    obConversion.SetInAndOutFormats("pdb", "mol2")
-
-    output_mol2_path  = output_path + '/' + out_name +'.mol2'
-
-    mol = openbabel.OBMol()
-
-    obConversion.ReadFile(mol, pdb_file)
-    mol.DeleteHydrogens()
-    if addH: 
-        mol.CorrectForPH()
-        mol.AddHydrogens()
-
-    obConversion.WriteFile(mol, output_mol2_path)
-    
-    if cleanup:
-        # Use MDA to remove clean file
-        univ = mda.Universe(output_mol2_path)
+def cleanup_residues(univ):
         res_names = univ.residues.resnames
         new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
         univ.residues.resnames = new_names
-        univ = univ.select_atoms(f'protein and ({selection_str})')
-        mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
+        
+        return univ
 
-
-def protein2mol2(pdb_file, structure_name, out_directory, min_size=256, addH=True, out_name='protein', cleanup=True):
-    # print("Starting")
+    
+def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format='pdb', out_name='protein', parse_prot=True):
+    ob_input = in_file
     output_path = out_directory + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
     
+    if parse_prot:
+        univ = mda.Universe(in_file)
+        univ = cleanup_residues(univ)
+        prot_atoms = univ.select_atoms(f'protein and ({selection_str})')
+        ob_input = f'{output_path}/{out_name}.{in_format}'
+        mda.coordinates.writer(ob_input).write(prot_atoms)
+        
     obConversion = openbabel.OBConversion()
-    obConversion.SetInAndOutFormats("pdb", "mol2")
+    obConversion.SetInAndOutFormats(in_format, "mol2")
 
-    output_mol2_path  = output_path + '/' + out_name +'.mol2'
+    output_mol2_path  = f'{output_path}/{out_name}.mol2'
 
     mol = openbabel.OBMol()
 
-    obConversion.ReadFile(mol, pdb_file)
-    mol.StripSalts(min_size)
+    obConversion.ReadFile(mol, ob_input)
     mol.DeleteHydrogens()
     if addH: 
         mol.CorrectForPH()
         mol.AddHydrogens()
     
-
     obConversion.WriteFile(mol, output_mol2_path)
     
-    if cleanup:
-        # Use MDA to remove clean file
+    if parse_prot:
+        if ob_input != output_mol2_path:
+            os.remove(ob_input) # cleaning temp file
         univ = mda.Universe(output_mol2_path)
-        res_names = univ.residues.resnames
-        new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
-        univ.residues.resnames = new_names
-        univ = univ.select_atoms(f'protein and ({selection_str})')
-        mda.coordinates.MOL2.MOL2Writer(output_mol2_path).write(univ)
+        univ = cleanup_residues(univ)
+        mda.coordinates.writer(output_mol2_path).write(univ.atoms)
 
 
-def rebond_mol2(i, infile, structure_name, outfile, addH=False, min_size=256, cleanup=True):
-    obConversion = openbabel.OBConversion()
-    obConversion.SetInAndOutFormats("mol2", "pdb")
-
-    mol = openbabel.OBMol()
-    obConversion.ReadFile(mol, infile)
-    mol.DeleteHydrogens()
-    mol.StripSalts(min_size)
-    obConversion.WriteFile(mol, 'temp{}.pdb'.format(i))
-    pdb2mol2('temp{}.pdb'.format(i), structure_name, outfile, addH=addH, cleanup=cleanup)
-
-    # Delete mol2 file
-    os.remove('temp{}.pdb'.format(i))
-    return None
-
-
-def convert_all_pdb(structure_name, out_directory, addH=True, cleanup=True):
+def convert_all_pdb(structure_name, out_directory, addH=True, parse_prot=True):
     output_path = out_directory + structure_name
     files = os.listdir(output_path)
     for file in files:
         if file.split('.')[-1] == 'pdb':
-            pdb2mol2(f'{output_path}/{file}', structure_name, out_directory, addH=addH, out_name=file[:-4], cleanup=cleanup)
+            convert_to_mol2(f'{output_path}/{file}', structure_name, out_directory, addH=addH, out_name=file[:-4], parse_prot=parse_prot)
             os.remove(f'{output_path}/{file}')
 
 
@@ -235,7 +200,7 @@ def check_p2rank_criteria(prot_univ, lig_univ):
     return False
 
 
-def process_train_p2rank(i, file, output_dir, min_size=98): 
+def process_train_p2rank(file, output_dir): 
     try:
         prepend = os.getcwd()
         structure_name = file
@@ -243,7 +208,7 @@ def process_train_p2rank(i, file, output_dir, min_size=98):
         if not os.path.isdir(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name)): 
             os.makedirs(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name))
 
-        rebond_mol2(i,f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file}/protein.mol2', structure_name, f'{prepend}/{output_dir}/ready_to_parse_mol2/',addH=True, min_size=min_size)
+        convert_to_mol2(f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file}/protein.mol2', structure_name, f'{prepend}/{output_dir}/ready_to_parse_mol2/', addH=True, in_format='mol2')
         
         for file_path in glob(f'{prepend}/scPDB_data_dir/unprocessed_mol2/{file}/*'):
             if 'ligand' in file_path:
@@ -269,9 +234,7 @@ def process_train_p2rank(i, file, output_dir, min_size=98):
         # print("ERROR", file, e)
         raise e
 
-def process_train_openbabel(i, file, output_dir):
-    min_size = 98 # Max number of atoms in a ligand in scPDB excluding hydrogens
-    
+def process_train_openbabel(file, output_dir):
     try:
         prepend = os.getcwd()
         structure_name = file
@@ -279,7 +242,7 @@ def process_train_openbabel(i, file, output_dir):
             os.makedirs(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name))
         # print(os.path.join(prepend, '/scPDB_data_dir/unprocessed_mol2/',file,'/protein.mol2'))
         # print(prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2')
-        rebond_mol2(i,prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/",addH=True, min_size=min_size)
+        convert_to_mol2(prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/", addH=True, in_format='mol2')
         
         for file_path in glob(prepend + '/scPDB_data_dir/unprocessed_mol2/' + file + '/*'):
             if 'ligand' in file_path:
@@ -296,7 +259,7 @@ def process_train_openbabel(i, file, output_dir):
         raise e
         
 
-def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unprocessed_scPDB_mol2'):
+def process_train_classic(structure_name, output_dir, unprocessed_dir = 'unprocessed_scPDB_mol2'):
     # print("Processing", structure_name, flush=True)
     try:
         process_system(os.path.join('./',output_dir, unprocessed_dir, structure_name), save_directory='./' + output_dir)
@@ -307,12 +270,12 @@ def process_train_classic(i, structure_name, output_dir, unprocessed_dir = 'unpr
         raise e
         
 
-def process_p2rank_set(path, data_dir="benchmark_data_dir", min_size=256):
+def process_p2rank_set(path, data_dir="benchmark_data_dir"):
     try:
         prepend = os.getcwd()
         structure_name = path.split('/')[-1].split('.')[0]
         mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
-        protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
+        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, out_name='protein', parse_prot=True)
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_p2rank(f'{mol2_dir}{structure_name}') # parsing pdb avoids selection issues
 
@@ -326,7 +289,7 @@ def process_p2rank_set(path, data_dir="benchmark_data_dir", min_size=256):
             with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
                 f.write(f'{structure_name}\n')
                 
-        convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
+        convert_all_pdb(structure_name, mol2_dir, parse_prot=False) # converting system and ligand pdbs to mol2s
         
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
@@ -335,12 +298,12 @@ def process_p2rank_set(path, data_dir="benchmark_data_dir", min_size=256):
         raise e
 
 
-def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir", min_size=256):
+def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir"):
     try:
         prepend = os.getcwd()
         structure_name = path.split('/')[-1].split('.')[0]
         mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
-        protein2mol2(f'{prepend}/{path}', structure_name, mol2_dir, min_size=min_size, out_name='protein', cleanup=True)
+        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, out_name='protein', parse_prot=True)
         shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
         extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames) # parsing pdb avoids selection issues
 
@@ -354,7 +317,7 @@ def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir", min_size
             with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
                 f.write(f'{structure_name}\n')
 
-        convert_all_pdb(structure_name, mol2_dir, cleanup=False) # converting system and ligand pdbs to mol2s
+        convert_all_pdb(structure_name, mol2_dir, parse_prot=False) # converting system and ligand pdbs to mol2s
         
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
@@ -379,44 +342,38 @@ if __name__ == "__main__":
         nolig_file = f'{prepend}/scPDB_data_dir/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_p2rank)(i, filename, 'scPDB_data_dir', min_size=5) for i, filename in enumerate(tqdm(mol2_files[:]))) 
-        # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
-        #     process_train(i,filename, 'regular_data_dir')
+        Parallel(n_jobs=num_cores)(delayed(process_train_p2rank)(filename, 'scPDB_data_dir') for filename in tqdm(mol2_files[:])) 
 
     elif dataset == "train_openbabel":
         print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(i, filename, 'scPDB_data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
-        # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
-        #     process_train(i,filename, 'regular_data_dir')
+        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(filename, 'scPDB_data_dir') for filename in tqdm(mol2_files[:])) 
 
     elif dataset == "train_classic":
         print("Parsing the standard train set")
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_classic)(i, filename, 'data_dir') for i, filename in enumerate(tqdm(mol2_files[:]))) 
-        # for i, filename in enumerate(mol2_files[1800+360+380+250:]):
-        #     process_train(i,filename, 'regular_data_dir')
+        Parallel(n_jobs=num_cores)(delayed(process_train_classic)(filename, 'data_dir') for filename in tqdm(mol2_files[:])) 
 
     elif dataset == "coach420":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/coach420.ds')
         nolig_file = f'{prepend}/benchmark_data_dir/coach420/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/coach420', min_size=5) for i in tqdm(full_df.index))
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/coach420') for i in tqdm(full_df.index))
     
     elif dataset == "coach420_mlig":
         full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/coach420(mlig).ds', skiprows=4)
         nolig_file = f'{prepend}/benchmark_data_dir/coach420_mlig/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig', min_size=5) for i in tqdm(full_df.index))
+        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig') for i in tqdm(full_df.index))
     
     elif dataset == "holo4k":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds')
         nolig_file = f'{prepend}/benchmark_data_dir/holo4k/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k', min_size=5) for i in tqdm(full_df.index))
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k') for i in tqdm(full_df.index))
     
     elif dataset == "holo4k_mlig":
         full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2)
         nolig_file = f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig', min_size=5) for i in tqdm(full_df.index))
+        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig') for i in tqdm(full_df.index))
