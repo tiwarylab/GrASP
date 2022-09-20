@@ -72,16 +72,16 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
 def initialize_model(supplied_arg):
     if  supplied_arg == 'hybrid':
         print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, traditional")
-        model = Hybrid_1g12_self_edges(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+        model = Hybrid_1g12_self_edges(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
     elif supplied_arg == 'transformer':
         print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
-        model = Hybrid_1g12_self_edges_transformer_style(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+        model = Hybrid_1g12_self_edges_transformer_style(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
     elif supplied_arg == 'graphnorm':
         print("Using Hybrid_1g12_self_edges with GraphNorm.")
-        model = Hybrid_1g12_GN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+        model = Hybrid_1g12_GN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
     elif supplied_arg == 'transformer_gn':
         print("Using Hybrid_1g12_self_edges with GraphNorm, transformer style")
-        model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 88, noise_variance = node_noise_variance, GAT_heads=4)
+        model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
     else:
         raise ValueError("Unknown Model Type:", supplied_arg)
     return model
