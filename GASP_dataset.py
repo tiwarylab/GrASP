@@ -53,7 +53,7 @@ class GASPData(Dataset):
         adj_matrix.eliminate_zeros()
         # Build a graph from the sparse adjacency matrix
         G = nx.convert_matrix.from_scipy_sparse_matrix(adj_matrix)
-        nx.set_edge_attributes(G, [0,0,0,0,0,1,0], "bond_type")         # Set all edge types to 'null' one-hot
+        nx.set_edge_attributes(G, [0,0,0,0,1,0], "bond_type")         # Set all edge types to 'null' one-hot
         nx.set_edge_attributes(G, arr['edge_attributes'].item())           # Set all edge types to value in file
     
         # Calculate degree values

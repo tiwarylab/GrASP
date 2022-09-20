@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 class Hybrid_1g12_self_edges(nn.Module):
-    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1])):
         self.noise_variance = noise_variance
         # No need for bias in GAT Convs due to batch norms
         super(Hybrid_1g12_self_edges, self).__init__()
@@ -92,7 +92,7 @@ class Hybrid_1g12_self_edges(nn.Module):
         return x, rcon_output
 
 class Hybrid_1g12_GN(nn.Module):
-    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1])):
         self.noise_variance = noise_variance
         # No need for bias in GAT Convs due to batch norms
         super(Hybrid_1g12_GN, self).__init__()
@@ -178,7 +178,7 @@ class Hybrid_1g12_GN(nn.Module):
         return x, rcon_output
 
 class Hybrid_1g12_self_edges_transformer_style(nn.Module):
-    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1])):
         self.noise_variance = noise_variance
         # No need for bias in GAT Convs due to batch norms
         super(Hybrid_1g12_self_edges_transformer_style, self).__init__()
@@ -264,7 +264,7 @@ class Hybrid_1g12_self_edges_transformer_style(nn.Module):
         return x, rcon_output
 
 class Hybrid_1g12_self_edges_transformer_GN(nn.Module):
-    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+    def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1])):
         self.noise_variance = noise_variance
         # No need for bias in GAT Convs due to batch norms
         super(Hybrid_1g12_self_edges_transformer_GN, self).__init__()
@@ -494,7 +494,7 @@ class Hybrid_Cat_Linear_GN(nn.Module):
         return block_out
 
 # class Hybrid_1g12_LN(nn.Module):
-#     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+#     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1])):
 #         self.noise_variance = noise_variance
 #         # No need for bias in GAT Convs due to batch norms
 #         super(Hybrid_1g12_LN, self).__init__()
@@ -580,7 +580,7 @@ class Hybrid_Cat_Linear_GN(nn.Module):
 #         return x, rcon_output
 
 # class Hybrid_1g12_IN(nn.Module):
-#     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+#     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1])):
 #         self.noise_variance = noise_variance
 #         # No need for bias in GAT Convs due to batch norms
 #         super(Hybrid_1g12_IN, self).__init__()
@@ -702,7 +702,7 @@ class Hybrid_Cat_Linear_GN(nn.Module):
 #         return block_out
 
 # class Hybrid_1g12_FirstBN(nn.Module):
-#     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,0,1])):
+#     def __init__(self, input_dim, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add", noise_variance=0.02, GAT_heads=4, GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1])):
 #         self.noise_variance = noise_variance
 #         # No need for bias in GAT Convs due to batch norms
 #         super(Hybrid_1g12_FirstBN, self).__init__()

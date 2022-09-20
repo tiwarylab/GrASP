@@ -61,12 +61,11 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
     # Leaving an extra bit to denote self loops
     bond_type_dict = {
-        '1': [1,0,0,0,0,0,0],
-        '2': [0,1,0,0,0,0,0],
-        '3': [0,0,1,0,0,0,0],
-        'ar':[0,0,0,1,0,0,0],
-        'am':[0,0,0,0,1,0,0],
-        'un':[0,0,0,0,0,1,0]    # Unknown bond order is set to null/unbonded edges
+        '1': [1,0,0,0,0,0],
+        '2': [0,1,0,0,0,0],
+        'ar':[0,0,1,0,0,0],
+        'am':[0,0,0,1,0,0],
+        'un':[0,0,0,0,1,0]    # Unknown bond order is set to null/unbonded edges
     }
     selection_str = "".join(["resname " + x + " or " for x in list(residue_dict.keys())[:-1]]) + "resname " + str(list(residue_dict.keys())[-1])
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
