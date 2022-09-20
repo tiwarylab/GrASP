@@ -382,6 +382,7 @@ if __name__ == "__main__":
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig') for i in tqdm(full_df.index))
     
     elif dataset == "holo4k":
+        print('Cleaning alternate positions...')
         clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds', pdb_dir='cleaned_pdb')
         nolig_file = f'{prepend}/benchmark_data_dir/holo4k/no_ligands.txt'
@@ -389,6 +390,7 @@ if __name__ == "__main__":
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k') for i in tqdm(full_df.index))
     
     elif dataset == "holo4k_mlig":
+        print('Cleaning alternate positions...')
         clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')
         full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2, pdb_dir='cleaned_pdb')
         nolig_file = f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt'
