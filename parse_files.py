@@ -80,7 +80,7 @@ def clean_alternate_positions(input_dir, output_dir):
     if not os.path.isdir(output_dir): os.makedirs(output_dir)
     
     res_group = '|'.join(allowed_residues)
-    r = re.compile(f'^ATOM.*[B-Z]({res_group})')
+    r = re.compile(f'^ATOM.*([2-9]|[B-Z])({res_group})')
     
     for file_path in glob(f'{input_dir}/*.pdb'):
         with open(file_path, 'r') as infile:
