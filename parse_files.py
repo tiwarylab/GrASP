@@ -76,6 +76,21 @@ def cleanup_residues(univ):
         
         return univ
 
+def clean_alternate_positions(input_dir, output_dir):
+    if not os.path.isdir(output_dir): os.makedirs(output_dir)
+    
+    res_group = '|'.join(allowed_residues)
+    r = re.compile(f'^ATOM.*[B-Z]({res_group})')
+    
+    for file_path in glob(f'{input_dir}/*.pdb'):
+        with open(file_path, 'r') as infile:
+            lines = infile.readlines()
+            
+        pdb_name = file_path.split('/')[-1]
+        out_path = f'{output_dir}/{pdb_name}'
+        
+        with open(out_path, 'w') as outfile:
+            outfile.writelines([line for line in lines if not re.search(r, line)])
     
 def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format='pdb', out_name='protein', parse_prot=True):
     ob_input = in_file
@@ -121,17 +136,17 @@ def convert_all_pdb(structure_name, out_directory, addH=True, parse_prot=True):
             os.remove(f'{output_path}/{file}')
 
 
-def load_p2rank_set(file):
+def load_p2rank_set(file, pdb_dir='unprocessed_pdb'):
     df = pd.read_csv(file, sep='\s+', names=['path'], index_col=False)
-    df['path'] = ['benchmark_data_dir/'+'/unprocessed_pdb/'.join(file.split('/')) for file in df['path']]
+    df['path'] = ['benchmark_data_dir/'+f'/{pdb_dir}/'.join(file.split('/')) for file in df['path']]
     
     return df
 
 
-def load_p2rank_mlig(file, skiprows):
+def load_p2rank_mlig(file, skiprows, pdb_dir='unprocessed_pdb'):
     df = pd.read_csv(file, sep='\s+', names=['path', 'ligands'], index_col=False, skiprows=skiprows)
     df = df[df['ligands'] != '<CONFLICTS>']
-    df['path'] = ['benchmark_data_dir/'+'/unprocessed_pdb/'.join(file.split('/')) for file in df['path']]
+    df['path'] = ['benchmark_data_dir/'+f'/{pdb_dir}/'.join(file.split('/')) for file in df['path']]
     df['ligands'] = [l.split(',') for l in df['ligands']]
     
     return df
@@ -367,13 +382,15 @@ if __name__ == "__main__":
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig') for i in tqdm(full_df.index))
     
     elif dataset == "holo4k":
-        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds')
+        clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')
+        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds', pdb_dir='cleaned_pdb')
         nolig_file = f'{prepend}/benchmark_data_dir/holo4k/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k') for i in tqdm(full_df.index))
     
     elif dataset == "holo4k_mlig":
-        full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2)
+        clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')
+        full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2, pdb_dir='cleaned_pdb')
         nolig_file = f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig') for i in tqdm(full_df.index))
