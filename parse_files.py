@@ -16,7 +16,8 @@ import re
 import argparse
 
 allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
-selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)[:-1]]) + "resname " + str(allowed_residues[-1])
+res_selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)[:-1]]) + "resname " + str(allowed_residues[-1])
+atom_selection_str = "type C or type H or type N or type O or type S" # ignore post-translational modification
 exclusion_list = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
 
 
@@ -100,7 +101,7 @@ def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format
     if parse_prot:
         univ = mda.Universe(in_file)
         univ = cleanup_residues(univ)
-        prot_atoms = univ.select_atoms(f'protein and ({selection_str})')
+        prot_atoms = univ.select_atoms(f'protein and ({res_selection_str}) and ({atom_selection_str})')
         ob_input = f'{output_path}/{out_name}.{in_format}'
         mda.coordinates.writer(ob_input).write(prot_atoms)
         
