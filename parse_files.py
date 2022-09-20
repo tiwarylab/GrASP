@@ -16,8 +16,9 @@ import re
 import argparse
 
 allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
-res_selection_str = "".join(["resname " + x + " or " for x in list(allowed_residues)[:-1]]) + "resname " + str(allowed_residues[-1])
-atom_selection_str = "type C or type H or type N or type O or type S" # ignore post-translational modification
+allowed_types = ['C','H', 'N', 'O', 'S']
+res_selection_str = " or ".join([f'resname {x}' for x in allowed_residues])
+atom_selection_str = " or ".join([f'type {x}' for x in allowed_types]) # ignore post-translational modification
 exclusion_list = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
 
 
