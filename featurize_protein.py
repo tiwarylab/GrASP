@@ -67,7 +67,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         'am':[0,0,0,1,0,0],
         'un':[0,0,0,0,1,0]    # Unknown bond order is set to null/unbonded edges
     }
-    selection_str = "".join(["resname " + x + " or " for x in list(residue_dict.keys())[:-1]]) + "resname " + str(list(residue_dict.keys())[-1])
+    selection_str = " or ".join([f'resname {x}' for x in list(residue_dict.keys())])
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
     
     # Adjacency Matrix
