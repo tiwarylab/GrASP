@@ -113,7 +113,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         SAS[atom.index] += np.sum(local_SAS * is_bonded_to_H)       # Only take the values from hydrogens
     # Drop Hydrogens
     protein_w_H.ids = np.arange(0, len(protein_w_H.atoms))
-    protein = protein_w_H.select_atoms("not type H")
+    protein = protein_w_H.select_atoms("not element H")
     protein.ids = np.arange(0, len(protein.atoms))              # Abusing atoms ids to make them zero-indexed which makes our life easier
 
     trimmed = scipy.sparse.lil_matrix((len(protein.atoms.positions), len(protein.atoms.positions)), dtype='float')
@@ -193,7 +193,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     for file_path in glob(f'{path_to_files}/*'):
         if 'ligand' in file_path and not 'site' in file_path:
             lig_univ = mda.Universe(file_path)
-            lig_coord_list.append(lig_univ.select_atoms('not type H').positions)
+            lig_coord_list.append(lig_univ.select_atoms('not element H').positions)
 
     prot_coords = protein.positions
     all_lig_coords = np.row_stack(lig_coord_list)

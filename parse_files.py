@@ -16,9 +16,9 @@ import re
 import argparse
 
 allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
-allowed_types = ['C','H', 'N', 'O', 'S']
+allowed_elements = ['C','H', 'N', 'O', 'S']
 res_selection_str = " or ".join([f'resname {x}' for x in allowed_residues])
-atom_selection_str = " or ".join([f'type {x}' for x in allowed_types]) # ignore post-translational modification
+atom_selection_str = " or ".join([f'element {x}' for x in allowed_elements]) # ignore post-translational modification
 exclusion_list = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
 
 
@@ -33,7 +33,7 @@ def add_chains_from_frags(univ):
 def label_sites_given_ligands(path_to_mol2, extension='mol2'):
     protein = mda.Universe(os.path.join(path_to_mol2, f'protein.{extension}'))
     add_chains_from_frags(protein)
-    protein_no_h = protein.select_atoms("not type H")
+    protein_no_h = protein.select_atoms("not element H")
     
     all_sites = mda.AtomGroup([], protein) # empty AtomGroup
     for file_path in sorted(glob(path_to_mol2+ '/*')):
@@ -172,7 +172,7 @@ def extract_residues_p2rank(mol_directory, univ_extension='pdb'):
         if (res.resname[:3] not in exclusion_list) and (res.atoms.n_atoms >= 5):
             com = res.atoms.center_of_mass()
             com_string = ' '.join(com.astype(str).tolist())
-            not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
+            not_protruding = univ.select_atoms(f'protein and not element H and point {com_string} 5.5').n_atoms > 0
             if not_protruding:
                 write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
                 lig_ind += 1
@@ -188,7 +188,7 @@ def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='pdb'
         if (res.resname[:3] not in exclusion_list) and (res.resname[:3] in lig_resnames) and (res.atoms.n_atoms >= 5):
             com = res.atoms.center_of_mass()
             com_string = ' '.join(com.astype(str).tolist())
-            not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
+            not_protruding = univ.select_atoms(f'protein and not element H and point {com_string} 5.5').n_atoms > 0
             if not_protruding:
                 write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
                 lig_ind += 1
@@ -210,7 +210,7 @@ def check_p2rank_criteria(prot_univ, lig_univ):
     if valid_resnames and not_prot and nearby and (lig_univ.atoms.n_atoms >= 5):
         com = lig_univ.atoms.center_of_mass()
         com_string = ' '.join(com.astype(str).tolist())
-        not_protruding = univ.select_atoms(f'protein and not type H and point {com_string} 5.5').n_atoms > 0
+        not_protruding = univ.select_atoms(f'protein and not element H and point {com_string} 5.5').n_atoms > 0
         if not_protruding:
             return True
 
