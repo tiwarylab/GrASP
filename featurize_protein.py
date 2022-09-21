@@ -163,8 +163,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             hydrophobe = [1,0] if atom.index in hydrophobe_indices else [0,1]
             lumped_hydrophobe = [1,0] if atom.index in lumped_hydrophobe_indices else [0,1]
 
-            if name == 'MET' and element == 'SE': element = 'S' # for featurizing selenomethionine
-
             assert not np.any(np.isnan(num_bonds_w_heavy_atoms))
             assert not np.any(np.isnan(formal_charge))
             assert not np.any(np.isnan(is_in_ring))

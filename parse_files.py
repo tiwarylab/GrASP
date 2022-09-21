@@ -78,6 +78,12 @@ def cleanup_residues(univ):
         
         return univ
 
+def undo_se_modification(univ):
+    se_atoms = univ.select_atoms('protein and element Se')
+    se_atoms.elements = 'S'
+    
+    return univ
+
 def clean_alternate_positions(input_dir, output_dir):
     if not os.path.isdir(output_dir): os.makedirs(output_dir)
     
@@ -102,6 +108,7 @@ def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format
     if parse_prot:
         univ = mda.Universe(in_file)
         univ = cleanup_residues(univ)
+        univ = undo_se_modification(univ)
         prot_atoms = univ.select_atoms(f'protein and ({res_selection_str}) and ({atom_selection_str})')
         ob_input = f'{output_path}/{out_name}.{in_format}'
         mda.coordinates.writer(ob_input).write(prot_atoms)
