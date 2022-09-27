@@ -136,7 +136,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
 
     bins = np.arange(0,11)
-    pi_4 = 4 * np.pi
     for atom in protein.atoms:                                                              # Iterate through residues and create vectors of features
         name = "".join(re.findall("^[a-zA-Z]+", atom.resname)).upper()                      # Remove numbers from the name string
         element = atom.element.upper()
@@ -145,7 +144,8 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             d = trimmed[np.where(protein.ids == atom.id)[0][0]]
             n, bins = np.histogram(d[d>0], bins =bins)
             r = bins[1:] # using the exterior radius of the shell
-            g = n/(pi_4 * r ** 2)
+            vol = (4/3) * np.pi * r**3
+            g = n.cumsum() / vol # this is now density not g(r)
             g = g[1:] # skip the bin from 0 to 1, there shouldn't be any entries
 
             # RDKit Features
@@ -178,7 +178,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             # Add feature vector with                  0-27               28-31        32-40       41               42                  43               44-45        46-47      48      49-50        51-52    53-54    55-56     57-58 (59  is degree)
             feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
         except Exception as e:
-            print("Error while feautrizing atom for file {}.{}".format(path_to_files,e), flush=True)
+            print("Error while feautrizing atom {} for file {}.{}".format(atom.id, path_to_files,e), flush=True)
             return -2
             # raise ValueError ("Value not included in dictionary \"{}\" while generating feature vector for {}.".format(name, path_to_files)) from e
 
