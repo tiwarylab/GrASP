@@ -251,6 +251,8 @@ def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, top_n_pl
                 cluster_probs = bind_probs[:,1][sorted_ids == c_id]
                 if type == 'square':
                     cluster_probs = cluster_probs**2
+                if type == "centroid":
+                    cluster_probs = np.ones(cluster_probs.shape)
                 prob_center = center_of_mass(predicted_points, cluster_probs)
                 predicted_center_list.append(prob_center)
 
@@ -490,7 +492,7 @@ if __name__ == "__main__":
     parser.add_argument("-su", "--use_surface", action="store_true", help="Option to use surface atoms for DCA and DCC_lig.")
     parser.add_argument("-a", "--aggregation_function", default="mean", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
     parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
-    parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square"], help="Type of centroid to use for site center. Not currently supported with -su.")
+    parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square", "centroid"], help="Type of centroid to use for site center. Not currently supported with -su.")
 
     args = parser.parse_args()
     non_path_args = [sys.argv[1]] + sys.argv[3:]
@@ -527,7 +529,7 @@ if __name__ == "__main__":
         data_dir = prepend + '/benchmark_data_dir/coach420'
         metric_dir = '/test_metrics/coach420'
     elif set_to_use ==  'coach420_mlig':
-        print("Performing Metrics on the coach420 DeepPocket Set")    
+        print("Performing Metrics on the coach420 mlig Set")    
         data_dir = prepend + '/benchmark_data_dir/coach420_mlig'
         metric_dir = '/test_metrics/coach420_mlig'
     elif set_to_use == 'holo4k':
@@ -535,7 +537,7 @@ if __name__ == "__main__":
         data_dir = prepend + '/benchmark_data_dir/holo4k'
         metric_dir = '/test_metrics/holo4k'
     elif set_to_use == 'holo4k_mlig':
-        print("Performing Metrics on the holo4k DeepPocket Set")    
+        print("Performing Metrics on the holo4k mlig Set")    
         data_dir = prepend + '/benchmark_data_dir/holo4k_mlig'
         metric_dir = '/test_metrics/holo4k_mlig'
     else:
