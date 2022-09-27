@@ -59,7 +59,7 @@ parser.add_argument("model_path", help="Path to the model from ./trained_models/
 parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
 args = parser.parse_args()
 model_name = args.model_path
-model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 88)
+model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 60)
 
 model_path = prepend + "/trained_models/" + model_name
 set_to_use = args.test_set
@@ -209,7 +209,7 @@ with torch.no_grad():
         
         labels = batch.y.detach().cpu()
         hard_labels = np.argmax(labels, axis=1)
-        SASAs = batch.x[:,63].detach().cpu()
+        SASAs = batch.x[:,41].detach().cpu()
         
         ba = accuracy_score(hard_labels, preds)
         bm = mcc(hard_labels, preds)
