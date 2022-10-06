@@ -4,8 +4,8 @@ import torch
 from torch import Tensor
 from torch_scatter import scatter_mean
 
-from pytorch_geometric.nn.inits import ones, zeros
-from torch.nn.functional import sigmoid
+from torch_geometric.nn.inits import ones, zeros
+from torch import sigmoid
 
 
 

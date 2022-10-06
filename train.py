@@ -38,7 +38,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData#, GASPData_noisy_nodes
-from atom_wise_models import Hybrid_1g12_self_edges, Hybrid_1g12_self_edges_transformer_style, Hybrid_1g12_GN, Hybrid_1g12_self_edges_transformer_GN
+from atom_wise_models import GASPformer_BN, GASPformer_GN, GASPformer_IN, GASPformer_IN_stats, GASPformer_PN, GASPformer_GNS, GASPformer_AON
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
@@ -70,18 +70,27 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
     return (dataset[train_mask], dataset[val_mask], i)
 
 def initialize_model(supplied_arg):
-    if  supplied_arg == 'hybrid':
-        print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, traditional")
-        model = Hybrid_1g12_self_edges(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer':
-        print("Using Hybrid_1g12_self_edges with one-hot self-edge encoding, transformer style")
-        model = Hybrid_1g12_self_edges_transformer_style(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'graphnorm':
-        print("Using Hybrid_1g12_self_edges with GraphNorm.")
-        model = Hybrid_1g12_GN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    if supplied_arg == 'transformer':
+        print("Using GASPformer with BatchNorm")
+        model = GASPformer_BN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
     elif supplied_arg == 'transformer_gn':
-        print("Using Hybrid_1g12_self_edges with GraphNorm, transformer style")
-        model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+        print("Using GASPformer with GraphNorm")
+        model = GASPformer_GN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer_in':
+        print("Using GASPformer with InstanceNorm")
+        model = GASPformer_IN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer_in_stats':
+        print("Using GASPformer with InstancehNorm")
+        model = GASPformer_IN_stats(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer_pn':
+        print("Using GASPformer with PairNorm")
+        model = GASPformer_PN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer_gns':
+        print("Using GASPformer with GraphNormSigmoid")
+        model = GASPformer_GNS(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer_aon':
+        print("Using GASPformer with AffineOnlyNorm")
+        model = GASPformer_AON(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
     else:
         raise ValueError("Unknown Model Type:", supplied_arg)
     return model
@@ -330,14 +339,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Training set.")
     parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
-    parser.add_argument("-m", "--model", default="hybrid", choices=["hybrid", "transformer", "graphnorm", "transformer_gn"], help="GNN architecture to train.")
+    parser.add_argument("-m", "--model", default="hybrid", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
+     "transformer_pn", "transformer_gns", "transformer_aon"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.005, help="Adam learning rate.")
     parser.add_argument("-cw", "--class_loss_weight", type=float, nargs=2, default=[1.0, 1.0], help="Loss weight for [negative, positive] classes.")
     parser.add_argument("-ls", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
     parser.add_argument("-hw", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
-    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
     model_id = f'{argstring}_{str(job_start_time)}'

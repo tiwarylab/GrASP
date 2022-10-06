@@ -56,7 +56,7 @@ prepend = str(os.getcwd())
 parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
 parser.add_argument("model_path", help="Path to the model from ./trained_models/")
-parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[6.5, 1], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
 args = parser.parse_args()
 model_name = args.model_path
 model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 60)
