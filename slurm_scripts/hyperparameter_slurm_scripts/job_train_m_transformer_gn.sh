@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -p GPU-shared
-#SBATCH -t 12:00:00
+#SBATCH -t 16:00:00
 #SBATCH --gpus=v100-32:4
 #SBATCH --ntasks-per-node=8
 #SBATCH --job-name="scPDB -m transformer_gn"

@@ -13,4 +13,4 @@ conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/10.2
 conda activate pytorch_env
 sh reset_sasa.sh holo4k_mlig
-python3 infer_test_set.py holo4k_mlig holo4k_mlig/trained_model_m_transformer_gn_s_holo4k_mlig_1661869163.1372495/epoch_49
+python3 infer_test_set.py holo4k_mlig train_full/trained_model_m_transformer_gn_s_train_full_sp_4_5_1664459350.690863/cv_0/epoch_49 -sp 4 5

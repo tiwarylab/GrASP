@@ -12,4 +12,4 @@ module load anaconda3
 conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/10.2
 conda activate pytorch_env
-python3 train.py -m transformer_gn -s coach420_mlig
+python3 train.py -m transformer_gn -s coach420_mlig -sp 4 5
