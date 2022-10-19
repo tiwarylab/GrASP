@@ -38,7 +38,7 @@ from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData#, GASPData_noisy_nodes
-from atom_wise_models import GASPformer_BN, GASPformer_GN, GASPformer_IN, GASPformer_IN_stats, GASPformer_PN, GASPformer_GNS, GASPformer_AON
+from atom_wise_models import GASPformer_BN, GASPformer_GN, GASPformer_IN, GASPformer_IN_stats, GASPformer_PN, GASPformer_GNS, GASPformer_AON, GASPformer_no_norm
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
@@ -91,6 +91,9 @@ def initialize_model(supplied_arg):
     elif supplied_arg == 'transformer_aon':
         print("Using GASPformer with AffineOnlyNorm")
         model = GASPformer_AON(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    elif supplied_arg == 'transformer_no_norm':
+        print("Using GASPformer without norms.")
+        model = GASPformer_no_norm(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
     else:
         raise ValueError("Unknown Model Type:", supplied_arg)
     return model
@@ -339,8 +342,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Training set.")
     parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
-    parser.add_argument("-m", "--model", default="hybrid", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
-     "transformer_pn", "transformer_gns", "transformer_aon"], help="GNN architecture to train.")
+    parser.add_argument("-m", "--model", default="transformer_gn", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
+     "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.005, help="Adam learning rate.")
