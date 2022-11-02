@@ -358,7 +358,7 @@ if __name__ == "__main__":
     from joblib import Parallel, delayed
 
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Dataset to prepare.")
+    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen11", "joined"], help="Dataset to prepare.")
     args = parser.parse_args()
     dataset = args.dataset
  
