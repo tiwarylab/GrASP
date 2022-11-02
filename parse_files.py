@@ -145,8 +145,9 @@ def convert_all_pdb(structure_name, out_directory, addH=True, parse_prot=True):
             os.remove(f'{output_path}/{file}')
 
 
-def load_p2rank_set(file, pdb_dir='unprocessed_pdb'):
-    df = pd.read_csv(file, sep='\s+', names=['path'], index_col=False)
+def load_p2rank_set(file, skiprows=0, pdb_dir='unprocessed_pdb', joined_style=False):
+    df = pd.read_csv(file, sep='\s+', names=['path'], index_col=False, skiprows=skiprows)
+    if joined_style: df['path'] = ['/'.join(file.split('/')[::2]) for file in df['path']] #removing subset directory
     df['path'] = ['benchmark_data_dir/'+f'/{pdb_dir}/'.join(file.split('/')) for file in df['path']]
     
     return df
@@ -405,3 +406,16 @@ if __name__ == "__main__":
         nolig_file = f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig') for i in tqdm(full_df.index))
+
+    elif dataset == "chen11":
+        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/chen11.ds', skiprows=5)
+        nolig_file = f'{prepend}/benchmark_data_dir/chen11/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/chen11') for i in tqdm(full_df.index))
+
+    elif dataset == "joined":
+        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/joined.ds', joined_style=True)
+        nolig_file = f'{prepend}/benchmark_data_dir/joined/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/joined') for i in tqdm(full_df.index))
+        
