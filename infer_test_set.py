@@ -20,56 +20,14 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 
 from GASP_dataset import GASPData
-from atom_wise_models import Hybrid_1g12_self_edges_transformer_GN
+from atom_wise_models import GASPformer_BN, GASPformer_GN, GASPformer_IN, GASPformer_IN_stats, GASPformer_PN, GASPformer_GNS, GASPformer_AON, GASPformer_no_norm
 
-prepend = str(os.getcwd())
 
 ###################################################################################
 ''' Some bits that are surrounded in comments like this can be used to temporarily
     modify the code to use the training set.'''
 ###################################################################################
 
-
-########################## Change Me To Change The Model ##########################
-# model_name = "trained_model_1646775694.0918303/epoch_49" # Standard Model
-# model_name = "trained_model_1647199519.6304853/epoch_49" # Noise Added to Node Features During Training Var = 0.2, Mean = 0, no second loss func
-# model_name = "trained_model_1647218964.5406673/epoch_49" # Noisy Nodes With MSE loss
-# model_name = "trained_model_1648747746.262174/epoch_26" # Mean Self Edges
-
-# model_name = "trained_model_1g12_null_self_edges/epoch_49" # Null Self Edge. Use with Hybrid_1g12_self_edges
-# model = Hybrid_1g12_self_edges(input_dim = 88)
-
-# model_name = "trained_model_1g12_mean_self_edges/epoch_49" # Mean Self Edges. Use with Hybrid_1g12
-# model = Hybrid_1g12(input_dim = 88)
-
-# model_name = "trained_model_1g12_mean_self_edges_ligand_removed_SASA/epoch_49"
-# model = Hybrid_1g12(input_dim = 88)
-
-# model_name= "trained_model_1650260810.482072/epoch_46"   # After site relabeling and OB. Old model's hyperparams this is a Hybrid_1g12_self_edges() model
-# model = Hybrid_1g12_self_edges(input_dim = 88)
-
-# New model trained on freshly merged dataset, and fixed site labeling issues
-# model_name = "trained_model_1652221046.78391/epoch_49"
-# model = Hybrid_1g12_self_edges(input_dim = 88)
-
-# Model trained exclusively on the holo4k split: "holo4k/trained_model_1656153741.4964042/epoch_49"
-parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
-parser.add_argument("model_path", help="Path to the model from ./trained_models/")
-parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
-args = parser.parse_args()
-model_name = args.model_path
-model = Hybrid_1g12_self_edges_transformer_GN(input_dim = 60)
-
-model_path = prepend + "/trained_models/" + model_name
-set_to_use = args.test_set
-
-label_midpoint, label_slope = args.sigmoid_params
-
-# model = Two_Track_GIN_GAT_Noisy_Nodes(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
-# model = Two_Track_GIN_GAT_fixed_bn(input_dim=88, output_dim=2, drop_prob=0.1, GAT_aggr="mean", GIN_aggr="add") 
-
-###################################################################################
 
 def k_fold(dataset, path, fold_number):
     val_names    = np.loadtxt(prepend + "/splits/test_ids_fold"  + str(fold_number), dtype='str')
@@ -99,6 +57,55 @@ def distance_sigmoid(data, midpoint, slope):
     sigmoid = torch.sigmoid(x)
     
     return sigmoid
+
+def initialize_model(supplied_arg):
+    if supplied_arg == 'transformer':
+        print("Using GASPformer with BatchNorm")
+        model = GASPformer_BN(input_dim = 60, GAT_heads=4)
+    elif supplied_arg == 'transformer_gn':
+        print("Using GASPformer with GraphNorm")
+        model = GASPformer_GN(input_dim = 60, GAT_heads=4)
+    elif supplied_arg == 'transformer_in':
+        print("Using GASPformer with InstanceNorm")
+        model = GASPformer_IN(input_dim = 60, GAT_heads=4)
+    elif supplied_arg == 'transformer_in_stats':
+        print("Using GASPformer with InstancehNorm")
+        model = GASPformer_IN_stats(input_dim = 60, GAT_heads=4)
+    elif supplied_arg == 'transformer_pn':
+        print("Using GASPformer with PairNorm")
+        model = GASPformer_PN(input_dim = 60, GAT_heads=4)
+    elif supplied_arg == 'transformer_gns':
+        print("Using GASPformer with GraphNormSigmoid")
+        model = GASPformer_GNS(input_dim = 60, GAT_heads=4)
+    elif supplied_arg == 'transformer_aon':
+        print("Using GASPformer with AffineOnlyNorm")
+        model = GASPformer_AON(input_dim = 60, GAT_heads=4)
+    elif supplied_arg == 'transformer_no_norm':
+        print("Using GASPformer without norms.")
+        model = GASPformer_no_norm(input_dim = 60, GAT_heads=4)
+    else:
+        raise ValueError("Unknown Model Type:", supplied_arg)
+    return model
+
+prepend = str(os.getcwd())
+
+parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
+parser.add_argument("model_path", help="Path to the model from ./trained_models/")
+parser.add_argument("-m", "--model", default="transformer_gn", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
+     "transformer_pn", "transformer_gns", "transformer_aon"], help="GNN architecture to test.")
+parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+args = parser.parse_args()
+model_name = args.model_path
+model = initialize_model(args.model)
+
+model_path = prepend + "/trained_models/" + model_name
+set_to_use = args.test_set
+
+label_midpoint, label_slope = args.sigmoid_params
+
+###################################################################################
+
 
 
 # Other Parameters
