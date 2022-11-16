@@ -19,7 +19,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch_geometric.nn import DataParallel
 
-from torch_geometric.nn import GATv2Conv
+from torch_geometric.nn import GATConv, GATv2Conv
 from torch_geometric.loader import DataLoader, DataListLoader
 from torch_geometric.data import Data, Dataset
 from torch_geometric.nn.norm import BatchNorm
@@ -39,6 +39,8 @@ from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData#, GASPData_noisy_nodes
 from atom_wise_models import GASPformer_BN, GASPformer_GN, GASPformer_IN, GASPformer_IN_stats, GASPformer_PN, GASPformer_GNS, GASPformer_AON, GASPformer_no_norm
+from simple_models import GAT_model
+
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
@@ -69,33 +71,47 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
 
     return (dataset[train_mask], dataset[val_mask], i)
 
-def initialize_model(supplied_arg):
-    if supplied_arg == 'transformer':
+def initialize_model(parser_args):
+    model_name = parser_args.model
+    weight_groups = parser_args.weight_groups
+    group_layers = parser_args.group_layers
+
+    if model_name == 'transformer':
         print("Using GASPformer with BatchNorm")
         model = GASPformer_BN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer_gn':
+    elif model_name == 'transformer_gn':
         print("Using GASPformer with GraphNorm")
         model = GASPformer_GN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer_in':
+    elif model_name == 'transformer_in':
         print("Using GASPformer with InstanceNorm")
         model = GASPformer_IN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer_in_stats':
+    elif model_name == 'transformer_in_stats':
         print("Using GASPformer with InstancehNorm")
         model = GASPformer_IN_stats(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer_pn':
+    elif model_name == 'transformer_pn':
         print("Using GASPformer with PairNorm")
         model = GASPformer_PN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer_gns':
+    elif model_name == 'transformer_gns':
         print("Using GASPformer with GraphNormSigmoid")
         model = GASPformer_GNS(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer_aon':
+    elif model_name == 'transformer_aon':
         print("Using GASPformer with AffineOnlyNorm")
         model = GASPformer_AON(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif supplied_arg == 'transformer_no_norm':
+    elif model_name == 'transformer_no_norm':
         print("Using GASPformer without norms.")
         model = GASPformer_no_norm(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
+    elif model_name == 'gat':
+        print("Using GAT")
+        model = GAT_model(input_dim=60, noise_variance=node_noise_variance,
+         GAT_heads=4, GAT_style=GATConv, weight_groups=weight_groups,
+          group_layers=group_layers)
+    elif model_name == 'gatv2':
+        print("Using GATv2")
+        model = GAT_model(input_dim=60, noise_variance=node_noise_variance,
+         GAT_heads=4, GAT_style=GATv2Conv, weight_groups=weight_groups,
+          group_layers=group_layers)
     else:
-        raise ValueError("Unknown Model Type:", supplied_arg)
+        raise ValueError("Unknown Model Type:", model_name)
     return model
    
 
@@ -111,8 +127,8 @@ def main(node_noise_variance : float, training_split='cv'):
     num_epochs = args.num_epochs
     batch_size = args.batch_size
     learning_rate = args.learning_rate
-    class_loss_weight = args.class_loss_weight#[0.8,1.2]
-    label_smoothing = args.label_smoothing#0.2
+    class_loss_weight = args.class_loss_weight
+    label_smoothing = args.label_smoothing
     head_loss_weight = args.head_loss_weight
     label_midpoint, label_slope = args.sigmoid_params
     
@@ -123,47 +139,54 @@ def main(node_noise_variance : float, training_split='cv'):
     loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing, weight=torch.FloatTensor(class_loss_weight).to(device))
     
     head_loss_weight = torch.tensor(head_loss_weight).to(device)
-    
-    data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
-    
-    do_validation = False
-    if training_split == 'cv' or training_split == 'cv_full':
+
+    if training_split == 'chen':
         do_validation = True
-        val_paths = []
-        train_paths = []
-        
-        for fold_number in range(1 if training_split == 'cv' else 10):
-            val_paths.append(prepend + "/splits/test_ids_fold"  + str(fold_number))
-            train_paths.append(prepend + "/splits/train_ids_fold" + str(fold_number))
-        data_points = zip(train_paths,val_paths)
+        train_set = GASPData(f'{prepend}/benchmark_data_dir/chen11', num_cpus, cutoff=5)
+        val_set = GASPData(f'{prepend}/benchmark_data_dir/joined', num_cpus, cutoff=5)
 
-        gen = (k_fold(data_set, train_path, val_path, i) for i, (train_path, val_path) in enumerate(data_points))
-
-    elif training_split == 'train_full':
-        do_validation = False
-        gen = zip([data_set], [0], [0])
-
+        gen = zip([train_set], [val_set], [0])
+    
     else:
-        train_prefix = '/splits/train_ids_'
-        if training_split == 'coach420':
-            train_names = np.loadtxt(prepend + f'{train_prefix}coach420_uniprot', dtype=str)
-        elif training_split == 'coach420_mlig':
-            train_names = np.loadtxt(prepend + f'{train_prefix}coach420(mlig)_uniprot', dtype=str)
-        elif training_split == 'holo4k':
-            train_names = np.loadtxt(prepend + f'{train_prefix}holo4k_uniprot', dtype=str)
-        elif training_split == 'holo4k_mlig':
-            train_names = np.loadtxt(prepend + f'{train_prefix}holo4k(mlig)_uniprot', dtype=str)
-        train_indices = []
-        for idx, name in enumerate(data_set.raw_file_names):
-            if name.split('_')[0] in train_names:
-                train_indices.append(idx)
-        train_mask = torch.zeros(len(data_set), dtype=torch.bool)
-        train_mask[train_indices] = 1
-        gen = zip([data_set[train_mask]],[data_set[torch.zeros(len(data_set),dtype=torch.bool)]],[0])
-        # print(gen)
+        data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
+        
+        do_validation = False
+        if training_split == 'cv' or training_split == 'cv_full':
+            do_validation = True
+            val_paths = []
+            train_paths = []
+            
+            for fold_number in range(1 if training_split == 'cv' else 10):
+                val_paths.append(prepend + "/splits/test_ids_fold"  + str(fold_number))
+                train_paths.append(prepend + "/splits/train_ids_fold" + str(fold_number))
+            data_points = zip(train_paths,val_paths)
+
+            gen = (k_fold(data_set, train_path, val_path, i) for i, (train_path, val_path) in enumerate(data_points))
+
+        elif training_split == 'train_full':
+            do_validation = False
+            gen = zip([data_set], [0], [0])
+
+        else:
+            train_prefix = '/splits/train_ids_'
+            if training_split == 'coach420':
+                train_names = np.loadtxt(prepend + f'{train_prefix}coach420_uniprot', dtype=str)
+            elif training_split == 'coach420_mlig':
+                train_names = np.loadtxt(prepend + f'{train_prefix}coach420(mlig)_uniprot', dtype=str)
+            elif training_split == 'holo4k':
+                train_names = np.loadtxt(prepend + f'{train_prefix}holo4k_uniprot', dtype=str)
+            elif training_split == 'holo4k_mlig':
+                train_names = np.loadtxt(prepend + f'{train_prefix}holo4k(mlig)_uniprot', dtype=str)
+            train_indices = []
+            for idx, name in enumerate(data_set.raw_file_names):
+                if name.split('_')[0] in train_names:
+                    train_indices.append(idx)
+            train_mask = torch.zeros(len(data_set), dtype=torch.bool)
+            train_mask[train_indices] = 1
+            gen = zip([data_set[train_mask]],[data_set[torch.zeros(len(data_set),dtype=torch.bool)]],[0])
 
     for train_set, val_set, cv_iteration in gen:
-        model = initialize_model(args.model)
+        model = initialize_model(args)
         model =  DataParallel(model)
         model.to(device)
         
@@ -340,10 +363,10 @@ def main(node_noise_variance : float, training_split='cv'):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Training set.")
+    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen"], help="Training set.")
     parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
     parser.add_argument("-m", "--model", default="transformer_gn", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
-     "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm"], help="GNN architecture to train.")
+     "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.005, help="Adam learning rate.")
@@ -351,6 +374,8 @@ if __name__ == "__main__":
     parser.add_argument("-ls", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
     parser.add_argument("-hw", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
     parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+    parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
+    parser.add_argument("-gl", "--group_layers", type=int, default=4, help="Number of layers per weight-sharing group.")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
     model_id = f'{argstring}_{str(job_start_time)}'
