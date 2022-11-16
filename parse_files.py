@@ -16,7 +16,7 @@ import re
 import argparse
 
 allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
-allowed_elements = ['C','H', 'N', 'O', 'S']
+allowed_elements = ['C', 'N', 'O', 'S']
 res_selection_str = " or ".join([f'resname {x}' for x in allowed_residues])
 atom_selection_str = " or ".join([f'element {x}' for x in allowed_elements]) # ignore post-translational modification
 exclusion_list = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
@@ -131,7 +131,7 @@ def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format
     if parse_prot:
         if ob_input != output_mol2_path:
             os.remove(ob_input) # cleaning temp file
-        univ = mda.Universe(output_mol2_path)
+        univ = mda.Universe(output_mol2_path) 
         univ = cleanup_residues(univ)
         mda.coordinates.writer(output_mol2_path).write(univ.atoms)
 
@@ -256,7 +256,6 @@ def process_train_p2rank(file, output_dir):
     except AssertionError as e: 
         print("Failed to find ligand in", file)
     except Exception as e:
-        # print("ERROR", file, e)
         raise e
 
 def process_train_openbabel(file, output_dir):
@@ -265,8 +264,6 @@ def process_train_openbabel(file, output_dir):
         structure_name = file
         if not os.path.isdir(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name)): 
             os.makedirs(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name))
-        # print(os.path.join(prepend, '/scPDB_data_dir/unprocessed_mol2/',file,'/protein.mol2'))
-        # print(prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2')
         convert_to_mol2(prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/", addH=True, in_format='mol2')
         
         for file_path in glob(prepend + '/scPDB_data_dir/unprocessed_mol2/' + file + '/*'):
@@ -280,28 +277,29 @@ def process_train_openbabel(file, output_dir):
     except AssertionError as e: 
         print("Failed to find ligand in", file)
     except Exception as e:
-        # print("ERROR", file, e)
         raise e
         
 
 def process_train_classic(structure_name, output_dir, unprocessed_dir = 'unprocessed_scPDB_mol2'):
-    # print("Processing", structure_name, flush=True)
     try:
         process_system(os.path.join('./',output_dir, unprocessed_dir, structure_name), save_directory='./' + output_dir)
     except AssertionError as e: 
         print("Failed to find ligand in", structure_name)
     except Exception as e:
-        # print(e)
         raise e
         
 
-def process_p2rank_set(path, data_dir="benchmark_data_dir"):
+def process_p2rank_set(path, data_dir="benchmark_data_dir", chen_fix=False):
+    print(f'\n PARSING {path} \n', flush=True)
     try:
         prepend = os.getcwd()
-        structure_name = path.split('/')[-1].split('.')[0]
+        structure_name = '.'.join(path.split('/')[-1].split('.')[:-1])
         mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
         convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, out_name='protein', parse_prot=True)
-        shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
+        shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extractio
+        if chen_fix:
+            univ = mda.Universe(f'{mol2_dir}{structure_name}/system.pdb')
+            mda.coordinates.writer(f'{mol2_dir}{structure_name}/system.pdb').write(univ.atoms)
         extract_residues_p2rank(f'{mol2_dir}{structure_name}') # parsing pdb avoids selection issues
 
         n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}')])
@@ -319,7 +317,6 @@ def process_p2rank_set(path, data_dir="benchmark_data_dir"):
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
     except Exception as e:  
-        # print(e)
         raise e
 
 
@@ -347,7 +344,6 @@ def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir"):
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
     except Exception as e:  
-        # print(e)
         raise e
 
 
@@ -411,11 +407,13 @@ if __name__ == "__main__":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/chen11.ds', skiprows=5)
         nolig_file = f'{prepend}/benchmark_data_dir/chen11/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/chen11') for i in tqdm(full_df.index))
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/chen11', chen_fix=True) for i in tqdm(full_df.index))
 
     elif dataset == "joined":
-        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/joined.ds', joined_style=True)
+        print('Cleaning alternate positions...')
+        clean_alternate_positions(f'{prepend}/benchmark_data_dir/joined/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/joined/cleaned_pdb/')
+        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/joined.ds', pdb_dir='cleaned_pdb', joined_style=True)
         nolig_file = f'{prepend}/benchmark_data_dir/joined/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/joined') for i in tqdm(full_df.index))
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/joined', chen_fix=True) for i in tqdm(full_df.index))
         
