@@ -11,6 +11,7 @@ import torch.nn.functional as F
 
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import DataParallel
+from torch_geometric.nn import GATConv, GATv2Conv
 
 from sklearn.preprocessing import label_binarize
 from scipy import interp
@@ -21,6 +22,7 @@ import torch
 
 from GASP_dataset import GASPData
 from atom_wise_models import GASPformer_BN, GASPformer_GN, GASPformer_IN, GASPformer_IN_stats, GASPformer_PN, GASPformer_GNS, GASPformer_AON, GASPformer_no_norm
+from simple_models import GAT_model
 
 
 ###################################################################################
@@ -58,33 +60,47 @@ def distance_sigmoid(data, midpoint, slope):
     
     return sigmoid
 
-def initialize_model(supplied_arg):
-    if supplied_arg == 'transformer':
+def initialize_model(parser_args):
+    model_name = parser_args.model
+    weight_groups = parser_args.weight_groups
+    group_layers = parser_args.group_layers
+
+    if model_name == 'transformer':
         print("Using GASPformer with BatchNorm")
-        model = GASPformer_BN(input_dim = 60, GAT_heads=4)
-    elif supplied_arg == 'transformer_gn':
+        model = GASPformer_BN(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'transformer_gn':
         print("Using GASPformer with GraphNorm")
-        model = GASPformer_GN(input_dim = 60, GAT_heads=4)
-    elif supplied_arg == 'transformer_in':
+        model = GASPformer_GN(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'transformer_in':
         print("Using GASPformer with InstanceNorm")
-        model = GASPformer_IN(input_dim = 60, GAT_heads=4)
-    elif supplied_arg == 'transformer_in_stats':
+        model = GASPformer_IN(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'transformer_in_stats':
         print("Using GASPformer with InstancehNorm")
-        model = GASPformer_IN_stats(input_dim = 60, GAT_heads=4)
-    elif supplied_arg == 'transformer_pn':
+        model = GASPformer_IN_stats(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'transformer_pn':
         print("Using GASPformer with PairNorm")
-        model = GASPformer_PN(input_dim = 60, GAT_heads=4)
-    elif supplied_arg == 'transformer_gns':
+        model = GASPformer_PN(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'transformer_gns':
         print("Using GASPformer with GraphNormSigmoid")
-        model = GASPformer_GNS(input_dim = 60, GAT_heads=4)
-    elif supplied_arg == 'transformer_aon':
+        model = GASPformer_GNS(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'transformer_aon':
         print("Using GASPformer with AffineOnlyNorm")
-        model = GASPformer_AON(input_dim = 60, GAT_heads=4)
-    elif supplied_arg == 'transformer_no_norm':
+        model = GASPformer_AON(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'transformer_no_norm':
         print("Using GASPformer without norms.")
-        model = GASPformer_no_norm(input_dim = 60, GAT_heads=4)
+        model = GASPformer_no_norm(input_dim = 60, noise_variance=0, GAT_heads=4)
+    elif model_name == 'gat':
+        print("Using GAT")
+        model = GAT_model(input_dim=60, noise_variance=0,
+         GAT_heads=4, GAT_style=GATConv, weight_groups=weight_groups,
+          group_layers=group_layers)
+    elif model_name == 'gatv2':
+        print("Using GATv2")
+        model = GAT_model(input_dim=60, noise_variance=0,
+         GAT_heads=4, GAT_style=GATv2Conv, weight_groups=weight_groups,
+          group_layers=group_layers)
     else:
-        raise ValueError("Unknown Model Type:", supplied_arg)
+        raise ValueError("Unknown Model Type:", model_name)
     return model
 
 prepend = str(os.getcwd())
@@ -93,11 +109,13 @@ parser = argparse.ArgumentParser(description="Evaluate site prediction on test s
 parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
 parser.add_argument("model_path", help="Path to the model from ./trained_models/")
 parser.add_argument("-m", "--model", default="transformer_gn", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
-     "transformer_pn", "transformer_gns", "transformer_aon"], help="GNN architecture to test.")
+     "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to test.")
 parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
+parser.add_argument("-gl", "--group_layers", type=int, default=4, help="Number of layers per weight-sharing group.")
 args = parser.parse_args()
 model_name = args.model_path
-model = initialize_model(args.model)
+model = initialize_model(args)
 
 model_path = prepend + "/trained_models/" + model_name
 set_to_use = args.test_set
@@ -162,10 +180,6 @@ else:
         print("Initializing holo4k Mlig Set")    
         path_to_dataset = prepend + '/benchmark_data_dir/holo4k_mlig'
         metric_dir = '/test_metrics/holo4k_mlig'
-    elif set_to_use == 'sc6k':
-        print("Initializing sc6k Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/sc6k'
-        metric_dir = '/test_metrics/sc6k'
     else:
         raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
     data_set = GASPData(path_to_dataset, num_cpus, cutoff=5)
