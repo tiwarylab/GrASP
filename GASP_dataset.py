@@ -7,13 +7,14 @@ from joblib import Parallel, delayed
 import torch
 # from torch_geometric.utils import add_self_loops
 from torch_geometric.data import Data, Dataset
-from torch_geometric.utils import from_scipy_sparse_matrix
+from torch_geometric.utils import from_scipy_sparse_matrix, k_hop_subgraph
 
 class GASPData(Dataset):
-    def __init__(self, root, num_cpus, cutoff=5, force_process=False):
+    def __init__(self, root, num_cpus, cutoff=5, force_process=False, surface_subgraph_hops=None):
         self.cutoff=cutoff
         self.force_process=force_process
         self.num_cpus = num_cpus
+        self.hops = surface_subgraph_hops
         
         if not os.path.isdir(root + '/processed'):
             os.mkdir(root + '/processed')
@@ -71,8 +72,17 @@ class GASPData(Dataset):
         y = torch.FloatTensor(distance_to_ligand)
         # print("0.6")
         # print("TIME TO GET OBJ: {}".format(time.time()- start))
-        to_save = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
-        torch.save(to_save, os.path.join(processed_dir, "data_{}.pt".format(i))) 
+        graph = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
+        graph.atom_index = torch.arange(graph.num_nodes)
+        sasa = torch.FloatTensor(arr['SASA_array'])
+        graph.surface_mask = sasa > 1e-4
+
+        if self.hops is not None:
+            # inducing the subgraph k hops away from the surface
+            sub_nodes, _, _, _ = k_hop_subgraph(graph.atom_index[graph.surf_mask], self.hops, graph.edge_index)
+            graph = graph.subgraph(sub_nodes)
+
+        torch.save(graph, os.path.join(processed_dir, "data_{}.pt".format(i))) 
 
     def process(self):
         # print(len(self.raw_file_names), len(self.processed_file_names))

@@ -122,6 +122,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
 
     # Feature Matrix
     feature_array = []  # This will contain all of the features for a given molecule
+    SASA_array = []
 
     try:
         rdkit_protein_w_H.UpdatePropertyCache(strict=False)
@@ -177,6 +178,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
             # Warning, any change to SAS's index must be reflected in infer_test_set.py
             # Add feature vector with                  0-27               28-31        32-40       41               42                  43               44-45        46-47      48      49-50        51-52    53-54    55-56     57-58 (59  is degree)
             feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
+            SASA_array.append(SAS[atom.index])
         except Exception as e:
             print("Error while feautrizing atom {} for file {}.{}".format(atom.id, path_to_files,e), flush=True)
             return -2
@@ -200,7 +202,9 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # Creating edge_attributes dictionary. Only holds bond types, weights are stored in trimmed
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
 
-    np.savez_compressed(save_directory + '/raw/' + structure_name, adj_matrix = trimmed, feature_matrix = feature_array, ligand_distance_array = distance_to_ligand, edge_attributes = edge_attributes)
+    np.savez_compressed(save_directory + '/raw/' + structure_name, adj_matrix = trimmed,
+     feature_matrix = feature_array, ligand_distance_array = distance_to_ligand,
+      edge_attributes = edge_attributes, SASA_array = SASA_array)
     protein.atoms.write(save_directory + '/mol2/' + str(structure_name) +'.mol2')
 
     return None

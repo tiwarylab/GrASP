@@ -131,6 +131,7 @@ def main(node_noise_variance : float, training_split='cv'):
     label_smoothing = args.label_smoothing
     head_loss_weight = args.head_loss_weight
     label_midpoint, label_slope = args.sigmoid_params
+    k_hops = args.k_hops
     
     
     num_cpus = 8
@@ -142,13 +143,13 @@ def main(node_noise_variance : float, training_split='cv'):
 
     if training_split == 'chen':
         do_validation = True
-        train_set = GASPData(f'{prepend}/benchmark_data_dir/chen11', num_cpus, cutoff=5)
-        val_set = GASPData(f'{prepend}/benchmark_data_dir/joined', num_cpus, cutoff=5)
+        train_set = GASPData(f'{prepend}/benchmark_data_dir/chen11', num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+        val_set = GASPData(f'{prepend}/benchmark_data_dir/joined', num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
 
         gen = zip([train_set], [val_set], [0])
     
     else:
-        data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5)
+        data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
         
         do_validation = False
         if training_split == 'cv' or training_split == 'cv_full':
@@ -233,9 +234,18 @@ def main(node_noise_variance : float, training_split='cv'):
                     data.y = torch.stack([1-data.y, data.y], dim=1)
                 labels  = torch.cat([data.y.clone().detach() for data in batch]).cpu().numpy()
                 y       = torch.cat([data.y.to(device) for data in batch])
+                surf_mask = torch.cat([data.surf_mask.to(device) for data in batch])
             
                 optimizer.zero_grad(set_to_none=True)
                 out, out_recon = model.forward(batch)
+
+                if surface_only:
+                    labels = labels[surf_mask]
+                    y = y[surf_mask]
+                    unperturbed_x = unperturbed_x[surf_mask]
+
+                    out = out[surf_mask]
+                    recon = recon[surf_mask]
 
                 weighted_xent_l, mse_l = head_loss_weight[0] * loss_fn(out,y), head_loss_weight[1] * F.mse_loss(out_recon, unperturbed_x)           
 
@@ -310,11 +320,19 @@ def main(node_noise_variance : float, training_split='cv'):
                             data.y = torch.stack([1-data.y, data.y], dim=1)
                         labels  = torch.cat([data.y.clone().detach() for data in batch]).cpu().numpy()
                         y       = torch.cat([data.y.to(device) for data in batch])
+                        surf_mask = torch.cat([data.surf_mask.to(device) for data in batch])
                     
                         optimizer.zero_grad(set_to_none=True)
 
                         out, _ = model.forward(batch)
                         # loss = F.cross_entropy(out, batch.y)
+
+                        if surface_only:
+                            labels = labels[surf_mask]
+                            y = y[surf_mask]
+
+                            out = out[surf_mask]
+
                         loss = loss_fn(out,y)
                         probs = out.softmax(dim=-1).detach().cpu().numpy()
                         preds = np.argmax(probs, axis=1)
@@ -376,12 +394,15 @@ if __name__ == "__main__":
     parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
     parser.add_argument("-gl", "--group_layers", type=int, default=4, help="Number of layers per weight-sharing group.")
+    parser.add_argument("-so", "--surface_only_prediction", action="store_true", help="Option to only predict on surface atoms.")
+    parser.add_argument("-kh", "--k_hops", type=int, default=None, help="Number of hops for constructing a surface graph.")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
     model_id = f'{argstring}_{str(job_start_time)}'
 
     node_noise_variance = args.node_noise_variance
     training_split = args.training_split
+    surface_only = args.surface_only_prediction
 
     print("Training with noise with variance", node_noise_variance, "and mean 0 added to nodes.")
     
