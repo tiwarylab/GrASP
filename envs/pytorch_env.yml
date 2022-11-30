@@ -2,7 +2,6 @@ name: pytorch_env
 channels:
   - pyg
   - pytorch
-  - nvidia
   - conda-forge
   - defaults
 dependencies:
@@ -29,38 +28,7 @@ dependencies:
   - cftime=1.5.1.1=py39hce1f21e_0
   - charset-normalizer=2.0.4=pyhd3eb1b0_0
   - cryptography=37.0.1=py39h9ce1e76_0
-  - cuda=11.6.2=0
-  - cuda-cccl=11.6.55=hf6102b2_0
-  - cuda-command-line-tools=11.6.2=0
-  - cuda-compiler=11.6.2=0
-  - cuda-cudart=11.6.55=he381448_0
-  - cuda-cudart-dev=11.6.55=h42ad0f4_0
-  - cuda-cuobjdump=11.6.124=h2eeebcb_0
-  - cuda-cupti=11.6.124=h86345e5_0
-  - cuda-cuxxfilt=11.6.124=hecbf4f6_0
-  - cuda-driver-dev=11.6.55=0
-  - cuda-gdb=11.8.86=0
-  - cuda-libraries=11.6.2=0
-  - cuda-libraries-dev=11.6.2=0
-  - cuda-memcheck=11.8.86=0
-  - cuda-nsight=11.8.86=0
-  - cuda-nsight-compute=11.8.0=0
-  - cuda-nvcc=11.6.124=hbba6d2d_0
-  - cuda-nvdisasm=11.8.86=0
-  - cuda-nvml-dev=11.6.55=haa9ef22_0
-  - cuda-nvprof=11.8.87=0
-  - cuda-nvprune=11.6.124=he22ec0a_0
-  - cuda-nvrtc=11.6.124=h020bade_0
-  - cuda-nvrtc-dev=11.6.124=h249d397_0
-  - cuda-nvtx=11.6.124=h0630a44_0
-  - cuda-nvvp=11.8.87=0
-  - cuda-runtime=11.6.2=0
-  - cuda-samples=11.6.101=h8efea70_0
-  - cuda-sanitizer-api=11.8.86=0
-  - cuda-toolkit=11.6.2=0
-  - cuda-tools=11.6.2=0
-  - cuda-visual-tools=11.6.2=0
-  - cudatoolkit=10.2.89=hfd86e86_1
+  - cudatoolkit=11.6.0=hecad31d_10
   - curl=7.82.0=h7f8727e_0
   - cycler=0.11.0=pyhd3eb1b0_0
   - cython=0.29.28=py39h295c915_0
@@ -75,11 +43,10 @@ dependencies:
   - fontconfig=2.13.1=h6c09931_0
   - fonttools=4.25.0=pyhd3eb1b0_0
   - freetype=2.11.0=h70c0345_0
-  - gds-tools=1.4.0.31=0
   - giflib=5.2.1=h7b6447c_0
   - glib=2.69.1=h4ff587b_1
-  - gmp=6.2.1=h295c915_3
-  - gnutls=3.6.15=he1e5248_0
+  - gmp=6.2.1=h58526e2_0
+  - gnutls=3.6.13=h85f3911_1
   - griddataformats=0.7.0=pyhd8ed1ab_0
   - grpcio=1.42.0=py39hce63b2e_0
   - gsd=2.5.1=py39hd257fcd_1
@@ -105,24 +72,12 @@ dependencies:
   - jupyterlab_widgets=3.0.3=pyhd8ed1ab_0
   - kiwisolver=1.4.2=py39h295c915_0
   - krb5=1.19.2=hac12032_0
-  - lame=3.100=h7b6447c_0
+  - lame=3.100=h7f98852_1001
   - lcms2=2.12=h3be6417_0
   - ld_impl_linux-64=2.38=h1181459_1
   - libblas=3.9.0=12_linux64_mkl
   - libcblas=3.9.0=12_linux64_mkl
-  - libcublas=11.11.3.6=0
-  - libcublas-dev=11.11.3.6=0
-  - libcufft=10.9.0.58=0
-  - libcufft-dev=10.9.0.58=0
-  - libcufile=1.4.0.31=0
-  - libcufile-dev=1.4.0.31=0
-  - libcurand=10.3.0.86=0
-  - libcurand-dev=10.3.0.86=0
   - libcurl=7.82.0=h0b77cf5_0
-  - libcusolver=11.4.1.48=0
-  - libcusolver-dev=11.4.1.48=0
-  - libcusparse=11.7.5.86=0
-  - libcusparse-dev=11.7.5.86=0
   - libedit=3.1.20210910=h7f8727e_0
   - libev=4.33=h7f8727e_1
   - libffi=3.3=he6710b0_2
@@ -130,22 +85,15 @@ dependencies:
   - libgfortran-ng=7.5.0=ha8ba4b0_17
   - libgfortran4=7.5.0=ha8ba4b0_17
   - libgomp=11.2.0=h1234567_1
-  - libiconv=1.16=h7f8727e_2
-  - libidn2=2.3.2=h7f8727e_0
+  - libiconv=1.17=h166bdaf_0
   - libnetcdf=4.6.1=h2053bdc_4
   - libnghttp2=1.46.0=hce63b2e_0
-  - libnpp=11.8.0.86=0
-  - libnpp-dev=11.8.0.86=0
-  - libnvjpeg=11.9.0.86=0
-  - libnvjpeg-dev=11.9.0.86=0
   - libpng=1.6.37=hbc83047_0
   - libprotobuf=3.19.1=h4ff587b_0
   - libsodium=1.0.18=h36c2ea0_1
   - libssh2=1.10.0=h8f2d780_0
   - libstdcxx-ng=11.2.0=h1234567_1
-  - libtasn1=4.16.0=h27cfd23_0
   - libtiff=4.2.0=h85742a9_0
-  - libunistring=0.9.10=h27cfd23_0
   - libuuid=1.0.3=h7f8727e_2
   - libuv=1.40.0=h7b6447c_0
   - libwebp=1.2.2=h55f646e_0
@@ -175,13 +123,12 @@ dependencies:
   - ncurses=6.3=h7f8727e_2
   - nest-asyncio=1.5.5=pyhd8ed1ab_0
   - netcdf4=1.5.7=py39he70f4c8_0
-  - nettle=3.7.3=hbbd107a_1
+  - nettle=3.6=he412f7d_0
   - networkx=2.7.1=pyhd3eb1b0_0
-  - nsight-compute=2022.3.0.22=0
   - numexpr=2.8.1=py39h6abb31d_0
   - numpy=1.22.3=py39he7a7128_0
   - numpy-base=1.22.3=py39hf524024_0
-  - openh264=2.1.1=h4ff587b_0
+  - openh264=2.1.1=h780b84a_0
   - openssl=1.1.1s=h7f8727e_0
   - packaging=21.3=pyhd3eb1b0_0
   - pandas=1.4.2=py39h295c915_0
@@ -198,7 +145,7 @@ dependencies:
   - ptyprocess=0.7.0=pyhd3deb0d_0
   - pure_eval=0.2.2=pyhd8ed1ab_0
   - pycparser=2.21=pyhd3eb1b0_0
-  - pyg=2.1.0=py39_torch_1.13.0_cu116
+  - pyg=2.1.0=py39_torch_1.12.0_cu116
   - pygments=2.13.0=pyhd8ed1ab_0
   - pyopenssl=22.0.0=pyhd3eb1b0_0
   - pyparsing=3.0.4=pyhd3eb1b0_0
@@ -211,12 +158,11 @@ dependencies:
   - python-fastjsonschema=2.16.2=pyhd8ed1ab_0
   - python-louvain=0.15=pyhd3eb1b0_0
   - python_abi=3.9=2_cp39
-  - pytorch=1.13.0=py3.9_cuda11.6_cudnn8.3.2_0
-  - pytorch-cluster=1.6.0=py39_torch_1.13.0_cu116
-  - pytorch-cuda=11.6=h867d48c_0
+  - pytorch=1.12.1=py3.9_cuda11.6_cudnn8.3.2_0
+  - pytorch-cluster=1.6.0=py39_torch_1.12.0_cu116
   - pytorch-mutex=1.0=cuda
-  - pytorch-scatter=2.0.9=py39_torch_1.13.0_cu116
-  - pytorch-sparse=0.6.15=py39_torch_1.13.0_cu116
+  - pytorch-scatter=2.0.9=py39_torch_1.12.0_cu116
+  - pytorch-sparse=0.6.15=py39_torch_1.12.0_cu116
   - pytz=2022.1=py39h06a4308_0
   - pyyaml=6.0=py39h7f8727e_1
   - pyzmq=19.0.2=py39hb69f2a1_2
@@ -235,8 +181,8 @@ dependencies:
   - tensorboard=2.0.0=pyhb38c66f_1
   - threadpoolctl=2.2.0=pyh0d69192_0
   - tk=8.6.11=h1ccaba5_0
-  - torchaudio=0.13.0=py39_cu116
-  - torchvision=0.14.0=py39_cu116
+  - torchaudio=0.12.1=py39_cu116
+  - torchvision=0.13.1=py39_cu116
   - tornado=6.1=py39h27cfd23_0
   - tqdm=4.64.0=py39h06a4308_0
   - traitlets=5.4.0=pyhd8ed1ab_0
