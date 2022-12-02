@@ -113,12 +113,16 @@ parser.add_argument("-m", "--model", default="transformer_gn", choices=["transfo
 parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
 parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
 parser.add_argument("-gl", "--group_layers", type=int, default=4, help="Number of layers per weight-sharing group.")
+parser.add_argument("-so", "--surface_only_prediction", action="store_true", help="Option to only predict on surface atoms.")
+parser.add_argument("-kh", "--k_hops", type=int, default=None, help="Number of hops for constructing a surface graph.")
 args = parser.parse_args()
 model_name = args.model_path
 model = initialize_model(args)
 
 model_path = prepend + "/trained_models/" + model_name
 set_to_use = args.test_set
+surface_only = args.surface_only_prediction
+k_hops = args.k_hops
 
 label_midpoint, label_slope = args.sigmoid_params
 
@@ -159,7 +163,7 @@ if set_to_use == 'val':
     path_to_dataset = prepend + '/scPDB_data_dir'
     metric_dir = '/test_metrics/validation'
 
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5)
+    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
     train_mask, val_mask = k_fold(data_set, prepend, 0) 
     val_set     = data_set[val_mask]
     val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
@@ -182,7 +186,7 @@ else:
         metric_dir = '/test_metrics/holo4k_mlig'
     else:
         raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5)
+    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
     data_set.process()
     val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
@@ -197,6 +201,7 @@ all_labels = torch.Tensor([])
 prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
 label_path = prepend + metric_dir + '/labels/' + model_name + '/'
 surface_path = prepend + metric_dir + '/SASAs/'
+index_path = prepend + metric_dir + '/indices/' + model_name + '/'
 
 if not os.path.isdir(prob_path):
     os.makedirs(prob_path)
@@ -204,6 +209,8 @@ if not os.path.isdir(label_path):
     os.makedirs(label_path)
 if not os.path.isdir(surface_path):
     os.makedirs(surface_path)
+if not os.path.isdir(index_path):
+    os.makedirs(index_path)
 
 print("Begining Evaluation")
 model.eval()
@@ -220,6 +227,12 @@ with torch.no_grad():
         assembly_name = name[0][:-4]  
 
         out, _ = model.forward(batch.to(device))
+
+        if surface_only:
+            surf_mask = batch.surf_mask.to(device)
+            labels = labels[surf_mask]
+            out = out[surf_mask]
+
         probs = F.softmax(out, dim=-1) 
         all_probs = torch.cat((all_probs, probs.detach().cpu()))
         all_labels = torch.cat((all_labels, labels.detach().cpu()))
@@ -229,8 +242,13 @@ with torch.no_grad():
         bl = loss.detach().cpu().item()
         
         labels = batch.y.detach().cpu()
+
+        if surface_only:
+            labels = labels[surf_mask.detach().cpu()]
+
         hard_labels = np.argmax(labels, axis=1)
-        SASAs = batch.x[:,41].detach().cpu()
+        surf_masks = batch.surf_mask.detach().cpu()
+        atom_indices = batch.atom_index.detach().cpu()
         
         ba = accuracy_score(hard_labels, preds)
         bm = mcc(hard_labels, preds)
@@ -242,7 +260,9 @@ with torch.no_grad():
         test_batch_pr_auc += bpr
         np.save(prob_path + assembly_name, probs.detach().cpu().numpy())
         np.save(label_path + assembly_name, labels.detach().cpu().numpy())
-        np.save(surface_path + assembly_name, SASAs.detach().cpu().numpy())
+        np.save(surface_path + assembly_name, surf_masks.detach().cpu().numpy())
+        np.save(index_path + assembly_name, atom_indices.detach().cpu().numpy())
+
         
         # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
         # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
