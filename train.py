@@ -240,12 +240,12 @@ def main(node_noise_variance : float, training_split='cv'):
                 out, out_recon = model.forward(batch)
 
                 if surface_only:
-                    labels = labels[surf_mask]
+                    labels = labels[surf_mask.detach().cpu().numpy()]
                     y = y[surf_mask]
                     unperturbed_x = unperturbed_x[surf_mask]
 
                     out = out[surf_mask]
-                    recon = recon[surf_mask]
+                    out_recon = out_recon[surf_mask]
 
                 weighted_xent_l, mse_l = head_loss_weight[0] * loss_fn(out,y), head_loss_weight[1] * F.mse_loss(out_recon, unperturbed_x)           
 
@@ -328,7 +328,7 @@ def main(node_noise_variance : float, training_split='cv'):
                         # loss = F.cross_entropy(out, batch.y)
 
                         if surface_only:
-                            labels = labels[surf_mask]
+                            labels = labels[surf_mask.detach().cpu().numpy()]
                             y = y[surf_mask]
 
                             out = out[surf_mask]
