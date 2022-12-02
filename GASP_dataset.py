@@ -75,7 +75,7 @@ class GASPData(Dataset):
         graph = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
         graph.atom_index = torch.arange(graph.num_nodes)
         sasa = torch.FloatTensor(arr['SASA_array'])
-        graph.surface_mask = sasa > 1e-4
+        graph.surf_mask = sasa > 1e-4
 
         if self.hops is not None:
             # inducing the subgraph k hops away from the surface
