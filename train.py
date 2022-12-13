@@ -134,7 +134,7 @@ def main(node_noise_variance : float, training_split='cv'):
     k_hops = args.k_hops
     
     
-    num_cpus = 8
+    num_cpus = args.n_tasks
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing, weight=torch.FloatTensor(class_loss_weight).to(device))
@@ -396,6 +396,7 @@ if __name__ == "__main__":
     parser.add_argument("-gl", "--group_layers", type=int, default=4, help="Number of layers per weight-sharing group.")
     parser.add_argument("-so", "--surface_only_prediction", action="store_true", help="Option to only predict on surface atoms.")
     parser.add_argument("-kh", "--k_hops", type=int, default=None, help="Number of hops for constructing a surface graph.")
+    parser.add_argument("-n", "--n_tasks", type=int, default=8, help="Number of cpu workers.")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
     model_id = f'{argstring}_{str(job_start_time)}'
