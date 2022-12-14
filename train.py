@@ -227,14 +227,14 @@ def main(node_noise_variance : float, training_split='cv'):
             for batch in train_dataloader:
                 batch = list(map(lambda x: x[0].to(device), batch))
                 
-                unperturbed_x = torch.cat([data.x.clone().detach().to(device) for data in batch])
+                unperturbed_x = torch.cat([data.x for data in batch]).clone().detach().to(device)
                 for data in batch:
                     data.x = data.x + (node_noise_variance**0.5)*torch.randn_like(data.x)
                     data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
                     data.y = torch.stack([1-data.y, data.y], dim=1)
-                labels  = torch.cat([data.y.clone().detach() for data in batch]).cpu().numpy()
-                y       = torch.cat([data.y.to(device) for data in batch])
-                surf_mask = torch.cat([data.surf_mask.to(device) for data in batch])
+                labels  = torch.cat([data.y for data in batch]).clone().detach().cpu().numpy()
+                y       = torch.cat([data.y for data in batch]).to(device)
+                surf_mask = torch.cat([data.surf_mask for data in batch]).to(device)
             
                 optimizer.zero_grad(set_to_none=True)
                 out, out_recon = model.forward(batch)
@@ -314,13 +314,13 @@ def main(node_noise_variance : float, training_split='cv'):
                     for batch in val_dataloader:
                         batch = list(map(lambda x: x[0].to(device), batch))
                 
-                        unperturbed_x = torch.cat([data.x.clone().detach().to(device) for data in batch])
+                        #unperturbed_x = torch.cat([data.x.clone().detach().to(device) for data in batch]) # This isn't used in validation so we won't use it
                         for data in batch:
                             data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
                             data.y = torch.stack([1-data.y, data.y], dim=1)
-                        labels  = torch.cat([data.y.clone().detach() for data in batch]).cpu().numpy()
-                        y       = torch.cat([data.y.to(device) for data in batch])
-                        surf_mask = torch.cat([data.surf_mask.to(device) for data in batch])
+                        labels  = torch.cat([data.y for data in batch]).clone().detach().cpu().numpy()
+                        y       = torch.cat([data.y for data in batch]).to(device)
+                        surf_mask = torch.cat([data.surf_mask for data in batch]).to(device)
                     
                         optimizer.zero_grad(set_to_none=True)
 
