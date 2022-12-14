@@ -337,7 +337,7 @@ def main(node_noise_variance : float, training_split='cv'):
                         probs = out.softmax(dim=-1).detach().cpu().numpy()
                         preds = np.argmax(probs, axis=1)
                         hard_labels = np.argmax(labels, axis=1) # converting to binary labels for metrics
-                        bl = loss.detach().cpu().ite
+                        bl = loss.detach().cpu().item()
 
                         ba = accuracy_score(hard_labels, preds)
                         bm = mcc(hard_labels, preds)
