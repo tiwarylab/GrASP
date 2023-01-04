@@ -558,7 +558,8 @@ if __name__ == "__main__":
                 os.makedirs(overlap_path)
             
 
-            np.savez(f"{overlap_path}/{argstring}.npz", DCC_lig=DCC_lig, DCA=DCA, n_predicted=n_predicted, names=names)
+            np.savez(f"{overlap_path}/{argstring}.npz", DCC_lig=np.array(DCC_lig, dtype=object), DCA=np.array(DCA, dtype=object),
+             n_predicted=n_predicted, names=names)
 
             n_predicted = np.array(n_predicted)
 
