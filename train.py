@@ -76,40 +76,14 @@ def initialize_model(parser_args):
     weight_groups = parser_args.weight_groups
     group_layers = parser_args.group_layers
 
-    if model_name == 'transformer':
-        print("Using GASPformer with BatchNorm")
-        model = GASPformer_BN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'transformer_gn':
-        print("Using GASPformer with GraphNorm")
-        model = GASPformer_GN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'transformer_in':
-        print("Using GASPformer with InstanceNorm")
-        model = GASPformer_IN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'transformer_in_stats':
-        print("Using GASPformer with InstancehNorm")
-        model = GASPformer_IN_stats(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'transformer_pn':
-        print("Using GASPformer with PairNorm")
-        model = GASPformer_PN(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'transformer_gns':
-        print("Using GASPformer with GraphNormSigmoid")
-        model = GASPformer_GNS(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'transformer_aon':
-        print("Using GASPformer with AffineOnlyNorm")
-        model = GASPformer_AON(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'transformer_no_norm':
-        print("Using GASPformer without norms.")
-        model = GASPformer_no_norm(input_dim = 60, noise_variance = node_noise_variance, GAT_heads=4)
-    elif model_name == 'gat':
+    if model_name == 'gat':
         print("Using GAT")
-        model = GAT_model(input_dim=60, noise_variance=node_noise_variance,
-         GAT_heads=4, GAT_style=GATConv, weight_groups=weight_groups,
-          group_layers=group_layers)
+        model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATConv,
+         weight_groups=weight_groups, group_layers=group_layers)
     elif model_name == 'gatv2':
         print("Using GATv2")
-        model = GAT_model(input_dim=60, noise_variance=node_noise_variance,
-         GAT_heads=4, GAT_style=GATv2Conv, weight_groups=weight_groups,
-          group_layers=group_layers)
+        model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATv2Conv,
+         weight_groups=weight_groups,group_layers=group_layers)
     else:
         raise ValueError("Unknown Model Type:", model_name)
     return model
@@ -122,7 +96,7 @@ def distance_sigmoid(data, midpoint, slope):
     return sigmoid
 
 
-def main(node_noise_variance : float, training_split='cv'):
+def main(node_noise_std : float, training_split='cv'):
     # Hyperparameters
     num_epochs = args.num_epochs
     batch_size = args.batch_size
@@ -229,7 +203,7 @@ def main(node_noise_variance : float, training_split='cv'):
                 
                 unperturbed_x = torch.cat([data.x for data in batch]).clone().detach().to(device)
                 for data in batch:
-                    data.x = data.x + (node_noise_variance**0.5)*torch.randn_like(data.x)
+                    data.x += (data.x.std(dim=0) * node_noise_std) * torch.randn_like(data.x)
                     data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
                     data.y = torch.stack([1-data.y, data.y], dim=1)
                 labels  = torch.cat([data.y for data in batch]).clone().detach().cpu().numpy()
@@ -382,9 +356,8 @@ def main(node_noise_variance : float, training_split='cv'):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen"], help="Training set.")
-    parser.add_argument("-v", "--node_noise_variance", type=float, default=0.04, help="NoisyNodes variance.")
-    parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
-     "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to train.")
+    parser.add_argument("-nn", "--node_noise_std", type=float, default=0.02, help="NoisyNodes standard deviation.")
+    parser.add_argument("-m", "--model", default="gatv2", choices=["gat", "gatv2"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
     parser.add_argument("-lr", "--learning_rate", type=float, default=0.005, help="Adam learning rate.")
@@ -401,10 +374,10 @@ if __name__ == "__main__":
     argstring='_'.join(sys.argv[1:]).replace('-','')
     model_id = f'{argstring}_{str(job_start_time)}'
 
-    node_noise_variance = args.node_noise_variance
+    node_noise_std = args.node_noise_std
     training_split = args.training_split
     surface_only = not args.all_atom_prediction
 
-    print("Training with noise with variance", node_noise_variance, "and mean 0 added to nodes.")
+    print("Training with noise with std", node_noise_std, "and mean 0 added to nodes.")
     
-    main(node_noise_variance,training_split)
+    main(node_noise_std, training_split)
