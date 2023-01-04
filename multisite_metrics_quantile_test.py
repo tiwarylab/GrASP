@@ -240,6 +240,9 @@ def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, top_n_pl
 
     return predicted_center_list
 
+def subgraph_adjacency(adjacency, indices):
+    return adjacency[indices].T[indices].T
+
 def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, top_n_plus=0, threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, adj_matrix=None, surf_mask=None):
     """Cluster multiple binding sites and calculate distance from the ligand
 
@@ -285,7 +288,7 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
     if surf_mask is not None:
         prot_coords = prot_coords[surf_mask]
         if method == "louvain":
-            adj_matrix = adj_matrix[surf_mask].T[surf_mask].T
+            adj_matrix = subgraph_adjacency(adj_matrix, surf_mask)
 
     if method == "meanshift":
         bind_coords, sorted_ids, all_ids = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
@@ -349,6 +352,7 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             probs = np.load(prepend + metric_dir + '/probs/' + model_name + '/' + assembly_name + '.npy')
             atom_indices = np.load(prepend + metric_dir + '/indices/' + model_name + '/' + assembly_name + '.npy')
 
+            surf_mask = None
             if use_surface: 
                 surf_mask = np.load(prepend + metric_dir + '/SASAs/'  + assembly_name + '.npy')
             # print(probs.shape)
@@ -368,14 +372,11 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
                     ligand_mass_list.append([rdk_ligand.GetAtomWithIdx(int(i)).GetMass() for i in ligand.atoms.indices])
             # TODO: MAKE THIS AN ACUTAL PATH
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
-            if use_surface:
-                DCC_lig, DCA, n_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, ligand_mass_list,
-                 probs, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
-                  centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
-            else:
-                DCC_lig, DCA, n_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, ligand_mass_list,
-                 probs, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
-                  centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix)
+            adj_matrix = subgraph_adjacency(adj_matrix, atom_indices)
+            DCC_lig, DCA, n_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, ligand_mass_list,
+                probs, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
+                centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
+
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCA)): 
                 no_prediction_count += 1
             return DCC_lig, DCA, n_predicted, no_prediction_count
@@ -385,7 +386,7 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             print(assembly_name, flush=True)
             raise e
 
-    r = Parallel(n_jobs=15)(delayed(helper)(file) for file in tqdm(os.listdir(path_to_labels)[:],  position=0, leave=True))
+    r = Parallel(n_jobs=n_jobs)(delayed(helper)(file) for file in tqdm(os.listdir(path_to_labels)[:],  position=0, leave=True))
     DCC_lig_list, DCA_list, n_predicted, no_prediction_count = zip(*r)
     names = [file for file in os.listdir(path_to_labels)]
     return DCC_lig_list, DCA_list, n_predicted, no_prediction_count, names
@@ -404,13 +405,14 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--clustering_method", default="louvain", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", help="Distance thresholds for clustering.")
     parser.add_argument("-p", "--prob_threshold", type=float, help="Probability threshold for atom classification.")
-    parser.add_argument("-n", "--top_n_plus", type=int, nargs="+", default=[0,2,10], help="Number of additional sites to consider.")
+    parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,10], help="Number of additional sites to consider.")
     parser.add_argument("-o", "--compute_optimal", action="store_true", help="Option to compute optimal threshold.")
     parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
     parser.add_argument("-su", "--use_surface", action="store_true", help="Option to use surface atoms for DCA and DCC_lig.")
     parser.add_argument("-a", "--aggregation_function", default="mean", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
     parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
     parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square", "centroid"], help="Type of centroid to use for site center. Not currently supported with -su.")
+    parser.add_argument("-n", "--n_tasks", type=int, default=15, help="Number of cpu workers.")
 
     args = parser.parse_args()
     non_path_args = [sys.argv[1]] + sys.argv[3:]
@@ -429,12 +431,13 @@ if __name__ == "__main__":
     score_type = args.aggregation_function
     centroid_type = args.centroid_type
     use_surface = args.use_surface
+    n_jobs = args.n_tasks
 
     is_label=args.use_labels
     if is_label:
         print("Using labels rather than probabilities.")
     if use_surface:
-        print("Using surface atoms to find ligands.")
+        print("Using surface atoms to predict sites.")
 
     set_to_use = args.test_set
     if set_to_use == 'val':
