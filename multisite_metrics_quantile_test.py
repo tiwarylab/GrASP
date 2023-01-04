@@ -402,14 +402,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
-    parser.add_argument("-c", "--clustering_method", default="louvain", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
+    parser.add_argument("-c", "--clustering_method", default="linkage", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", help="Distance thresholds for clustering.")
     parser.add_argument("-p", "--prob_threshold", type=float, help="Probability threshold for atom classification.")
     parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,10], help="Number of additional sites to consider.")
     parser.add_argument("-o", "--compute_optimal", action="store_true", help="Option to compute optimal threshold.")
     parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
-    parser.add_argument("-su", "--use_surface", action="store_true", help="Option to use surface atoms for DCA and DCC_lig.")
-    parser.add_argument("-a", "--aggregation_function", default="mean", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
+    parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
+    parser.add_argument("-a", "--aggregation_function", default="square", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
     parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
     parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square", "centroid"], help="Type of centroid to use for site center. Not currently supported with -su.")
     parser.add_argument("-n", "--n_tasks", type=int, default=15, help="Number of cpu workers.")
@@ -430,7 +430,7 @@ if __name__ == "__main__":
     top_n_list=args.top_n_plus
     score_type = args.aggregation_function
     centroid_type = args.centroid_type
-    use_surface = args.use_surface
+    use_surface = not args.all_atom_prediction
     n_jobs = args.n_tasks
 
     is_label=args.use_labels

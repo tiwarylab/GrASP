@@ -383,7 +383,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen"], help="Training set.")
     parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
-    parser.add_argument("-m", "--model", default="transformer_gn", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
+    parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
      "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("-b", "--batch_size", type=int, default=4, help="Training batch size.")
@@ -391,10 +391,10 @@ if __name__ == "__main__":
     parser.add_argument("-cw", "--class_loss_weight", type=float, nargs=2, default=[1.0, 1.0], help="Loss weight for [negative, positive] classes.")
     parser.add_argument("-ls", "--label_smoothing", type=float, default=0, help="Level of label smoothing.")
     parser.add_argument("-hw", "--head_loss_weight", type=float, nargs=2, default=[.9,.1], help="Weight of the loss functions for the [inference, reconstruction] heads.")
-    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
-    parser.add_argument("-gl", "--group_layers", type=int, default=4, help="Number of layers per weight-sharing group.")
-    parser.add_argument("-so", "--surface_only_prediction", action="store_true", help="Option to only predict on surface atoms.")
+    parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
+    parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
     parser.add_argument("-kh", "--k_hops", type=int, default=None, help="Number of hops for constructing a surface graph.")
     parser.add_argument("-n", "--n_tasks", type=int, default=8, help="Number of cpu workers.")
     args = parser.parse_args()
@@ -403,7 +403,7 @@ if __name__ == "__main__":
 
     node_noise_variance = args.node_noise_variance
     training_split = args.training_split
-    surface_only = args.surface_only_prediction
+    surface_only = not args.all_atom_prediction
 
     print("Training with noise with variance", node_noise_variance, "and mean 0 added to nodes.")
     
