@@ -368,7 +368,7 @@ if __name__ == "__main__":
     parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
     parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
-    parser.add_argument("-kh", "--k_hops", type=int, default=None, help="Number of hops for constructing a surface graph.")
+    parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
     parser.add_argument("-n", "--n_tasks", type=int, default=8, help="Number of cpu workers.")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')
