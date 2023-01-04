@@ -6,11 +6,10 @@ from torch_geometric.nn.norm import InstanceNorm
 class GAT_model(nn.Module):
     def __init__(self, input_dim, hidden_dim=64, output_dim=2, weight_groups=1, group_layers=1,
      GAT_heads=4, drop_prob=0.1, GAT_aggr="mean", GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1]),
-      GAT_style=GATv2Conv, noise_variance=0.02): # hidden_dim must be divisible by 8
+      GAT_style=GATv2Conv): # hidden_dim must be divisible by 8
         super(GAT_model, self).__init__()
         self.weight_groups = weight_groups
         self.edge_dim = len(GAT_fill_value)
-        self.noise_variance = noise_variance
 
         self.pre_norm = InstanceNorm(input_dim, affine=True)
 
