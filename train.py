@@ -382,7 +382,7 @@ def main(node_noise_variance : float, training_split='cv'):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen"], help="Training set.")
-    parser.add_argument("-v", "--node_noise_variance", type=float, default=0.02, help="NoisyNodes variance.")
+    parser.add_argument("-v", "--node_noise_variance", type=float, default=0.04, help="NoisyNodes variance.")
     parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
      "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")

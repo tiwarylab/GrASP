@@ -55,9 +55,6 @@ class GAT_model(nn.Module):
 
     def forward(self, input):
         x = input.x
-        if self.training:
-            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
-
         x = self.pre_norm(x)
         x = self.encoder(x)
         jk_inputs = [x]
