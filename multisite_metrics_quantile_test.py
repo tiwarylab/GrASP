@@ -303,9 +303,9 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
     ligand_center_list = [center_of_mass(lig_coord_list[i], ligand_mass_list[i]) for i in range(len(lig_coord_list))]
 
     n_sites = len(ligand_center_list)
-    predicted_points_list, predicted_hull_list, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites, top_n_plus)
-
-    if centroid_type != "hull":
+    if centroid_type == "hull":
+        _, _, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites, top_n_plus)
+    else:
         predicted_center_list = center_of_probability(bind_coords, predicted_probs[all_ids > -1], sorted_ids, n_sites, top_n_plus, type=centroid_type)
 
     if type(sorted_ids) == type(None):
@@ -411,7 +411,7 @@ if __name__ == "__main__":
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
     parser.add_argument("-a", "--aggregation_function", default="square", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
     parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
-    parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square", "centroid"], help="Type of centroid to use for site center. Not currently supported with -su.")
+    parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square", "centroid"], help="Type of centroid to use for site center.")
     parser.add_argument("-n", "--n_tasks", type=int, default=15, help="Number of cpu workers.")
 
     args = parser.parse_args()
