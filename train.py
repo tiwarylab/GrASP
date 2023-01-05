@@ -75,15 +75,16 @@ def initialize_model(parser_args):
     model_name = parser_args.model
     weight_groups = parser_args.weight_groups
     group_layers = parser_args.group_layers
+    aggr = parser_args.aggregator
 
     if model_name == 'gat':
         print("Using GAT")
         model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATConv,
-         weight_groups=weight_groups, group_layers=group_layers)
+         weight_groups=weight_groups, group_layers=group_layers, GAT_aggr=aggr)
     elif model_name == 'gatv2':
         print("Using GATv2")
         model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATv2Conv,
-         weight_groups=weight_groups,group_layers=group_layers)
+         weight_groups=weight_groups,group_layers=group_layers, GAT_aggr=aggr)
     else:
         raise ValueError("Unknown Model Type:", model_name)
     return model
@@ -367,6 +368,7 @@ if __name__ == "__main__":
     parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
     parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
+    parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
     parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
     parser.add_argument("-n", "--n_tasks", type=int, default=8, help="Number of cpu workers.")

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch_geometric.nn import GATConv, GATv2Conv
 from torch_geometric.nn.norm import InstanceNorm
+from torch_geometric.nn.aggr import MultiAggregation
 
 class GAT_model(nn.Module):
     def __init__(self, input_dim, hidden_dim=64, output_dim=2, weight_groups=1, group_layers=1,
@@ -77,7 +78,13 @@ class GAT_block(nn.Module):
     def __init__(self, input_dim, output_dim, GAT_heads, edge_dim, drop_prob,
      GAT_aggr, GAT_fill_value, GAT_style):
         super(GAT_block, self).__init__()
-        self.GAT = GAT_style(input_dim, int(output_dim/GAT_heads),
+        head_dim = int(output_dim/GAT_heads)
+
+        if GAT_aggr == "multi":
+            GAT_aggr = MultiAggregation(['mean', 'sum'], mode='proj',
+             mode_kwargs={"in_channels":head_dim, "out_channels":head_dim})
+
+        self.GAT = GAT_style(input_dim, head_dim,
          heads=GAT_heads, edge_dim=edge_dim, bias=False, dropout=drop_prob,
           aggr=GAT_aggr, fill_value=GAT_fill_value)
 
