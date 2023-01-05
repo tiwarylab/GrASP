@@ -23,13 +23,6 @@ import torch
 from GASP_dataset import GASPData
 from model import GAT_model
 
-
-###################################################################################
-''' Some bits that are surrounded in comments like this can be used to temporarily
-    modify the code to use the training set.'''
-###################################################################################
-
-
 def k_fold(dataset, path, fold_number):
     val_names    = np.loadtxt(prepend + "/splits/test_ids_fold"  + str(fold_number), dtype='str')
     train_names   = np.loadtxt(prepend + "/splits/train_ids_fold" + str(fold_number), dtype='str')
@@ -46,12 +39,8 @@ def k_fold(dataset, path, fold_number):
     val_mask = torch.ones(len(dataset), dtype=torch.bool)
     train_mask[val_indices] = 0
     val_mask[train_mask] = 0
-    
-    # Temporary sanity check to make sure I got this right
-    assert train_mask.sum() > val_mask.sum()
 
     return train_mask, val_mask
-
 
 def distance_sigmoid(data, midpoint, slope):
     x = -slope*(data-midpoint)
@@ -101,11 +90,6 @@ k_hops = args.k_hops
 
 label_midpoint, label_slope = args.sigmoid_params
 
-###################################################################################
-
-
-
-# Other Parameters
 device = 'cpu'
 if torch.cuda.is_available():
     device = 'cuda'
@@ -114,22 +98,9 @@ num_cpus = 4
 print("The model will be using the following device:", device)
 print("The model will be using {} cpus.".format(num_cpus))
 
-# model = GATModelv2(input_dim=43, output_dim=2)
-# model = Two_Track_GATModel(input_dim=43, output_dim=2, drop_prob=0.1, left_aggr="max", right_aggr="mean").to(device)
-
-'''
-This whole bit is a quick fix that allows us to load incorrectly saved models.
-This has been fixed in the training script and as a result we can remove this in the future
-'''
+# Load Saved model
 state_dict = torch.load(model_path, map_location=device)
-# new_state_dict = OrderedDict()
-# for k, v in state_dict.items():
-#     name = k[7:] #remove 'module'
-#     new_state_dict[name] = v
-
-# model.load_state_dict(new_state_dict)
 model.load_state_dict(state_dict)
-
 model.to(device)
  
 #########################
@@ -141,7 +112,7 @@ if set_to_use == 'val':
     data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
     train_mask, val_mask = k_fold(data_set, prepend, 0) 
     val_set     = data_set[val_mask]
-    val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
+    test_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 else:  
     if set_to_use ==  'coach420':
         print("Initializing coach420 Set")    
@@ -163,7 +134,7 @@ else:
         raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
     data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
     data_set.process()
-    val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
+    test_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
 test_epoch_loss = []
 test_epoch_acc = []
@@ -187,6 +158,8 @@ if not os.path.isdir(surface_path):
 if not os.path.isdir(index_path):
     os.makedirs(index_path)
 
+loss_fn = torch.nn.CrossEntropyLoss()
+
 print("Begining Evaluation")
 model.eval()
 with torch.no_grad():
@@ -195,7 +168,7 @@ with torch.no_grad():
     test_batch_mcc = 0.0
     test_batch_pr_auc = 0.0
     # for batch, name in test_dataloader:
-    for batch, name in tqdm(val_dataloader, position=0, leave=True):
+    for batch, name in tqdm(test_dataloader, position=0, leave=True):
         batch.y = distance_sigmoid(batch.y, label_midpoint, label_slope)
         batch.y = torch.stack([1-batch.y, batch.y], dim=1)
         labels = batch.y.to(device)
@@ -211,9 +184,8 @@ with torch.no_grad():
         probs = F.softmax(out, dim=-1) 
         all_probs = torch.cat((all_probs, probs.detach().cpu()))
         all_labels = torch.cat((all_labels, labels.detach().cpu()))
-        loss_fn = torch.nn.CrossEntropyLoss()
-        loss = loss_fn(out, labels)        # Cross Entropy
-        preds = np.argmax(probs.detach().cpu().numpy(), axis=1) # [1 if x[1] > prediction_threshold else 0 for x in probs]
+        loss = loss_fn(out, labels)
+        preds = np.argmax(probs.detach().cpu().numpy(), axis=1)
         bl = loss.detach().cpu().item()
         
         labels = batch.y.detach().cpu()
@@ -238,25 +210,14 @@ with torch.no_grad():
         np.save(surface_path + assembly_name, surf_masks.detach().cpu().numpy())
         np.save(index_path + assembly_name, atom_indices.detach().cpu().numpy())
 
-        
-        # writer.add_scalar('Batch_Loss/test', bl, test_batch_num)
-        # writer.add_scalar('Batch_Acc/test',  ba,  test_batch_num)
-        # writer.add_scalar('Batch_Acc/MCC',  bm,  test_batch_num)
-
-    # test_epoch_loss.append(test_batch_loss/len(test_dataloader))
-    # test_epoch_acc.append(test_batch_acc/len(test_dataloader))
-    # test_epoch_mcc.append(test_batch_mcc/len(test_dataloader))
-    test_epoch_loss.append(test_batch_loss/len(val_dataloader))
-    test_epoch_acc.append(test_batch_acc/len(val_dataloader))
-    test_epoch_mcc.append(test_batch_mcc/len(val_dataloader))
-    test_epoch_pr_auc.append(test_batch_pr_auc/len(val_dataloader))
+    test_epoch_loss.append(test_batch_loss/len(test_dataloader))
+    test_epoch_acc.append(test_batch_acc/len(test_dataloader))
+    test_epoch_mcc.append(test_batch_mcc/len(test_dataloader))
+    test_epoch_pr_auc.append(test_batch_pr_auc/len(test_dataloader))
     print("Loss: {}".format(test_epoch_loss[-1]))
     print("Accu: {}".format(test_epoch_acc[-1]))
     print("MCC:  {}".format(test_epoch_mcc[-1]))
     print("PR AUC: {}".format(test_epoch_pr_auc[-1]))
-    # writer.add_scalar('Epoch_Loss/test', test_epoch_loss[-1], test_epoch_num)
-    # writer.add_scalar('Epoch_Acc/test',  test_epoch_acc[-1],  test_epoch_num)
-    # writer.add_scalar('Epoch_Acc/MCC',  test_epoch_mcc[-1],  test_epoch_num)
 
 # Code for calculating roc curves:
 # https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc.html?highlight=roc%20curve
