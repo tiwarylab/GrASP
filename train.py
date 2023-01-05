@@ -39,7 +39,7 @@ from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData#, GASPData_noisy_nodes
 from atom_wise_models import GASPformer_BN, GASPformer_GN, GASPformer_IN, GASPformer_IN_stats, GASPformer_PN, GASPformer_GNS, GASPformer_AON, GASPformer_no_norm
-from simple_models import GAT_model
+from models import GAT_model
 
 
 job_start_time = time.time()
