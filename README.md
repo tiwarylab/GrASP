@@ -12,7 +12,7 @@ The following command can be used to train the model:
 ```
 python3 train.py -s <split>
 ```
-where <split> can be one of ["val", "coach420_mlig", "holo4k_mlig"]
+where ```<split>``` can be one of ["val", "coach420_mlig", "holo4k_mlig"]
 Example slurm scripts for reference can be found in ```./bridges_slurm_scripts/train_scripts.```
 
 ### Performing Inference
