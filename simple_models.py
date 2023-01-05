@@ -2,15 +2,15 @@ import torch
 import torch.nn as nn
 from torch_geometric.nn import GATConv, GATv2Conv
 from torch_geometric.nn.norm import InstanceNorm
+from torch_geometric.nn.aggr import MultiAggregation
 
 class GAT_model(nn.Module):
     def __init__(self, input_dim, hidden_dim=64, output_dim=2, weight_groups=1, group_layers=1,
      GAT_heads=4, drop_prob=0.1, GAT_aggr="mean", GAT_fill_value=torch.Tensor([0,0,0,0,0,0,1]),
-      GAT_style=GATv2Conv, noise_variance=0.02): # hidden_dim must be divisible by 8
+      GAT_style=GATv2Conv): # hidden_dim must be divisible by 8
         super(GAT_model, self).__init__()
         self.weight_groups = weight_groups
         self.edge_dim = len(GAT_fill_value)
-        self.noise_variance = noise_variance
 
         self.pre_norm = InstanceNorm(input_dim, affine=True)
 
@@ -55,9 +55,6 @@ class GAT_model(nn.Module):
 
     def forward(self, input):
         x = input.x
-        if self.training:
-            x += (x.std(dim=0)*self.noise_variance)*torch.randn_like(x)
-
         x = self.pre_norm(x)
         x = self.encoder(x)
         jk_inputs = [x]
@@ -81,7 +78,13 @@ class GAT_block(nn.Module):
     def __init__(self, input_dim, output_dim, GAT_heads, edge_dim, drop_prob,
      GAT_aggr, GAT_fill_value, GAT_style):
         super(GAT_block, self).__init__()
-        self.GAT = GAT_style(input_dim, int(output_dim/GAT_heads),
+        head_dim = int(output_dim/GAT_heads)
+
+        if GAT_aggr == "multi":
+            GAT_aggr = MultiAggregation(['mean', 'sum'], mode='proj',
+             mode_kwargs={"in_channels":head_dim, "out_channels":head_dim})
+
+        self.GAT = GAT_style(input_dim, head_dim,
          heads=GAT_heads, edge_dim=edge_dim, bias=False, dropout=drop_prob,
           aggr=GAT_aggr, fill_value=GAT_fill_value)
 

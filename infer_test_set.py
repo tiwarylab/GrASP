@@ -64,41 +64,16 @@ def initialize_model(parser_args):
     model_name = parser_args.model
     weight_groups = parser_args.weight_groups
     group_layers = parser_args.group_layers
+    aggr = parser_args.aggregator
 
-    if model_name == 'transformer':
-        print("Using GASPformer with BatchNorm")
-        model = GASPformer_BN(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'transformer_gn':
-        print("Using GASPformer with GraphNorm")
-        model = GASPformer_GN(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'transformer_in':
-        print("Using GASPformer with InstanceNorm")
-        model = GASPformer_IN(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'transformer_in_stats':
-        print("Using GASPformer with InstancehNorm")
-        model = GASPformer_IN_stats(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'transformer_pn':
-        print("Using GASPformer with PairNorm")
-        model = GASPformer_PN(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'transformer_gns':
-        print("Using GASPformer with GraphNormSigmoid")
-        model = GASPformer_GNS(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'transformer_aon':
-        print("Using GASPformer with AffineOnlyNorm")
-        model = GASPformer_AON(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'transformer_no_norm':
-        print("Using GASPformer without norms.")
-        model = GASPformer_no_norm(input_dim = 60, noise_variance=0, GAT_heads=4)
-    elif model_name == 'gat':
+    if model_name == 'gat':
         print("Using GAT")
-        model = GAT_model(input_dim=60, noise_variance=0,
-         GAT_heads=4, GAT_style=GATConv, weight_groups=weight_groups,
-          group_layers=group_layers)
+        model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATConv,
+         weight_groups=weight_groups, group_layers=group_layers, GAT_aggr=aggr)
     elif model_name == 'gatv2':
         print("Using GATv2")
-        model = GAT_model(input_dim=60, noise_variance=0,
-         GAT_heads=4, GAT_style=GATv2Conv, weight_groups=weight_groups,
-          group_layers=group_layers)
+        model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATv2Conv,
+         weight_groups=weight_groups,group_layers=group_layers, GAT_aggr=aggr)
     else:
         raise ValueError("Unknown Model Type:", model_name)
     return model
@@ -108,20 +83,21 @@ prepend = str(os.getcwd())
 parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
 parser.add_argument("model_path", help="Path to the model from ./trained_models/")
-parser.add_argument("-m", "--model", default="transformer_gn", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
+parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
      "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to test.")
-parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[4, 5], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
 parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
-parser.add_argument("-gl", "--group_layers", type=int, default=4, help="Number of layers per weight-sharing group.")
-parser.add_argument("-so", "--surface_only_prediction", action="store_true", help="Option to only predict on surface atoms.")
-parser.add_argument("-kh", "--k_hops", type=int, default=None, help="Number of hops for constructing a surface graph.")
+parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
+parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
+parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
+parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
 args = parser.parse_args()
 model_name = args.model_path
 model = initialize_model(args)
 
 model_path = prepend + "/trained_models/" + model_name
 set_to_use = args.test_set
-surface_only = args.surface_only_prediction
+surface_only = not args.all_atom_prediction
 k_hops = args.k_hops
 
 label_midpoint, label_slope = args.sigmoid_params
