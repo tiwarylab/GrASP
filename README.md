@@ -2,7 +2,7 @@
 
 ## Requirements
 * Anaconda
-* Cuda 11.7.1
+* Cuda 11.x
 
 ## How to Run
 * Build the conda environments in /envs/ob_env.yml and /envs/pytorch_env.yml (the clustering environment is currently defunct).
