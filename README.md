@@ -29,3 +29,8 @@ Once test inference has completed, common metrics can be calculated using:
 python3 site_metrics.py <split> <path_to_trained_model>
 ```
 Example slurm scripts can be found in ```./bridges_slurm_scripts/test_inference_slurm_scripts/[ job_test_site_metrics_val.sh | job_test_site_metrics_coach420_mlig.sh | job_test_site_metrics_holo4k_mlig.sh ]```
+
+Additional options for training, inference and metrics can be found with the -h flag. For example:
+```
+python3 site_metrics.py -h
+```
