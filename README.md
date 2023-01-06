@@ -6,6 +6,10 @@
 
 ## How to Run
 * Build the conda environments in /envs/ob_env.yml and /envs/pytorch_env.yml (the clustering environment is currently defunct).
+ ```
+ conda env create -f envs/ob_env.yml
+ conda env create -f envs/pytorch_env.yml
+ ```
 * Copy provided data and unzip in the main directory
 ### Training
 The following command can be used to train the model:
