@@ -1,11 +1,15 @@
-# scPDB
+# Graph Attention Site Prediction (GASP)
 
 ## Requirements
 * Anaconda
-* Cuda 11.7.1
+* Cuda 11.x
 
 ## How to Run
-* Build the conda environments in /envs/ob_env.yml and /envs/pytorch_env.yml (the clustering environment is currently defunct).
+* Build the conda environments in `./envs/ob_env.yml` and `./envs/pytorch_env.yml` (the clustering environment is currently defunct). This will add two new conda environments named `ob` and `pytorch_env` respectively.
+ ```
+ conda env create -f envs/ob_env.yml
+ conda env create -f envs/pytorch_env.yml
+ ```
 * Copy provided data and unzip in the main directory
 ### Training
 The following command can be used to train the model:
@@ -29,3 +33,8 @@ Once test inference has completed, common metrics can be calculated using:
 python3 site_metrics.py <split> <path_to_trained_model>
 ```
 Example slurm scripts can be found in ```./bridges_slurm_scripts/test_inference_slurm_scripts/[ job_test_site_metrics_val.sh | job_test_site_metrics_coach420_mlig.sh | job_test_site_metrics_holo4k_mlig.sh ]```
+
+Additional options for training, inference and metrics can be found with the -h flag. For example:
+```
+python3 site_metrics.py -h
+```
