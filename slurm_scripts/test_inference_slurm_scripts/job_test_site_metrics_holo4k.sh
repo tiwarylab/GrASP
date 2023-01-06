@@ -12,4 +12,4 @@ module load anaconda3
 conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/10.2
 conda activate ob 
-python3 multisite_metrics_quantile_test.py holo4k holo4k/trained_model_m_transformer_gn_s_holo4k_1661868927.1797612/epoch_49 -c louvain -d 4 -p .4 -a square
+python3 site_metrics.py holo4k holo4k/trained_model_m_transformer_gn_s_holo4k_1661868927.1797612/epoch_49 -c louvain -d 4 -p .4 -a square

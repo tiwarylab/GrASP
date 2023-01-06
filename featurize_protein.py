@@ -23,9 +23,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     from mdtraj import load as mdtrajload
     from collections import defaultdict
 
-    # import warnings
-    # warnings.filterwarnings("ignore") 
-
     #                     [One hot encoding of residue name     polar Y/N     Acidic,Basic,Neutral  Pos/Neg/Neutral Charge]
     residue_dict = {'ALA':[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
                     'ARG':[0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   1,0,    0,     1,     0,      1,  0,  0], 
@@ -65,7 +62,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         '2': [0,1,0,0,0,0],
         'ar':[0,0,1,0,0,0],
         'am':[0,0,0,1,0,0],
-        'un':[0,0,0,0,1,0]    # Unknown bond order is set to null/unbonded edges
+        'un':[0,0,0,0,1,0]  # Unkown Bond Type
     }
     selection_str = " or ".join([f'resname {x}' for x in list(residue_dict.keys())])
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
@@ -76,7 +73,6 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     try:
         protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
         rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
-        # rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False)
 
     except Exception as e: 
         raise e
@@ -92,13 +88,11 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         traj = mdtrajload(path_to_files + '/protein.mol2')
         SAS = shrake_rupley(traj, mode='atom')
         if len(SAS) > 1:
-            # Sanity check, I'm pretty sure this should never happen
+            # Sanity Check. This should never happen but the API is unclear
             raise Exception("Did not expect more than one list of SAS values")   
-        # SAS_org = SAS
         SAS = SAS[0]
     except KeyError as e:
         print("Value not included in dictionary \"{}\" while calculating SASA {}.".format(e, path_to_files))
-        # failed_list.append([path_to_files, "Value not included in dictionary \"{}\" while calculating SASA {}.".format(e, path_to_files)])
         return
 
     # Add SAS from hydrogen to bonded atom, create number of bonded hydrogens feature
@@ -114,14 +108,13 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # Drop Hydrogens
     protein_w_H.ids = np.arange(0, len(protein_w_H.atoms))
     protein = protein_w_H.select_atoms("not element H")
-    protein.ids = np.arange(0, len(protein.atoms))              # Abusing atoms ids to make them zero-indexed which makes our life easier
+    protein.ids = np.arange(0, len(protein.atoms))              # Reindex atoms ids to make them zero-indexed and contiguous
 
     trimmed = scipy.sparse.lil_matrix((len(protein.atoms.positions), len(protein.atoms.positions)), dtype='float')
     get_distance_matrix(protein.atoms.positions, trimmed, 10)
     trimmed = trimmed.tocsr()
 
-    # Feature Matrix
-    feature_array = []  # This will contain all of the features for a given molecule
+    feature_array = []  # Will contain all of the features for a given molecule
     SASA_array = []
 
     try:
@@ -130,24 +123,24 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     except Exception as e:
         print("Failed to update property cache while processing", path_to_files)
         return
-    acceptor_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Acceptor")]
-    donor_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Donor")]
-    hydrophobe_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Hydrophobe")]                # Seems to be the slow one, comparitively
+    acceptor_indices          = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Acceptor")]
+    donor_indices             = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Donor")]
+    hydrophobe_indices        = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Hydrophobe")]                # Seems to be the slow one, comparitively
     lumped_hydrophobe_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="LumpedHydrophobe")]
 
 
     bins = np.arange(0,11)
-    for atom in protein.atoms:                                                              # Iterate through residues and create vectors of features
-        name = "".join(re.findall("^[a-zA-Z]+", atom.resname)).upper()                      # Remove numbers from the name string
+    for atom in protein.atoms:                                              # Iterate through atoms and create vectors of features for each atom
+        name = "".join(re.findall("^[a-zA-Z]+", atom.resname)).upper()      # Clean resname 
         element = atom.element.upper()
         try:
             # rdf calculation where dr = 1 and r_max = 10
             d = trimmed[np.where(protein.ids == atom.id)[0][0]]
             n, bins = np.histogram(d[d>0], bins =bins)
-            r = bins[1:] # using the exterior radius of the shell
+            r = bins[1:]                                            # using the exterior radius of the shell
             vol = (4/3) * np.pi * r**3
-            g = n.cumsum() / vol # this is now density not g(r)
-            g = g[1:] # skip the bin from 0 to 1, there shouldn't be any entries
+            g = n.cumsum() / vol                                    # this is now density not g(r)
+            g = g[1:]                                               # skip the bin from 0 to 1, there shouldn't be any entries
 
             # RDKit Features
             rdkit_atom = rdkit_protein_w_H.GetAtomWithIdx(int(atom.index))
@@ -203,52 +196,11 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
 
     np.savez_compressed(save_directory + '/raw/' + structure_name, adj_matrix = trimmed,
-     feature_matrix = feature_array, ligand_distance_array = distance_to_ligand,
-      edge_attributes = edge_attributes, SASA_array = SASA_array)
+                        feature_matrix = feature_array, ligand_distance_array = distance_to_ligand,
+                        edge_attributes = edge_attributes, SASA_array = SASA_array)
     protein.atoms.write(save_directory + '/mol2/' + str(structure_name) +'.mol2')
 
     return None
-
-
-# Should run when file is called but not imported
-# if __name__ == "__main__":
-#     from joblib import Parallel, delayed
-#     from tqdm import tqdm
-    
-#     # print(selection_str)
-#     # total_files = len(os.listdir('./scPDB_raw_data'))
-#     # index = 1 # I have no idea what this was for, got I hope we don't need it
-#     # failed_list = []
-
-#     inputs = ['./scPDB_raw_data' + struct_name for struct_name in sorted(list(os.listdir('./scPDB_raw_data')))]
-
-#     if not os.path.isdir('./data_dir'):
-#         os.makedirs('./data_dir')
-#     ##########################################
-#     # Comment me out to run just one file
-#     num_cores = 24
-    
-#     from joblib.externals.loky import set_loky_pickler
-#     set_loky_pickler("dill")
-    
-#     r = Parallel(n_jobs=num_cores)(delayed(process_system)(x, save_directory='./data_dir') for x in tqdm(inputs[:]))
-#     # Parallel(n_jobs=2)(delayed(process_system)(x) for x in ['1iep_1','3eky_1'])
-
-#     # np.savez('./failed_list', np.array(failed_list))
-    ##########################################
-
-    ##########################################
-    # Uncomment me to run just one file
-    import time
-    # print("Starting")
-    # start = time.time()
-    # process_system('1iep_1',residue_dict,hybridization_dict,atom_dict,bond_type_dict,selection_str) 
-    # print("Finished. Total Time:", str(time.time() - start)) 
-    ##########################################
-# finally:
-#     res, i = zip(*r)
-#     if res.count(-1) > 0:
-#         print("Warning: Number of files skipped due to a nonstandard residue being a part of the site:", res.count(-1))
 
 if __name__ == "_main__":
     structure_name = '1ds7_2'

@@ -11,4 +11,4 @@
 source ~/scratch/anaconda3/etc/profile.d/conda.sh
 ml cuda/11.6.2
 conda activate ob 
-python3 multisite_metrics_quantile_test.py holo4k_mlig chen/trained_model_s_chen_m_gatv2_gl_12_kh_2_so_1669914883.3920903/cv_0/epoch_49 -c linkage -d 4 -p .4 -a square -su
+python3 site_metrics.py holo4k_mlig chen/trained_model_s_chen_m_gatv2_gl_12_kh_2_so_1669914883.3920903/cv_0/epoch_49 -c linkage -d 4 -p .4 -a square -su
