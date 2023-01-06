@@ -5,7 +5,7 @@
 * Cuda 11.x
 
 ## How to Run
-* Build the conda environments in /envs/ob_env.yml and /envs/pytorch_env.yml (the clustering environment is currently defunct).
+* Build the conda environments in `./envs/ob_env.yml` and `./envs/pytorch_env.yml` (the clustering environment is currently defunct). This will add two new conda environments named `ob` and `pytorch_env` respectively.
  ```
  conda env create -f envs/ob_env.yml
  conda env create -f envs/pytorch_env.yml
