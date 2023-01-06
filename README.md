@@ -1,4 +1,4 @@
-# scPDB
+# Graph Attention Site Prediction (GASP)
 
 ## Requirements
 * Anaconda
