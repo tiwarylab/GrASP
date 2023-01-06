@@ -358,7 +358,7 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
                 surf_mask = np.load(prepend + metric_dir + '/SASAs/'  + assembly_name + '.npy')
             # print(probs.shape)
             ############### THIS IS TEMPORARY AF REMOVE BEFORE PUBLICAITON ##############
-            if is_label: probs = np.array([[1,0] if x ==0 else [0,1] for x in labels])
+            if is_label: probs = labels
             # print(probs.shape)
 
             lig_coord_list = []
