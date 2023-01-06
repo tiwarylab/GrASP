@@ -306,9 +306,8 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
     if centroid_type == "hull":
         _, _, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites+top_n_plus)
     else:
-        print(predicted_probs.shape)
-        print(all_ids.shape)
-        predicted_center_list = center_of_probability(bind_coords, predicted_probs[all_ids > -1], sorted_ids, n_sites+top_n_plus, type=centroid_type)
+        bind_probs = predicted_probs[all_ids > -1]
+        predicted_center_list = center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites+top_n_plus, type=centroid_type)
 
     if type(sorted_ids) == type(None):
         n_predicted = 0
@@ -407,7 +406,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--clustering_method", default="linkage", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[4], help="Distance thresholds for clustering.")
     parser.add_argument("-p", "--prob_threshold", type=float, default=.4, help="Probability threshold for atom classification.")
-    parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,10], help="Number of additional sites to consider.")
+    parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,100], help="Number of additional sites to consider.")
     parser.add_argument("-o", "--compute_optimal", action="store_true", help="Option to compute optimal threshold.")
     parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
