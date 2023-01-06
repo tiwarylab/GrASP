@@ -47,7 +47,7 @@ def sort_clusters(cluster_ids, probs, labels, score_type='mean'):
         
     return sorted_ids
 
-def cluster_atoms(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=None, score_type='mean', **kwargs):
+def cluster_atoms_meanshift(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=None, score_type='mean', **kwargs):
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -201,8 +201,8 @@ def cheb_center(halfspaces):
     return center, radius
 
 
-def hulls_from_clusters(bind_coords, sorted_ids, n_sites, top_n_plus):
-    top_ids = np.unique(sorted_ids)[::-1][:n_sites+top_n_plus]
+def hulls_from_clusters(bind_coords, sorted_ids, n_sites):
+    top_ids = np.unique(sorted_ids)[::-1][:n_sites]
     predicted_points_list = []
     predicted_hull_list = []
     predicted_center_list = []
@@ -222,8 +222,8 @@ def hulls_from_clusters(bind_coords, sorted_ids, n_sites, top_n_plus):
 
     return predicted_points_list, predicted_hull_list, predicted_center_list
 
-def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, top_n_plus, type='prob'):
-    top_ids = np.unique(sorted_ids)[::-1][:n_sites+top_n_plus]
+def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, type='prob'):
+    top_ids = np.unique(sorted_ids)[::-1][:n_sites]
     predicted_center_list = []
     
     for c_id in top_ids:
@@ -291,7 +291,7 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
             adj_matrix = subgraph_adjacency(adj_matrix, surf_mask)
 
     if method == "meanshift":
-        bind_coords, sorted_ids, all_ids = cluster_atoms(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
+        bind_coords, sorted_ids, all_ids = cluster_atoms_meanshift(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
     elif method == "dbscan":
         bind_coords, sorted_ids, all_ids = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
     elif method == "louvain":
@@ -304,9 +304,11 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
 
     n_sites = len(ligand_center_list)
     if centroid_type == "hull":
-        _, _, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites, top_n_plus)
+        _, _, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites+top_n_plus)
     else:
-        predicted_center_list = center_of_probability(bind_coords, predicted_probs[all_ids > -1], sorted_ids, n_sites, top_n_plus, type=centroid_type)
+        print(predicted_probs.shape)
+        print(all_ids.shape)
+        predicted_center_list = center_of_probability(bind_coords, predicted_probs[all_ids > -1], sorted_ids, n_sites+top_n_plus, type=centroid_type)
 
     if type(sorted_ids) == type(None):
         n_predicted = 0
