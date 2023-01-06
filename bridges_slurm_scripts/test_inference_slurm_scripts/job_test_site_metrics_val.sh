@@ -11,4 +11,4 @@
 module load anaconda3
 conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 conda activate clustering
-python3 multisite_metrics_quantile_test.py val cv/trained_model_nn_0.1_1672886039.4995553/cv_0/epoch_49
+python3 multisite_metrics_quantile_test.py val cv/trained_model_ag_multi_1672951703.4392676/cv_0/epoch_49

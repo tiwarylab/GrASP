@@ -13,4 +13,4 @@ conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/11.7.1
 conda activate pytorch_env
 sh reset_sasa.sh cv
-python3 infer_test_set.py val cv/trained_model_nn_0.1_1672886039.4995553/cv_0/epoch_49 
+python3 infer_test_set.py val cv/trained_model_ag_multi_1672951703.4392676/cv_0/epoch_49 -ag multi

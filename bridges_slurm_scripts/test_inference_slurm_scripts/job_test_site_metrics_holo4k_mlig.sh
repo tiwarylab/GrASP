@@ -11,4 +11,4 @@
 module load anaconda3
 conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 conda activate clustering 
-python3 multisite_metrics_quantile_test.py holo4k_mlig holo4k_mlig/trained_model_s_holo4k_mlig_m_gatv2_gl_12_kh_1_so_sp_5_3_1672394569.3117402/cv_0/epoch_49 -c louvain -d 5 -p .4 -a square
+python3 multisite_metrics_quantile_test.py holo4k_mlig holo4k_mlig/trained_model_s_holo4k_mlig_ag_multi_1672951807.304454/cv_0/epoch_49
