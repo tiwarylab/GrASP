@@ -98,7 +98,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     # Add SAS from hydrogen to bonded atom, create number of bonded hydrogens feature
     num_bonded_H = np.zeros(traj.n_atoms)
     for atom in protein_w_H:
-        is_bonded_to_H = [re.search("^[a-zA-Z]+", bond.type).group().upper() == 'H' for _, bond in atom.bonds]
+        is_bonded_to_H = [bond.element == 'H' for _, bond in atom.bonds]
         num_bonded_H[atom.index] = sum(is_bonded_to_H)
         # Because the bonds have the old ids, we use our map to the new ids to access the SAS value, if the value is -1
         # it means that the bonded atom no longer exists in our universe (i.e., it was dropped). If this happens it will
