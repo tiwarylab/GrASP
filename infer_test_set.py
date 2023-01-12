@@ -23,6 +23,13 @@ import torch
 from GASP_dataset import GASPData
 from model import GAT_model
 
+
+###################################################################################
+''' Some bits that are surrounded in comments like this can be used to temporarily
+    modify the code to use the training set.'''
+###################################################################################
+
+
 def k_fold(dataset, path, fold_number):
     val_names    = np.loadtxt(prepend + "/splits/test_ids_fold"  + str(fold_number), dtype='str')
     train_names   = np.loadtxt(prepend + "/splits/train_ids_fold" + str(fold_number), dtype='str')
@@ -39,8 +46,12 @@ def k_fold(dataset, path, fold_number):
     val_mask = torch.ones(len(dataset), dtype=torch.bool)
     train_mask[val_indices] = 0
     val_mask[train_mask] = 0
+    
+    # Temporary sanity check to make sure I got this right
+    assert train_mask.sum() > val_mask.sum()
 
     return train_mask, val_mask
+
 
 def distance_sigmoid(data, midpoint, slope):
     x = -slope*(data-midpoint)
@@ -66,212 +77,316 @@ def initialize_model(parser_args):
         raise ValueError("Unknown Model Type:", model_name)
     return model
 
-prepend = str(os.getcwd())
 
-parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
-parser.add_argument("model_path", help="Path to the model from ./trained_models/")
-parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
-     "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to test.")
-parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
-parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
-parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
-parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
-parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
-parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
-args = parser.parse_args()
-model_name = args.model_path
-model = initialize_model(args)
 
-model_path = prepend + "/trained_models/" + model_name
-set_to_use = args.test_set
-surface_only = not args.all_atom_prediction
-k_hops = args.k_hops
+def parse():
+    parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("infer_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "production"], help="Test or production set.")
+    parser.add_argument("model_path", help="Path to the model from ./trained_models/")
+    parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
+        "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to test.")
+    parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
+    parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
+    parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
+    parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
+    parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
+    parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
+    parser.add_argument("-n", "--n_tasks", type=int, default=4, help="Number of cpu workers.")
 
-label_midpoint, label_slope = args.sigmoid_params
+    args = parser.parse_args()
 
-device = 'cpu'
-if torch.cuda.is_available():
-    device = 'cuda'
+    return args
 
-num_cpus = 4
-print("The model will be using the following device:", device)
-print("The model will be using {} cpus.".format(num_cpus))
 
-# Load Saved model
-state_dict = torch.load(model_path, map_location=device)
-model.load_state_dict(state_dict)
-model.to(device)
- 
-#########################
-if set_to_use == 'val':
-    print("Initializing Validation Set")
-    path_to_dataset = prepend + '/scPDB_data_dir'
-    metric_dir = '/test_metrics/validation'
+def infer_test(args):
+    prepend = str(os.getcwd())
 
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
-    train_mask, val_mask = k_fold(data_set, prepend, 0) 
-    val_set     = data_set[val_mask]
-    test_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
-else:  
-    if set_to_use ==  'coach420':
-        print("Initializing coach420 Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/coach420'
-        metric_dir = '/test_metrics/coach420'
-    elif set_to_use ==  'coach420_mlig':
-        print("Initializing coach420 Mlig Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/coach420_mlig'
-        metric_dir = '/test_metrics/coach420_mlig'
-    elif set_to_use == 'holo4k':
-        print("Initializing holo4k Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/holo4k'
-        metric_dir = '/test_metrics/holo4k'
-    elif set_to_use == 'holo4k_mlig':
-        print("Initializing holo4k Mlig Set")    
-        path_to_dataset = prepend + '/benchmark_data_dir/holo4k_mlig'
-        metric_dir = '/test_metrics/holo4k_mlig'
-    else:
-        raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
+    model_name = args.model_path
+    model = initialize_model(args)
+
+    model_path = prepend + "/trained_models/" + model_name
+    set_to_use = args.infer_set
+    surface_only = not args.all_atom_prediction
+    k_hops = args.k_hops
+
+    label_midpoint, label_slope = args.sigmoid_params
+
+    ###################################################################################
+
+    # Other Parameters
+    device = 'cpu'
+    if torch.cuda.is_available():
+        device = 'cuda'
+
+    num_cpus = args.n_tasks
+    print("The model will be using the following device:", device)
+    print("The model will be using {} cpus.".format(num_cpus))
+
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+
+    model.to(device)
+    
+    #########################
+    if set_to_use == 'val':
+        print("Initializing Validation Set")
+        path_to_dataset = prepend + '/scPDB_data_dir'
+        metric_dir = '/test_metrics/validation'
+
+        data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+        train_mask, val_mask = k_fold(data_set, prepend, 0) 
+        val_set     = data_set[val_mask]
+        val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
+    else:  
+        if set_to_use ==  'coach420':
+            print("Initializing coach420 Set")    
+            path_to_dataset = prepend + '/benchmark_data_dir/coach420'
+            metric_dir = '/test_metrics/coach420'
+        elif set_to_use ==  'coach420_mlig':
+            print("Initializing coach420 Mlig Set")    
+            path_to_dataset = prepend + '/benchmark_data_dir/coach420_mlig'
+            metric_dir = '/test_metrics/coach420_mlig'
+        elif set_to_use == 'holo4k':
+            print("Initializing holo4k Set")    
+            path_to_dataset = prepend + '/benchmark_data_dir/holo4k'
+            metric_dir = '/test_metrics/holo4k'
+        elif set_to_use == 'holo4k_mlig':
+            print("Initializing holo4k Mlig Set")    
+            path_to_dataset = prepend + '/benchmark_data_dir/holo4k_mlig'
+            metric_dir = '/test_metrics/holo4k_mlig'
+        else:
+            raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
+        data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+        data_set.process()
+        val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
+
+    test_epoch_loss = []
+    test_epoch_acc = []
+    test_epoch_mcc = []
+    test_epoch_pr_auc = []
+
+    all_probs = torch.Tensor([])
+    all_labels = torch.Tensor([])
+
+    prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
+    label_path = prepend + metric_dir + '/labels/' + model_name + '/'
+    surface_path = prepend + metric_dir + '/SASAs/'
+    index_path = prepend + metric_dir + '/indices/' + model_name + '/'
+
+    if not os.path.isdir(prob_path):
+        os.makedirs(prob_path)
+    if not os.path.isdir(label_path):
+        os.makedirs(label_path)
+    if not os.path.isdir(surface_path):
+        os.makedirs(surface_path)
+    if not os.path.isdir(index_path):
+        os.makedirs(index_path)
+
+    print("Begining Evaluation")
+    model.eval()
+    with torch.no_grad():
+        test_batch_loss = 0.0
+        test_batch_acc = 0.0
+        test_batch_mcc = 0.0
+        test_batch_pr_auc = 0.0
+        # for batch, name in test_dataloader:
+        for batch, name in tqdm(val_dataloader, position=0, leave=True):
+            batch.y = distance_sigmoid(batch.y, label_midpoint, label_slope)
+            batch.y = torch.stack([1-batch.y, batch.y], dim=1)
+            labels = batch.y.to(device)
+            assembly_name = name[0][:-4]  
+
+            out, _ = model.forward(batch.to(device))
+
+            if surface_only:
+                surf_mask = batch.surf_mask.to(device)
+                labels = labels[surf_mask]
+                out = out[surf_mask]
+
+            probs = F.softmax(out, dim=-1) 
+            all_probs = torch.cat((all_probs, probs.detach().cpu()))
+            all_labels = torch.cat((all_labels, labels.detach().cpu()))
+            loss_fn = torch.nn.CrossEntropyLoss()
+            loss = loss_fn(out, labels)        # Cross Entropy
+            preds = np.argmax(probs.detach().cpu().numpy(), axis=1) # [1 if x[1] > prediction_threshold else 0 for x in probs]
+            bl = loss.detach().cpu().item()
+            
+            labels = batch.y.detach().cpu()
+
+            if surface_only:
+                labels = labels[surf_mask.detach().cpu()]
+
+            hard_labels = np.argmax(labels, axis=1)
+            surf_masks = batch.surf_mask.detach().cpu()
+            atom_indices = batch.atom_index.detach().cpu()
+            
+            ba = accuracy_score(hard_labels, preds)
+            bm = mcc(hard_labels, preds)
+            bpr = average_precision_score(hard_labels, probs.detach().cpu().numpy()[:,1])
+
+            test_batch_loss += bl
+            test_batch_acc  += ba
+            test_batch_mcc  += bm
+            test_batch_pr_auc += bpr
+            np.save(prob_path + assembly_name, probs.detach().cpu().numpy())
+            np.save(label_path + assembly_name, labels.detach().cpu().numpy())
+            np.save(surface_path + assembly_name, surf_masks.detach().cpu().numpy())
+            np.save(index_path + assembly_name, atom_indices.detach().cpu().numpy())
+
+        test_epoch_loss.append(test_batch_loss/len(val_dataloader))
+        test_epoch_acc.append(test_batch_acc/len(val_dataloader))
+        test_epoch_mcc.append(test_batch_mcc/len(val_dataloader))
+        test_epoch_pr_auc.append(test_batch_pr_auc/len(val_dataloader))
+        print("Loss: {}".format(test_epoch_loss[-1]))
+        print("Accu: {}".format(test_epoch_acc[-1]))
+        print("MCC:  {}".format(test_epoch_mcc[-1]))
+        print("PR AUC: {}".format(test_epoch_pr_auc[-1]))
+
+    # Code for calculating roc curves:
+    # https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc.html?highlight=roc%20curve
+
+    all_probs  =  all_probs.detach().cpu().numpy()
+    all_labels = all_labels.detach().cpu().numpy()
+
+    all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
+    all_label_path = prepend + metric_dir + '/all_labels/' + model_name + '/'
+
+    if not os.path.isdir(all_prob_path):
+        os.makedirs(all_prob_path)
+    if not os.path.isdir(all_label_path):
+        os.makedirs(all_label_path)
+
+    np.savez(all_prob_path + 'all_probs', all_probs)
+    np.savez(all_label_path + 'all_labels', all_labels)
+
+    all_hard_labels = (all_labels >= .5).astype('float')
+
+    fpr = dict()
+    tpr = dict()
+    thresholds = dict()
+    roc_auc = dict()
+    n_classes = 2
+
+    for i in range(n_classes):
+        fpr[i], tpr[i], thresholds[i] = roc_curve(all_hard_labels[:, i],all_probs[:,i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
+    # Compute micro-average ROC curve and ROC area
+    fpr["micro"], tpr["micro"], _ = roc_curve(all_hard_labels.ravel(), all_probs.ravel())
+    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+    # First aggregate all false positive rates
+    all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+
+    # Then interpolate all ROC curves at this points
+    mean_tpr = np.zeros_like(all_fpr)
+    for i in range(n_classes):
+        mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+
+    # Finally average it and compute AUC
+    mean_tpr /= n_classes
+
+    fpr["macro"] = all_fpr
+    tpr["macro"] = mean_tpr
+    roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+    roc_path = prepend + metric_dir + '/roc_curves/' + model_name
+    if not os.path.isdir(roc_path):
+        os.makedirs(roc_path)
+
+    np.savez(roc_path + "/roc_auc", roc_auc)
+    np.savez(roc_path + "/tpr", tpr)
+    np.savez(roc_path + "/fpr", fpr)
+    np.savez(roc_path + "/thresholds", thresholds)
+
+
+def infer_production(args):
+    prepend = str(os.getcwd())
+
+    model_name = args.model_path
+    model = initialize_model(args)
+
+    model_path = prepend + "/trained_models/" + model_name
+    surface_only = not args.all_atom_prediction
+    k_hops = args.k_hops
+    ###################################################################################
+
+    # Other Parameters
+    device = 'cpu'
+    if torch.cuda.is_available():
+        device = 'cuda'
+
+    num_cpus = args.n_tasks
+    print("The model will be using the following device:", device)
+    print("The model will be using {} cpus.".format(num_cpus))
+
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+
+    model.to(device)
+    
+    #########################
+
+    print("Initializing production set")    
+    path_to_dataset = prepend + '/benchmark_data_dir/production'
+    metric_dir = '/test_metrics/production'
+
     data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
     data_set.process()
-    test_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
+    val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
-test_epoch_loss = []
-test_epoch_acc = []
-test_epoch_mcc = []
-test_epoch_pr_auc = []
+    all_probs = torch.Tensor([])
 
-all_probs = torch.Tensor([])
-all_labels = torch.Tensor([])
+    prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
+    surface_path = prepend + metric_dir + '/SASAs/'
+    index_path = prepend + metric_dir + '/indices/' + model_name + '/'
 
-prob_path = prepend + metric_dir + '/probs/' + model_name + '/'
-label_path = prepend + metric_dir + '/labels/' + model_name + '/'
-surface_path = prepend + metric_dir + '/SASAs/'
-index_path = prepend + metric_dir + '/indices/' + model_name + '/'
+    if not os.path.isdir(prob_path):
+        os.makedirs(prob_path)
+    if not os.path.isdir(surface_path):
+        os.makedirs(surface_path)
+    if not os.path.isdir(index_path):
+        os.makedirs(index_path)
 
-if not os.path.isdir(prob_path):
-    os.makedirs(prob_path)
-if not os.path.isdir(label_path):
-    os.makedirs(label_path)
-if not os.path.isdir(surface_path):
-    os.makedirs(surface_path)
-if not os.path.isdir(index_path):
-    os.makedirs(index_path)
+    print("Begining Evaluation")
+    model.eval()
+    with torch.no_grad():
+        # for batch, name in test_dataloader:
+        for batch, name in tqdm(val_dataloader, position=0, leave=True):
+            assembly_name = name[0][:-4]  
 
-loss_fn = torch.nn.CrossEntropyLoss()
+            out, _ = model.forward(batch.to(device))
 
-print("Begining Evaluation")
-model.eval()
-with torch.no_grad():
-    test_batch_loss = 0.0
-    test_batch_acc = 0.0
-    test_batch_mcc = 0.0
-    test_batch_pr_auc = 0.0
-    # for batch, name in test_dataloader:
-    for batch, name in tqdm(test_dataloader, position=0, leave=True):
-        batch.y = distance_sigmoid(batch.y, label_midpoint, label_slope)
-        batch.y = torch.stack([1-batch.y, batch.y], dim=1)
-        labels = batch.y.to(device)
-        assembly_name = name[0][:-4]  
+            if surface_only:
+                surf_mask = batch.surf_mask.to(device)
+                out = out[surf_mask]
 
-        out, _ = model.forward(batch.to(device))
+            probs = F.softmax(out, dim=-1) 
 
-        if surface_only:
-            surf_mask = batch.surf_mask.to(device)
-            labels = labels[surf_mask]
-            out = out[surf_mask]
+            surf_masks = batch.surf_mask.detach().cpu()
+            atom_indices = batch.atom_index.detach().cpu()
 
-        probs = F.softmax(out, dim=-1) 
-        all_probs = torch.cat((all_probs, probs.detach().cpu()))
-        all_labels = torch.cat((all_labels, labels.detach().cpu()))
-        loss = loss_fn(out, labels)
-        preds = np.argmax(probs.detach().cpu().numpy(), axis=1)
-        bl = loss.detach().cpu().item()
-        
-        labels = batch.y.detach().cpu()
+            np.save(prob_path + assembly_name, probs.detach().cpu().numpy())
+            np.save(surface_path + assembly_name, surf_masks.detach().cpu().numpy())
+            np.save(index_path + assembly_name, atom_indices.detach().cpu().numpy())
 
-        if surface_only:
-            labels = labels[surf_mask.detach().cpu()]
 
-        hard_labels = np.argmax(labels, axis=1)
-        surf_masks = batch.surf_mask.detach().cpu()
-        atom_indices = batch.atom_index.detach().cpu()
-        
-        ba = accuracy_score(hard_labels, preds)
-        bm = mcc(hard_labels, preds)
-        bpr = average_precision_score(hard_labels, probs.detach().cpu().numpy()[:,1])
+    # Code for calculating roc curves:
+    # https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc.html?highlight=roc%20curve
 
-        test_batch_loss += bl
-        test_batch_acc  += ba
-        test_batch_mcc  += bm
-        test_batch_pr_auc += bpr
-        np.save(prob_path + assembly_name, probs.detach().cpu().numpy())
-        np.save(label_path + assembly_name, labels.detach().cpu().numpy())
-        np.save(surface_path + assembly_name, surf_masks.detach().cpu().numpy())
-        np.save(index_path + assembly_name, atom_indices.detach().cpu().numpy())
+    all_probs  =  all_probs.detach().cpu().numpy()
 
-    test_epoch_loss.append(test_batch_loss/len(test_dataloader))
-    test_epoch_acc.append(test_batch_acc/len(test_dataloader))
-    test_epoch_mcc.append(test_batch_mcc/len(test_dataloader))
-    test_epoch_pr_auc.append(test_batch_pr_auc/len(test_dataloader))
-    print("Loss: {}".format(test_epoch_loss[-1]))
-    print("Accu: {}".format(test_epoch_acc[-1]))
-    print("MCC:  {}".format(test_epoch_mcc[-1]))
-    print("PR AUC: {}".format(test_epoch_pr_auc[-1]))
+    all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
 
-# Code for calculating roc curves:
-# https://scikit-learn.org/stable/auto_examples/model_selection/plot_roc.html?highlight=roc%20curve
+    if not os.path.isdir(all_prob_path):
+        os.makedirs(all_prob_path)
 
-all_probs  =  all_probs.detach().cpu().numpy()
-all_labels = all_labels.detach().cpu().numpy()
+    np.savez(all_prob_path + 'all_probs', all_probs)
 
-all_prob_path = prepend + metric_dir + '/all_probs/' + model_name + '/'
-all_label_path = prepend + metric_dir + '/all_labels/' + model_name + '/'
 
-if not os.path.isdir(all_prob_path):
-    os.makedirs(all_prob_path)
-if not os.path.isdir(all_label_path):
-    os.makedirs(all_label_path)
-
-np.savez(all_prob_path + 'all_probs', all_probs)
-np.savez(all_label_path + 'all_labels', all_labels)
-
-all_hard_labels = (all_labels >= .5).astype('float')
-
-fpr = dict()
-tpr = dict()
-thresholds = dict()
-roc_auc = dict()
-n_classes = 2
-
-for i in range(n_classes):
-    fpr[i], tpr[i], thresholds[i] = roc_curve(all_hard_labels[:, i],all_probs[:,i])
-    roc_auc[i] = auc(fpr[i], tpr[i])
-
-# Compute micro-average ROC curve and ROC area
-fpr["micro"], tpr["micro"], _ = roc_curve(all_hard_labels.ravel(), all_probs.ravel())
-roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
-
-# First aggregate all false positive rates
-all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
-
-# Then interpolate all ROC curves at this points
-mean_tpr = np.zeros_like(all_fpr)
-for i in range(n_classes):
-    mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
-
-# Finally average it and compute AUC
-mean_tpr /= n_classes
-
-fpr["macro"] = all_fpr
-tpr["macro"] = mean_tpr
-roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
-
-roc_path = prepend + metric_dir + '/roc_curves/' + model_name
-if not os.path.isdir(roc_path):
-    os.makedirs(roc_path)
-
-np.savez(roc_path + "/roc_auc", roc_auc)
-np.savez(roc_path + "/tpr", tpr)
-np.savez(roc_path + "/fpr", fpr)
-np.savez(roc_path + "/thresholds", thresholds)
+if __name__ == "__main__":
+    args = parse()
+    if args.infer_set == "production":
+        infer_production(args)
+    else:
+        infer_test(args)

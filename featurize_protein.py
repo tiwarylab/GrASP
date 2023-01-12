@@ -3,7 +3,7 @@ import numpy as np
 import pyximport; pyximport.install()
 
 
-def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
+def process_system(path_to_protein_mol2_files, save_directory='./data_dir', parse_ligands=True):
     # I really wish I didn't have to do this but the way some of these paackages pickle I have no other way. If you know a better alternative feel free to reach out
     import re
     import MDAnalysis as mda
@@ -182,15 +182,18 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
         raise ValueError ("Adjacency matrix shape ({}) did not match feature array shape ({}). {}".format(np.array(trimmed).shape, np.array(feature_array).shape, structure_name))
 
     # Classes
-    lig_coord_list = []
-    for file_path in glob(f'{path_to_files}/*'):
-        if 'ligand' in file_path and not 'site' in file_path:
-            lig_univ = mda.Universe(file_path)
-            lig_coord_list.append(lig_univ.select_atoms('not element H').positions)
+    if parse_ligands:
+        lig_coord_list = []
+        for file_path in glob(f'{path_to_files}/*'):
+            if 'ligand' in file_path and not 'site' in file_path:
+                lig_univ = mda.Universe(file_path)
+                lig_coord_list.append(lig_univ.select_atoms('not element H').positions)
 
-    prot_coords = protein.positions
-    all_lig_coords = np.row_stack(lig_coord_list)
-    distance_to_ligand = np.min(distance_array(prot_coords, all_lig_coords), axis=1)
+        prot_coords = protein.positions
+        all_lig_coords = np.row_stack(lig_coord_list)
+        distance_to_ligand = np.min(distance_array(prot_coords, all_lig_coords), axis=1)
+    else:
+        distance_to_ligand = 99 * np.ones(len(protein.atoms))
 
     # Creating edge_attributes dictionary. Only holds bond types, weights are stored in trimmed
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
@@ -201,7 +204,3 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir'):
     protein.atoms.write(save_directory + '/mol2/' + str(structure_name) +'.mol2')
 
     return None
-
-if __name__ == "_main__":
-    structure_name = '1ds7_2'
-    process_system('./data_dir/unprocessed_mol2/' + structure_name, save_directory='./data_dir')

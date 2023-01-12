@@ -347,6 +347,20 @@ def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir"):
         raise e
 
 
+def process_production_set(path, data_dir="benchmark_data_dir/production"):
+    try:
+        prepend = os.getcwd()
+        structure_name = path.split('/')[-1].split('.')[0]
+        mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
+        format = path.split('.')[-1]
+        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, in_format=format, out_name='protein', parse_prot=True)
+        if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
+        if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
+        process_system(mol2_dir + structure_name, save_directory=f'{prepend}/{data_dir}', parse_ligands=False)
+    except Exception as e:
+        raise e
+
+
 if __name__ == "__main__":
     num_cores = 24
     prepend = os.getcwd()
@@ -354,7 +368,7 @@ if __name__ == "__main__":
     from joblib import Parallel, delayed
 
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen11", "joined"], help="Dataset to prepare.")
+    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen11", "joined", "production"], help="Dataset to prepare.")
     args = parser.parse_args()
     dataset = args.dataset
  
@@ -417,3 +431,7 @@ if __name__ == "__main__":
         if os.path.exists(nolig_file): os.remove(nolig_file)
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/joined', chen_fix=True) for i in tqdm(full_df.index))
         
+    elif dataset == "production":
+        prod_dir = f'benchmark_data_dir/production'
+        paths = glob(f'{prod_dir}/unprocessed_inputs/*')
+        Parallel(n_jobs=num_cores)(delayed(process_production_set)(path, prod_dir) for path in tqdm(paths))
