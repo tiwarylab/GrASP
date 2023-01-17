@@ -187,7 +187,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
         for file_path in glob(f'{path_to_files}/*'):
             if 'ligand' in file_path and not 'site' in file_path:
                 lig_univ = mda.Universe(file_path)
-                lig_coord_list.append(lig_univ.select_atoms('not element H').positions)
+                lig_coord_list.append(lig_univ.atoms.positions)
 
         prot_coords = protein.positions
         all_lig_coords = np.row_stack(lig_coord_list)

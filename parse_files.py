@@ -136,15 +136,6 @@ def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format
         mda.coordinates.writer(output_mol2_path).write(univ.atoms)
 
 
-def convert_all_pdb(structure_name, out_directory, addH=True, parse_prot=True):
-    output_path = out_directory + structure_name
-    files = os.listdir(output_path)
-    for file in files:
-        if file.split('.')[-1] == 'pdb':
-            convert_to_mol2(f'{output_path}/{file}', structure_name, out_directory, addH=addH, out_name=file[:-4], parse_prot=parse_prot)
-            os.remove(f'{output_path}/{file}')
-
-
 def load_p2rank_set(file, skiprows=0, pdb_dir='unprocessed_pdb', joined_style=False):
     df = pd.read_csv(file, sep='\s+', names=['path'], index_col=False, skiprows=skiprows)
     if joined_style: df['path'] = ['/'.join(file.split('/')[::2]) for file in df['path']] #removing subset directory
@@ -170,36 +161,28 @@ def write_mlig(df, out_file):
             f.write(f'{val[0]}  {",".join(val[1])}\n')
 
 
-def extract_residues_p2rank(mol_directory, univ_extension='pdb'):
-    univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
-    univ.dimensions = None # this prevents PBC bugs in distance calculation
+def load_p2rank_test_ligands(p2rank_file):
+    ligand_df = pd.read_csv(p2rank_file, delimiter=', ', engine='python')
+    ligand_df['atomIds'] = [[int(atom) for atom in row.split(' ')] for row in ligand_df['atomIds']]
+    
+    return ligand_df
+
+
+def extract_ligand_from_p2rank_df(path, name, out_dir, ligand_df):
+    univ = mda.Universe(path)
+    selected_rows = ligand_df[ligand_df['file'] == f'{name}.pdb']
+    
     lig_ind = 0
-
-    sel = univ.select_atoms('record_type HETATM and around 4 protein')
-    for res in sel.residues:
-        if (res.resname[:3] not in exclusion_list) and (res.atoms.n_atoms >= 5):
-            com = res.atoms.center_of_mass()
-            com_string = ' '.join(com.astype(str).tolist())
-            not_protruding = univ.select_atoms(f'protein and not element H and point {com_string} 5.5').n_atoms > 0
-            if not_protruding:
-                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
-                lig_ind += 1
-
-
-def extract_residues_from_list(mol_directory, lig_resnames, univ_extension='pdb'):
-    univ = mda.Universe(f'{mol_directory}/system.{univ_extension}')
-    univ.dimensions = None # this prevents PBC bugs in distance calculation
-    lig_ind = 0
-
-    sel = univ.select_atoms('record_type HETATM and around 4 protein')
-    for res in sel.residues:
-        if (res.resname[:3] not in exclusion_list) and (res.resname[:3] in lig_resnames) and (res.atoms.n_atoms >= 5):
-            com = res.atoms.center_of_mass()
-            com_string = ' '.join(com.astype(str).tolist())
-            not_protruding = univ.select_atoms(f'protein and not element H and point {com_string} 5.5').n_atoms > 0
-            if not_protruding:
-                write_fragment(res.atoms, univ, f'{mol_directory}/ligand_{lig_ind}.{univ_extension}', check_overlap=False)
-                lig_ind += 1
+    for i in selected_rows.index:
+        resname, n_atoms, ids = selected_rows['ligand'][i], selected_rows['#atoms'][i], selected_rows['atomIds'][i]
+        selection = (univ.atoms.resnames == resname) * np.isin(univ.atoms.ids, ids)
+        ligand = univ.atoms[selection]
+        
+        if ligand.n_atoms == n_atoms:
+            ligand.write(f'{out_dir}/ligand_{lig_ind}.pdb')
+            lig_ind += 1
+        else:
+            print(f'Error: Ligand match for {resname} not found in {name}.pdb.', flush=True)
 
 
 def check_p2rank_criteria(prot_univ, lig_univ):
@@ -258,6 +241,7 @@ def process_train_p2rank(file, output_dir):
     except Exception as e:
         raise e
 
+
 def process_train_openbabel(file, output_dir):
     try:
         prepend = os.getcwd()
@@ -289,57 +273,28 @@ def process_train_classic(structure_name, output_dir, unprocessed_dir = 'unproce
         raise e
         
 
-def process_p2rank_set(path, data_dir="benchmark_data_dir", chen_fix=False):
+def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=False):
     print(f'\n PARSING {path} \n', flush=True)
     try:
         prepend = os.getcwd()
         structure_name = '.'.join(path.split('/')[-1].split('.')[:-1])
         mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
         convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, out_name='protein', parse_prot=True)
-        shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extractio
+
         if chen_fix:
             univ = mda.Universe(f'{mol2_dir}{structure_name}/system.pdb')
             mda.coordinates.writer(f'{mol2_dir}{structure_name}/system.pdb').write(univ.atoms)
-        extract_residues_p2rank(f'{mol2_dir}{structure_name}') # parsing pdb avoids selection issues
+
+        extract_ligand_from_p2rank_df(path, structure_name, mol2_dir, ligand_df)
 
         n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}')])
         if n_ligands > 0:
-            label_sites_given_ligands(f'{mol2_dir}{structure_name}')
             if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
             if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
             process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
         else:
             with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
                 f.write(f'{structure_name}\n')
-                
-        convert_all_pdb(structure_name, mol2_dir, parse_prot=False) # converting system and ligand pdbs to mol2s
-        
-    except AssertionError as e:
-        print("Failed to find ligand in", structure_name)
-    except Exception as e:  
-        raise e
-
-
-def process_mlig_set(path, lig_resnames, data_dir="benchmark_data_dir"):
-    try:
-        prepend = os.getcwd()
-        structure_name = path.split('/')[-1].split('.')[0]
-        mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
-        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, out_name='protein', parse_prot=True)
-        shutil.copyfile(f'{prepend}/{path}', f'{mol2_dir}{structure_name}/system.pdb') # copying pdb for ligand extraction
-        extract_residues_from_list(f'{mol2_dir}{structure_name}', lig_resnames) # parsing pdb avoids selection issues
-
-        n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}')])
-        if n_ligands > 0:
-            label_sites_given_ligands(f'{mol2_dir}{structure_name}')
-            if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
-            if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
-            process_system(mol2_dir + structure_name, save_directory='./'+data_dir)
-        else:
-            with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
-                f.write(f'{structure_name}\n')
-
-        convert_all_pdb(structure_name, mol2_dir, parse_prot=False) # converting system and ligand pdbs to mol2s
         
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
@@ -389,33 +344,25 @@ if __name__ == "__main__":
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
         Parallel(n_jobs=num_cores)(delayed(process_train_classic)(filename, 'data_dir') for filename in tqdm(mol2_files[:])) 
 
-    elif dataset == "coach420":
-        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/coach420.ds')
-        nolig_file = f'{prepend}/benchmark_data_dir/coach420/no_ligands.txt'
+    elif dataset == "coach420" or dataset == "coach420_mlig":
+        ligand_df = load_p2rank_test_ligands(f'{prepend}/test_metrics/{dataset}/p2rank/cases/ligands.csv')
+        data_dir = f'benchmark_data_dir/{dataset}'
+        nolig_file = f'{prepend}/{data_dir}/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/coach420') for i in tqdm(full_df.index))
+        systems = np.unique(ligand_df['file'])
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'{prepend}/benchmark_data_dir/coach420/unprocessed_pdb/{system}',
+         data_dir=data_dir) for system in tqdm(systems))
     
-    elif dataset == "coach420_mlig":
-        full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/coach420(mlig).ds', skiprows=4)
-        nolig_file = f'{prepend}/benchmark_data_dir/coach420_mlig/no_ligands.txt'
-        if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/coach420_mlig') for i in tqdm(full_df.index))
-    
-    elif dataset == "holo4k":
+    elif dataset == "holo4k" or dataset == "holo4k_mlig":
         print('Cleaning alternate positions...')
         clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')
-        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/holo4k.ds', pdb_dir='cleaned_pdb')
-        nolig_file = f'{prepend}/benchmark_data_dir/holo4k/no_ligands.txt'
+        ligand_df = load_p2rank_test_ligands(f'{prepend}/test_metrics/{dataset}/p2rank/cases/ligands.csv')
+        data_dir = f'benchmark_data_dir/{dataset}'
+        nolig_file = f'{prepend}/{data_dir}/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/holo4k') for i in tqdm(full_df.index))
-    
-    elif dataset == "holo4k_mlig":
-        print('Cleaning alternate positions...')
-        clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')
-        full_df = load_p2rank_mlig(f'{prepend}/benchmark_data_dir/holo4k(mlig).ds', skiprows=2, pdb_dir='cleaned_pdb')
-        nolig_file = f'{prepend}/benchmark_data_dir/holo4k_mlig/no_ligands.txt'
-        if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_mlig_set)(full_df['path'][i], full_df['ligands'][i], data_dir='/benchmark_data_dir/holo4k_mlig') for i in tqdm(full_df.index))
+        systems = np.unique(ligand_df['file'])
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/{system}',
+         data_dir=data_dir) for system in tqdm(systems))
 
     elif dataset == "chen11":
         full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/chen11.ds', skiprows=5)
