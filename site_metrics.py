@@ -20,6 +20,7 @@ import sys
 import argparse
 from joblib import Parallel, delayed
 
+
 def center_of_mass(coords, masses):
     return np.sum(coords*np.tile(masses, (3,1)).T, axis=0)/np.sum(masses)
 
@@ -151,7 +152,7 @@ def cluster_atoms_linkage(all_coords, predicted_probs, threshold=.5, score_type=
     else:
         # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
         # the clustering fails so we'll just call this one atom our best 'cluster'.
-        sorted_ids = [0]
+        sorted_ids = np.ones(1)
 
     all_ids = -1*np.ones(predicted_labels.shape)
     all_ids[predicted_labels] = sorted_ids
@@ -243,7 +244,36 @@ def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, type='pr
 def subgraph_adjacency(adjacency, indices):
     return adjacency[indices].T[indices].T
 
-def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, top_n_plus=0, threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, adj_matrix=None, surf_mask=None):
+
+def convert_atom_indices_to_array_indices(input_atom_order, atom_array):
+    array_indices = np.array([np.where(atom_array == atom)[0][0] for atom in input_atom_order])
+
+    return array_indices
+
+
+def get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indices, sorted_ids, predicted_probs, threshold):
+    predicted_labels = predicted_probs[:,1] > threshold
+    predicted_probs = predicted_probs[predicted_labels]
+    tracked_indices = tracked_indices[predicted_labels]
+    
+    selected_connolly = np.isin(connolly_atoms, tracked_indices)
+    if np.sum(selected_connolly) == 0:
+        print('Failed to project atom indices onto connolly.')
+        return None, None, None
+    connolly_atoms = connolly_atoms[selected_connolly]
+    bind_coords = connolly_vertices[selected_connolly]
+
+    where_in_arrays = convert_atom_indices_to_array_indices(connolly_atoms, tracked_indices)
+    sorted_ids = sorted_ids[where_in_arrays]
+    predicted_probs = predicted_probs[where_in_arrays]
+
+
+    return bind_coords, sorted_ids, predicted_probs
+
+
+def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, top_n_plus=0, 
+threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", 
+cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_indices=None):
     """Cluster multiple binding sites and calculate distance from the ligand
 
     Parameters
@@ -289,6 +319,10 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
         prot_coords = prot_coords[surf_mask]
         if method == "louvain":
             adj_matrix = subgraph_adjacency(adj_matrix, surf_mask)
+    if connolly_data is not None:
+        connolly_vertices = connolly_data['vertices']
+        connolly_atoms = connolly_data['atom_indices']
+        tracked_indices = tracked_indices[surf_mask]
 
     if method == "meanshift":
         bind_coords, sorted_ids, all_ids = cluster_atoms_meanshift(prot_coords, predicted_probs, threshold=threshold, cluster_all=cluster_all, score_type=score_type)
@@ -299,6 +333,8 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
     elif method == "linkage":
         bind_coords, sorted_ids, all_ids = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
     
+    if connolly_data is not None:
+        bind_coords, sorted_ids, predicted_probs = get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indices, sorted_ids, predicted_probs, threshold)
         
     ligand_center_list = [center_of_mass(lig_coord_list[i], ligand_mass_list[i]) for i in range(len(lig_coord_list))]
 
@@ -306,7 +342,7 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
     if centroid_type == "hull":
         _, _, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites+top_n_plus)
     else:
-        bind_probs = predicted_probs[all_ids > -1]
+        bind_probs = predicted_probs[predicted_probs[:,1] > threshold]
         predicted_center_list = center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites+top_n_plus, type=centroid_type)
 
     if type(sorted_ids) == type(None):
@@ -340,7 +376,7 @@ def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_p
         return nan_arr, nan_arr, n_predicted
 
 
-def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, use_surface=False):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, use_surface=False, use_connolly=False):
     DCC_lig_list = []
     DCA_list = []
 
@@ -354,8 +390,14 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             atom_indices = np.load(prepend + metric_dir + '/indices/' + model_name + '/' + assembly_name + '.npy')
 
             surf_mask = None
+            connolly_data = None
+            tracked_indices = None
             if use_surface: 
                 surf_mask = np.load(prepend + metric_dir + '/SASAs/'  + assembly_name + '.npy')
+            if use_connolly:
+                connolly_dir = '/'.join(path_to_mol2.split('/')[:-2])+'/connolly'
+                connolly_data = np.load(f'{connolly_dir}/{assembly_name}.npz')
+                tracked_indices = atom_indices
             # print(probs.shape)
             ############### THIS IS TEMPORARY AF REMOVE BEFORE PUBLICAITON ##############
             if is_label: probs = labels
@@ -367,7 +409,7 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             for file_path in sorted(glob(data_dir + '/ready_to_parse_mol2/' + assembly_name + '/*')):
                 # print(file_path)
                 if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
-                    ligand = mda.Universe(file_path).select_atoms("not element H")
+                    ligand = mda.Universe(file_path)
                     rdk_ligand = Chem.MolFromMol2File(file_path, removeHs = False, sanitize=False, cleanupSubstructures=False)
                     lig_coord_list.append(list(ligand.atoms.positions))
                     ligand_mass_list.append([rdk_ligand.GetAtomWithIdx(int(i)).GetMass() for i in ligand.atoms.indices])
@@ -376,7 +418,8 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             adj_matrix = subgraph_adjacency(adj_matrix, atom_indices)
             DCC_lig, DCA, n_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, ligand_mass_list,
                 probs, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
-                centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask)
+                centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask, connolly_data=connolly_data,
+                tracked_indices=tracked_indices)
 
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCA)): 
                 no_prediction_count += 1
@@ -410,6 +453,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--compute_optimal", action="store_true", help="Option to compute optimal threshold.")
     parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
+    parser.add_argument("-uc", "--use_connolly", action="store_true", help="Project clusters onto Connolly surface to make sites.")
     parser.add_argument("-a", "--aggregation_function", default="square", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
     parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
     parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square", "centroid"], help="Type of centroid to use for site center.")
@@ -432,6 +476,7 @@ if __name__ == "__main__":
     score_type = args.aggregation_function
     centroid_type = args.centroid_type
     use_surface = not args.all_atom_prediction
+    use_connolly = args.use_connolly
     n_jobs = args.n_tasks
 
     is_label=args.use_labels
@@ -439,6 +484,8 @@ if __name__ == "__main__":
         print("Using labels rather than probabilities.")
     if use_surface:
         print("Using surface atoms to predict sites.")
+    if use_connolly:
+        print("Projecting sites onto Connolly surface.")
 
     set_to_use = args.test_set
     if set_to_use == 'val':
@@ -549,7 +596,7 @@ if __name__ == "__main__":
             path_to_labels= prepend + metric_dir + '/labels/' + model_name + '/'
             DCC_lig, DCA, n_predicted, no_prediction_count, names = compute_metrics_for_all(
                 path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution,
-                 method=method, score_type=score_type, centroid_type=centroid_type, use_surface=use_surface)
+                 method=method, score_type=score_type, centroid_type=centroid_type, use_surface=use_surface, use_connolly=use_connolly)
 
             print("Done. {}".format(time.time()- start))
             out.write("Done. {}\n".format(time.time()- start))
