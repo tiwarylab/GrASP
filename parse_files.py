@@ -164,6 +164,7 @@ def write_mlig(df, out_file):
 def load_p2rank_test_ligands(p2rank_file):
     ligand_df = pd.read_csv(p2rank_file, delimiter=', ', engine='python')
     ligand_df['atomIds'] = [[int(atom) for atom in row.split(' ')] for row in ligand_df['atomIds']]
+    ligand_df['ligand'] = [row.split('&') for row in ligand_df['ligand']]
     
     return ligand_df
 
@@ -174,15 +175,15 @@ def extract_ligand_from_p2rank_df(path, name, out_dir, ligand_df):
     
     lig_ind = 0
     for i in selected_rows.index:
-        resname, n_atoms, ids = selected_rows['ligand'][i], selected_rows['#atoms'][i], selected_rows['atomIds'][i]
-        selection = (univ.atoms.resnames == resname) * np.isin(univ.atoms.ids, ids)
+        resnames, n_atoms, ids = selected_rows['ligand'][i], selected_rows['#atoms'][i], selected_rows['atomIds'][i]
+        selection = np.isin(univ.atoms.resnames, resnames) * np.isin(univ.atoms.ids, ids)
         ligand = univ.atoms[selection]
         
         if ligand.n_atoms == n_atoms:
             ligand.write(f'{out_dir}/ligand_{lig_ind}.pdb')
             lig_ind += 1
         else:
-            print(f'Error: Ligand match for {resname} not found in {name}.pdb.', flush=True)
+            print(f'Error: Ligand match for {resnames} not found in {name}.pdb.', flush=True)
 
 
 def check_p2rank_criteria(prot_univ, lig_univ):
@@ -274,7 +275,6 @@ def process_train_classic(structure_name, output_dir, unprocessed_dir = 'unproce
         
 
 def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=False):
-    print(f'\n PARSING {path} \n', flush=True)
     try:
         prepend = os.getcwd()
         structure_name = '.'.join(path.split('/')[-1].split('.')[:-1])
@@ -285,7 +285,7 @@ def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=
             univ = mda.Universe(f'{mol2_dir}{structure_name}/system.pdb')
             mda.coordinates.writer(f'{mol2_dir}{structure_name}/system.pdb').write(univ.atoms)
 
-        extract_ligand_from_p2rank_df(path, structure_name, mol2_dir, ligand_df)
+        extract_ligand_from_p2rank_df(path, structure_name, f'{mol2_dir}/{structure_name}', ligand_df)
 
         n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}')])
         if n_ligands > 0:
@@ -350,8 +350,8 @@ if __name__ == "__main__":
         nolig_file = f'{prepend}/{data_dir}/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
         systems = np.unique(ligand_df['file'])
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'{prepend}/benchmark_data_dir/coach420/unprocessed_pdb/{system}',
-         data_dir=data_dir) for system in tqdm(systems))
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'benchmark_data_dir/coach420/unprocessed_pdb/{system}',
+         ligand_df, data_dir=data_dir) for system in tqdm(systems))
     
     elif dataset == "holo4k" or dataset == "holo4k_mlig":
         print('Cleaning alternate positions...')
@@ -361,22 +361,8 @@ if __name__ == "__main__":
         nolig_file = f'{prepend}/{data_dir}/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
         systems = np.unique(ligand_df['file'])
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/{system}',
-         data_dir=data_dir) for system in tqdm(systems))
-
-    elif dataset == "chen11":
-        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/chen11.ds', skiprows=5)
-        nolig_file = f'{prepend}/benchmark_data_dir/chen11/no_ligands.txt'
-        if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/chen11', chen_fix=True) for i in tqdm(full_df.index))
-
-    elif dataset == "joined":
-        print('Cleaning alternate positions...')
-        clean_alternate_positions(f'{prepend}/benchmark_data_dir/joined/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/joined/cleaned_pdb/')
-        full_df = load_p2rank_set(f'{prepend}/benchmark_data_dir/joined.ds', pdb_dir='cleaned_pdb', joined_style=True)
-        nolig_file = f'{prepend}/benchmark_data_dir/joined/no_ligands.txt'
-        if os.path.exists(nolig_file): os.remove(nolig_file)
-        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(full_df['path'][i], data_dir='/benchmark_data_dir/joined', chen_fix=True) for i in tqdm(full_df.index))
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'benchmark_data_dir/holo4k/cleaned_pdb/{system}',
+         ligand_df, data_dir=data_dir) for system in tqdm(systems))
         
     elif dataset == "production":
         prod_dir = f'benchmark_data_dir/production'
