@@ -37,7 +37,7 @@ import time
 from torch.autograd import Variable
 from torch.nn.modules.loss import _WeightedLoss
 
-from GASP_dataset import GASPData#, GASPData_noisy_nodes
+from GASP_dataset import GASPData
 from model import GAT_model
 
 
@@ -106,6 +106,7 @@ def main(node_noise_std : float, training_split='cv'):
     head_loss_weight = args.head_loss_weight
     label_midpoint, label_slope = args.sigmoid_params
     k_hops = args.k_hops
+    sasa_threshold = args.sasa_threshold
     
     
     num_cpus = args.n_tasks
@@ -117,13 +118,13 @@ def main(node_noise_std : float, training_split='cv'):
 
     if training_split == 'chen':
         do_validation = True
-        train_set = GASPData(f'{prepend}/benchmark_data_dir/chen11', num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
-        val_set = GASPData(f'{prepend}/benchmark_data_dir/joined', num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+        train_set = GASPData(f'{prepend}/benchmark_data_dir/chen11', num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
+        val_set = GASPData(f'{prepend}/benchmark_data_dir/joined', num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
 
         gen = zip([train_set], [val_set], [0])
     
     else:
-        data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+        data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
         
         do_validation = False
         if training_split == 'cv' or training_split == 'cv_full':
@@ -370,6 +371,7 @@ if __name__ == "__main__":
     parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
     parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
+    parser.add_argument("-st", "--sasa_threshold", type=float, default=1e-4, help="SASA above which atoms are considered on the surface.")
     parser.add_argument("-n", "--n_tasks", type=int, default=8, help="Number of cpu workers.")
     args = parser.parse_args()
     argstring='_'.join(sys.argv[1:]).replace('-','')

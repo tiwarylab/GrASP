@@ -10,11 +10,12 @@ from torch_geometric.data import Data, Dataset
 from torch_geometric.utils import from_scipy_sparse_matrix, k_hop_subgraph
 
 class GASPData(Dataset):
-    def __init__(self, root, num_cpus, cutoff=5, force_process=False, surface_subgraph_hops=None):
-        self.cutoff=cutoff
-        self.force_process=force_process
+    def __init__(self, root, num_cpus, cutoff=5, force_process=False, surface_subgraph_hops=None, sasa_threshold=1e-4):
+        self.cutoff = cutoff
+        self.force_process = force_process
         self.num_cpus = num_cpus
         self.hops = surface_subgraph_hops
+        self.sasa_thresold = sasa_threshold
         
         if not os.path.isdir(root + '/processed'):
             os.mkdir(root + '/processed')
@@ -72,7 +73,7 @@ class GASPData(Dataset):
         graph = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
         graph.atom_index = torch.arange(graph.num_nodes)
         sasa = torch.FloatTensor(arr['SASA_array'])
-        graph.surf_mask = sasa > 1e-4
+        graph.surf_mask = sasa > self.sasa_thresold
 
         if self.hops is not None:
             # inducing the subgraph k hops away from the surface

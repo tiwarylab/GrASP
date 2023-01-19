@@ -91,6 +91,7 @@ def parse():
     parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
     parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
+    parser.add_argument("-st", "--sasa_threshold", type=float, default=1e-4, help="SASA above which atoms are considered on the surface.")
     parser.add_argument("-n", "--n_tasks", type=int, default=4, help="Number of cpu workers.")
 
     args = parser.parse_args()
@@ -108,6 +109,7 @@ def infer_test(args):
     set_to_use = args.infer_set
     surface_only = not args.all_atom_prediction
     k_hops = args.k_hops
+    sasa_threshold = args.sasa_threshold
 
     label_midpoint, label_slope = args.sigmoid_params
 
@@ -133,7 +135,7 @@ def infer_test(args):
         path_to_dataset = prepend + '/scPDB_data_dir'
         metric_dir = '/test_metrics/validation'
 
-        data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+        data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
         train_mask, val_mask = k_fold(data_set, prepend, 0) 
         val_set     = data_set[val_mask]
         val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
@@ -156,7 +158,7 @@ def infer_test(args):
             metric_dir = '/test_metrics/holo4k_mlig'
         else:
             raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
-        data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+        data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
         data_set.process()
         val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
@@ -309,6 +311,7 @@ def infer_production(args):
     model_path = prepend + "/trained_models/" + model_name
     surface_only = not args.all_atom_prediction
     k_hops = args.k_hops
+    sasa_threshold = args.sasa_threshold
     ###################################################################################
 
     # Other Parameters
@@ -331,7 +334,7 @@ def infer_production(args):
     path_to_dataset = prepend + '/benchmark_data_dir/production'
     metric_dir = '/test_metrics/production'
 
-    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops)
+    data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
     data_set.process()
     val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
 
