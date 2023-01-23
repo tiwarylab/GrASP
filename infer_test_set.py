@@ -30,7 +30,7 @@ from model import GAT_model
 ###################################################################################
 
 
-def k_fold(dataset, path, fold_number):
+def k_fold(dataset, prepend, fold_number):
     val_names    = np.loadtxt(prepend + "/splits/test_ids_fold"  + str(fold_number), dtype='str')
     train_names   = np.loadtxt(prepend + "/splits/train_ids_fold" + str(fold_number), dtype='str')
     
