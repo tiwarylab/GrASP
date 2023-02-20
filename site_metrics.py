@@ -348,7 +348,7 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
     if type(sorted_ids) == type(None):
         n_predicted = 0
     else:
-        n_predicted = len(predicted_center_list)
+        n_predicted = np.unique(sorted_ids[sorted_ids >= 0])
 
     if len(predicted_center_list) > 0:          
         DCC_lig_matrix = np.zeros([len(ligand_center_list), len(predicted_center_list)])
@@ -443,7 +443,8 @@ def extract_multi(metric_array):
 # model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig"], help="Test set.")
+    parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
+     "holo4k", "holo4k_mlig", "holo4k_intersect"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
     parser.add_argument("-c", "--clustering_method", default="linkage", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[4], help="Distance thresholds for clustering.")
@@ -465,7 +466,6 @@ if __name__ == "__main__":
     model_name = args.model_name
 
     prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
-    # 4.5 was found to be ebst on validation labels with threshold = 0.4
     eps_list = args.dist_thresholds
     threshold = args.prob_threshold
     resolution = args.louvain_resolution
@@ -488,27 +488,13 @@ if __name__ == "__main__":
 
     set_to_use = args.test_set
     if set_to_use == 'val':
-        print("Performing Metrics on the Validation Set")
+        print("Calculating metrics on the validation set")
         data_dir = prepend + '/scPDB_data_dir'
         metric_dir = '/test_metrics/validation'
-    elif set_to_use ==  'coach420':
-        print("Performing Metrics on the coach420 Set")    
-        data_dir = prepend + '/benchmark_data_dir/coach420'
-        metric_dir = '/test_metrics/coach420'
-    elif set_to_use ==  'coach420_mlig':
-        print("Performing Metrics on the coach420 mlig Set")    
-        data_dir = prepend + '/benchmark_data_dir/coach420_mlig'
-        metric_dir = '/test_metrics/coach420_mlig'
-    elif set_to_use == 'holo4k':
-        print("Performing Metrics on the holo4k Set")    
-        data_dir = prepend + '/benchmark_data_dir/holo4k'
-        metric_dir = '/test_metrics/holo4k'
-    elif set_to_use == 'holo4k_mlig':
-        print("Performing Metrics on the holo4k mlig Set")    
-        data_dir = prepend + '/benchmark_data_dir/holo4k_mlig'
-        metric_dir = '/test_metrics/holo4k_mlig'
     else:
-        raise ValueError("Expected one of {'val','coach420','coach420_mlig','holo4k','holo4k_mlig'} as set_to_use but got:", str(set_to_use))
+        print(f"Calculating metrics on the {set_to_use} set")    
+        data_dir = f'{prepend}/benchmark_data_dir/{set_to_use}'
+        metric_dir = f'/test_metrics/{set_to_use}'
 
     #######################################################################################
     if compute_optimal:
