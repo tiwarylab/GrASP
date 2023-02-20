@@ -185,6 +185,25 @@ def extract_ligand_from_p2rank_df(path, name, out_dir, ligand_df):
         else:
             print(f'Error: Ligand match for {resnames} not found in {name}.pdb.', flush=True)
 
+def p2rank_df_intersect(mlig_df, p2rank_df):
+    concat_list = [pd.DataFrame(columns=mlig_df.columns)]
+
+    for i in mlig_df.index:
+        row = mlig_df.iloc[i]
+        resname, n_atoms, ids = row['ligand'], row['#atoms'], row['atomIds']
+
+        resname_match = np.array([res == resname for res in p2rank_df['ligand']])
+        n_atoms_match = p2rank_df['#atoms'] == n_atoms
+        ids_match = np.array([atoms == ids for atoms in p2rank_df['atomIds']])
+
+        match = resname_match * n_atoms_match * ids_match
+        if np.any(match):
+            concat_list.append(row.to_frame().T)
+
+    intersect_df = pd.concat(concat_list, ignore_index=True)
+    
+    return intersect_df
+
 
 def check_p2rank_criteria(prot_univ, lig_univ):
     prot_univ.add_TopologyAttr('record_type')
@@ -323,7 +342,8 @@ if __name__ == "__main__":
     from joblib import Parallel, delayed
 
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen11", "joined", "production"], help="Dataset to prepare.")
+    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig",
+     "coach420_intersect", "holo4k", "holo4k_mlig", "holo4k_intersect", "chen11", "joined", "production"], help="Dataset to prepare.")
     args = parser.parse_args()
     dataset = args.dataset
  
@@ -363,7 +383,34 @@ if __name__ == "__main__":
         systems = np.unique(ligand_df['file'])
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'benchmark_data_dir/holo4k/cleaned_pdb/{system}',
          ligand_df, data_dir=data_dir) for system in tqdm(systems))
-        
+    
+    elif dataset == "coach420_intersect":
+        p2rank_df = load_p2rank_test_ligands(f'{prepend}/test_metrics/coach420/p2rank/cases/ligands.csv')
+        mlig_df =  load_p2rank_test_ligands(f'{prepend}/test_metrics/coach420_mlig/p2rank/cases/ligands.csv')
+        ligand_df = p2rank_df_intersect(mlig_df, p2rank_df)
+
+        data_dir = f'benchmark_data_dir/{dataset}'
+        nolig_file = f'{prepend}/{data_dir}/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
+        systems = np.unique(ligand_df['file'])
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'benchmark_data_dir/coach420/unprocessed_pdb/{system}',
+         ligand_df, data_dir=data_dir) for system in tqdm(systems))
+
+    elif dataset == "holo4k_intersect":
+        print('Cleaning alternate positions...')
+        clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')        
+
+        p2rank_df = load_p2rank_test_ligands(f'{prepend}/test_metrics/holo4k/p2rank/cases/ligands.csv')
+        mlig_df =  load_p2rank_test_ligands(f'{prepend}/test_metrics/holo4k_mlig/p2rank/cases/ligands.csv')
+        ligand_df = p2rank_df_intersect(mlig_df, p2rank_df)
+
+        data_dir = f'benchmark_data_dir/{dataset}'
+        nolig_file = f'{prepend}/{data_dir}/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
+        systems = np.unique(ligand_df['file'])
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'benchmark_data_dir/holo4k/cleaned_pdb/{system}',
+         ligand_df, data_dir=data_dir) for system in tqdm(systems))
+
     elif dataset == "production":
         prod_dir = f'benchmark_data_dir/production'
         paths = glob(f'{prod_dir}/unprocessed_inputs/*')
