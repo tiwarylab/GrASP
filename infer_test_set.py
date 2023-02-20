@@ -81,7 +81,8 @@ def initialize_model(parser_args):
 
 def parse():
     parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("infer_set", choices=["val", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "production"], help="Test or production set.")
+    parser.add_argument("infer_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect", 
+    "holo4k", "holo4k_mlig", "holo4k_intersect", "production"], help="Test or production set.")
     parser.add_argument("model_path", help="Path to the model from ./trained_models/")
     parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
         "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to test.")
@@ -140,24 +141,10 @@ def infer_test(args):
         val_set     = data_set[val_mask]
         val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
     else:  
-        if set_to_use ==  'coach420':
-            print("Initializing coach420 Set")    
-            path_to_dataset = prepend + '/benchmark_data_dir/coach420'
-            metric_dir = '/test_metrics/coach420'
-        elif set_to_use ==  'coach420_mlig':
-            print("Initializing coach420 Mlig Set")    
-            path_to_dataset = prepend + '/benchmark_data_dir/coach420_mlig'
-            metric_dir = '/test_metrics/coach420_mlig'
-        elif set_to_use == 'holo4k':
-            print("Initializing holo4k Set")    
-            path_to_dataset = prepend + '/benchmark_data_dir/holo4k'
-            metric_dir = '/test_metrics/holo4k'
-        elif set_to_use == 'holo4k_mlig':
-            print("Initializing holo4k Mlig Set")    
-            path_to_dataset = prepend + '/benchmark_data_dir/holo4k_mlig'
-            metric_dir = '/test_metrics/holo4k_mlig'
-        else:
-            raise ValueError("Expected one of {'val','chen','coach420','holo4k','sc6k'} as set_to_use but got:", str(set_to_use))
+        print(f"Initializing {set_to_use} set")
+        path_to_dataset = f'{prepend}/benchmark_data_dir/{set_to_use}'
+        metric_dir = f'/test_metrics/{set_to_use}'
+
         data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
         data_set.process()
         val_dataloader = DataLoader(data_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
