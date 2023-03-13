@@ -8,6 +8,7 @@ from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 import os
 import numpy as np
 import pandas as pd
+import networkx as nx
 import shutil
 import openbabel
 from tqdm import tqdm
@@ -123,7 +124,7 @@ def load_p2rank_test_ligands(p2rank_file):
     return ligand_df
 
 
-def extract_ligand_from_p2rank_df(path, name, out_dir, ligand_df):
+def extract_ligands_from_p2rank_df(path, name, out_dir, ligand_df):
     univ = mda.Universe(path)
     selected_rows = ligand_df[ligand_df['file'] == f'{name}.pdb']
     
@@ -138,6 +139,46 @@ def extract_ligand_from_p2rank_df(path, name, out_dir, ligand_df):
             lig_ind += 1
         else:
             print(f'Error: Ligand match for {resnames} not found in {name}.pdb.', flush=True)
+
+
+def select_ligands_from_p2rank_df(univ, name, ligand_df):
+    selected_rows = ligand_df[ligand_df['file'] == f'{name}.pdb']
+    
+    ligands = []
+    for i in selected_rows.index:
+        resnames, n_atoms, ids = selected_rows['ligand'][i], selected_rows['#atoms'][i], selected_rows['atomIds'][i]
+        selection = np.isin(univ.atoms.resnames, resnames) * np.isin(univ.atoms.ids, ids)
+        ligand = univ.atoms[selection]
+        
+        if ligand.n_atoms == n_atoms:
+            ligands.append(ligand)
+        else:
+            print(f'Error: Ligand match for {resnames} not found in {name}.pdb.', flush=True)
+
+    return ligands
+
+
+def chains_bound_to(univ, ligands):
+    chain_sets = []
+    for ligand in ligands:
+        nearby = univ.select_atoms('protein and around 4 group ligand', ligand=ligand)
+        chain_sets.append(np.unique(nearby.chainIDs))
+    
+    return chain_sets
+
+
+def chain_graph_components(chain_sets):
+    bound_chains = np.unique([chain for subset in chain_sets for chain in subset])
+    chain_graph = nx.Graph()
+
+    chain_graph.add_nodes_from(bound_chains)
+
+    for chains in chain_sets:
+        if len(chains) > 1:
+            for start in range(len(chains)-1):
+                chain_graph.add_edge(chains[start], chains[start+1])
+
+    return nx.connected_components(chain_graph)
 
 
 def p2rank_df_intersect(mlig_df, p2rank_df):
@@ -228,7 +269,7 @@ def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=
             univ = mda.Universe(f'{mol2_dir}{structure_name}/system.pdb')
             mda.coordinates.writer(f'{mol2_dir}{structure_name}/system.pdb').write(univ.atoms)
 
-        extract_ligand_from_p2rank_df(path, structure_name, f'{mol2_dir}/{structure_name}', ligand_df)
+        extract_ligands_from_p2rank_df(path, structure_name, f'{mol2_dir}/{structure_name}', ligand_df)
 
         n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{mol2_dir}{structure_name}')])
         if n_ligands > 0:
@@ -238,6 +279,52 @@ def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=
         else:
             with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
                 f.write(f'{structure_name}\n')
+        
+    except AssertionError as e:
+        print("Failed to find ligand in", structure_name)
+    except Exception as e:  
+        raise e
+
+
+def process_p2rank_chains(path, ligand_df, data_dir):
+    try:
+        prepend = os.getcwd()
+        structure_name = '.'.join(path.split('/')[-1].split('.')[:-1])
+        mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
+        pdb_dir = f'{prepend}/{data_dir}/split_pdb/'
+        if not os.path.isdir(pdb_dir): os.makedirs(pdb_dir)
+
+        univ = mda.Universe(path)
+        ligands = select_ligands_from_p2rank_df(univ, structure_name, ligand_df)
+
+        if len(ligands) == 0:
+            with open(f'{prepend}/{data_dir}/no_ligands.txt', 'a') as f:
+                f.write(f'{structure_name}\n')
+            return
+
+        chain_sets = chains_bound_to(univ, ligands) # calculating which chains are associated with each ligand
+        connected_chains = chain_graph_components(chain_sets) # connecting chains with interfacial ligands
+
+        for c in connected_chains:
+            chains = list(c)
+            chains.sort()
+            subsystem_atoms = univ.select_atoms(f'protein and (chainID {" or chainID ".join(c)})')
+            subsystem_name = f'{structure_name}{"".join(chains)}'
+            subsystem_ligands = []
+            for i in range(len(ligands)):
+                if set(chain_sets[i]).issubset(c): subsystem_ligands.append(ligands[i])
+            subsystem = mda.Merge(subsystem_atoms, *subsystem_ligands)
+            
+            subsystem.atoms.write(f'{pdb_dir}/{subsystem_name}.pdb') # saving split pdb for p2rank inference
+            convert_to_mol2(f'{pdb_dir}/{subsystem_name}.pdb', subsystem_name, mol2_dir, out_name='protein', parse_prot=True)
+
+            for lig_ind in range(len(subsystem_ligands)):
+                sub_lig = subsystem_ligands[lig_ind]
+                sub_lig.write(f'{mol2_dir}/{subsystem_name}/ligand_{lig_ind}.pdb')
+                
+            if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
+            if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
+            process_system(f'{mol2_dir}{subsystem_name}', save_directory='./'+data_dir)
         
     except AssertionError as e:
         print("Failed to find ligand in", structure_name)
@@ -266,8 +353,8 @@ if __name__ == "__main__":
     from joblib import Parallel, delayed
 
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("dataset", choices=["scpdb", "coach420", "coach420_mlig",
-     "coach420_intersect", "holo4k", "holo4k_mlig", "holo4k_intersect", "chen11", "joined", "production"], help="Dataset to prepare.")
+    parser.add_argument("dataset", choices=["scpdb", "coach420", "coach420_mlig", "coach420_intersect",
+    "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains", "production"], help="Dataset to prepare.")
     args = parser.parse_args()
     dataset = args.dataset
  
@@ -323,6 +410,21 @@ if __name__ == "__main__":
         if os.path.exists(nolig_file): os.remove(nolig_file)
         systems = np.unique(ligand_df['file'])
         Parallel(n_jobs=num_cores)(delayed(process_p2rank_set)(f'benchmark_data_dir/holo4k/cleaned_pdb/{system}',
+         ligand_df, data_dir=data_dir) for system in tqdm(systems))
+
+    elif dataset == "holo4k_chains":
+        print('Cleaning alternate positions...')
+        clean_alternate_positions(f'{prepend}/benchmark_data_dir/holo4k/unprocessed_pdb/', f'{prepend}/benchmark_data_dir/holo4k/cleaned_pdb/')        
+
+        p2rank_df = load_p2rank_test_ligands(f'{prepend}/test_metrics/holo4k/p2rank/cases/ligands.csv')
+        mlig_df =  load_p2rank_test_ligands(f'{prepend}/test_metrics/holo4k_mlig/p2rank/cases/ligands.csv')
+        ligand_df = p2rank_df_intersect(mlig_df, p2rank_df)
+
+        data_dir = f'benchmark_data_dir/{dataset}'
+        nolig_file = f'{prepend}/{data_dir}/no_ligands.txt'
+        if os.path.exists(nolig_file): os.remove(nolig_file)
+        systems = np.unique(ligand_df['file'])
+        Parallel(n_jobs=num_cores)(delayed(process_p2rank_chains)(f'benchmark_data_dir/holo4k/cleaned_pdb/{system}',
          ligand_df, data_dir=data_dir) for system in tqdm(systems))
 
     elif dataset == "production":
