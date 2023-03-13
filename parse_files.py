@@ -22,55 +22,6 @@ atom_selection_str = " or ".join([f'element {x}' for x in allowed_elements]) # i
 exclusion_list = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
 
 
-def add_chains_from_frags(univ):
-    univ.add_TopologyAttr('chainID')
-    for i, frag in enumerate(univ.atoms.fragments):
-        univ.add_Segment(segid=str(i))
-        for atom in frag.atoms:
-            atom.chainID = str(i)
-
-
-def label_sites_given_ligands(path_to_mol2, extension='mol2'):
-    protein = mda.Universe(os.path.join(path_to_mol2, f'protein.{extension}'))
-    add_chains_from_frags(protein)
-    protein_no_h = protein.select_atoms("not element H")
-    
-    all_sites = mda.AtomGroup([], protein) # empty AtomGroup
-    for file_path in sorted(glob(path_to_mol2+ '/*')):
-        if 'protein' in file_path:
-            # This is the main structure, we already have it
-            pass
-        elif 'ligand' in file_path and not 'site' in file_path:
-            # This is a ligand file
-            ligand = mda.Universe(file_path)
-            site_resid_list = []
-            site_chain_list = []
-            for atom in ligand.atoms:
-                x,y,z = atom.position
-                atoms_to_label = protein_no_h.select_atoms("point {} {} {} 6.5".format(x, y, z))
-                resids_to_label = list(atoms_to_label.resids)
-                chains_to_label = list(atoms_to_label.chainIDs)
-                site_resid_list += resids_to_label
-                site_chain_list += chains_to_label
-            
-            resid_chain_pairs = set(zip(site_resid_list, site_chain_list))
-            site_selection_str = " or ".join([f'(resid {x} and chainID {y})' for x, y in resid_chain_pairs])
-
-            this_ligands_site = protein.select_atoms(site_selection_str)
-            all_sites += this_ligands_site
-            ligand_idx = int(re.findall("\d+",file_path.split('/')[-1])[0])
-            try:
-                this_ligands_site.atoms.write(os.path.join(path_to_mol2, f"site_for_ligand_{ligand_idx}.{extension}"))
-            except IndexError as e:
-                print(f'Unable to write site for {file_path}')
-
-        else:
-            # This is an unexpected file
-            pass
-    
-    all_sites.write(os.path.join(path_to_mol2, f"site.{extension}"))
-
-
 def cleanup_residues(univ):
         res_names = univ.residues.resnames
         new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
@@ -78,11 +29,13 @@ def cleanup_residues(univ):
         
         return univ
 
+
 def undo_se_modification(univ):
     se_atoms = univ.select_atoms('protein and element Se')
     se_atoms.elements = 'S'
     
     return univ
+
 
 def clean_alternate_positions(input_dir, output_dir):
     if not os.path.isdir(output_dir): os.makedirs(output_dir)
@@ -100,6 +53,7 @@ def clean_alternate_positions(input_dir, output_dir):
         with open(out_path, 'w') as outfile:
             outfile.writelines([line for line in lines if not re.search(r, line)])
     
+
 def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format='pdb', out_name='protein', parse_prot=True):
     ob_input = in_file
     output_path = out_directory + structure_name
@@ -185,6 +139,7 @@ def extract_ligand_from_p2rank_df(path, name, out_dir, ligand_df):
         else:
             print(f'Error: Ligand match for {resnames} not found in {name}.pdb.', flush=True)
 
+
 def p2rank_df_intersect(mlig_df, p2rank_df):
     concat_list = [pd.DataFrame(columns=mlig_df.columns)]
 
@@ -228,7 +183,7 @@ def check_p2rank_criteria(prot_univ, lig_univ):
     return False
 
 
-def process_train_p2rank(file, output_dir): 
+def process_train_p2rank_style(file, output_dir): 
     try:
         prepend = os.getcwd()
         structure_name = file
@@ -248,7 +203,6 @@ def process_train_p2rank(file, output_dir):
         
         n_ligands = np.sum(['ligand' in file for file in os.listdir(f'{prepend}/{output_dir}/ready_to_parse_mol2/{file}/')])
         if n_ligands > 0:
-            label_sites_given_ligands(f'{prepend}/{output_dir}/ready_to_parse_mol2/{structure_name}')
             if not os.path.isdir(f'{prepend}/{output_dir}/raw'): os.makedirs(f'{prepend}/{output_dir}/raw')
             if not os.path.isdir(f'{prepend}/{output_dir}/mol2'): os.makedirs(f'{prepend}/{output_dir}/mol2')
             process_system(f'{prepend}/{output_dir}/ready_to_parse_mol2/{structure_name}', save_directory=f'./{output_dir}')
@@ -261,36 +215,6 @@ def process_train_p2rank(file, output_dir):
     except Exception as e:
         raise e
 
-
-def process_train_openbabel(file, output_dir):
-    try:
-        prepend = os.getcwd()
-        structure_name = file
-        if not os.path.isdir(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name)): 
-            os.makedirs(os.path.join(prepend,output_dir,"ready_to_parse_mol2",structure_name))
-        convert_to_mol2(prepend+'/scPDB_data_dir/unprocessed_mol2/'+file+'/protein.mol2', structure_name, prepend+'/'+output_dir+"/ready_to_parse_mol2/", addH=True, in_format='mol2')
-        
-        for file_path in glob(prepend + '/scPDB_data_dir/unprocessed_mol2/' + file + '/*'):
-            if 'ligand' in file_path:
-                shutil.copyfile(file_path, prepend+'/'+ output_dir+"/ready_to_parse_mol2/"+file+'/'+file_path.split('/')[-1])
-        
-        label_sites_given_ligands(prepend + '/scPDB_data_dir/ready_to_parse_mol2/' + file)
-        
-        process_system((prepend + '/' + output_dir + '/ready_to_parse_mol2/' + structure_name), save_directory='./' + output_dir)
-        
-    except AssertionError as e: 
-        print("Failed to find ligand in", file)
-    except Exception as e:
-        raise e
-        
-
-def process_train_classic(structure_name, output_dir, unprocessed_dir = 'unprocessed_scPDB_mol2'):
-    try:
-        process_system(os.path.join('./',output_dir, unprocessed_dir, structure_name), save_directory='./' + output_dir)
-    except AssertionError as e: 
-        print("Failed to find ligand in", structure_name)
-    except Exception as e:
-        raise e
         
 
 def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=False):
@@ -342,27 +266,17 @@ if __name__ == "__main__":
     from joblib import Parallel, delayed
 
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("dataset", choices=["train_p2rank", "train_openbabel", "train_classic", "coach420", "coach420_mlig",
+    parser.add_argument("dataset", choices=["scpdb", "coach420", "coach420_mlig",
      "coach420_intersect", "holo4k", "holo4k_mlig", "holo4k_intersect", "chen11", "joined", "production"], help="Dataset to prepare.")
     args = parser.parse_args()
     dataset = args.dataset
  
-    if dataset == "train_p2rank":
+    if dataset == "scpdb":
         print("Parsing the standard train set with p2rank criteria")
         nolig_file = f'{prepend}/scPDB_data_dir/no_ligands.txt'
         if os.path.exists(nolig_file): os.remove(nolig_file)
         mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_p2rank)(filename, 'scPDB_data_dir') for filename in tqdm(mol2_files[:])) 
-
-    elif dataset == "train_openbabel":
-        print("Parsing the standard train set")
-        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/scPDB_data_dir/unprocessed_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_openbabel)(filename, 'scPDB_data_dir') for filename in tqdm(mol2_files[:])) 
-
-    elif dataset == "train_classic":
-        print("Parsing the standard train set")
-        mol2_files = [filename for filename in sorted(list(os.listdir(prepend +'/data_dir/unprocessed_scPDB_mol2')))]
-        Parallel(n_jobs=num_cores)(delayed(process_train_classic)(filename, 'data_dir') for filename in tqdm(mol2_files[:])) 
+        Parallel(n_jobs=num_cores)(delayed(process_train_p2rank_style)(filename, 'scPDB_data_dir') for filename in tqdm(mol2_files[:])) 
 
     elif dataset == "coach420" or dataset == "coach420_mlig":
         ligand_df = load_p2rank_test_ligands(f'{prepend}/test_metrics/{dataset}/p2rank/cases/ligands.csv')

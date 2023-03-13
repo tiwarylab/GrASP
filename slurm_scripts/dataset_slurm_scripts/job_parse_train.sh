@@ -16,4 +16,4 @@ rm -r scPDB_data_dir/mol2/*
 rm -r scPDB_data_dir/raw/*
 rm -r scPDB_data_dir/processed/*
 rm -r scPDB_data_dir/ready_to_parse_mol2/*
-python3 parse_files.py train_p2rank
+python3 parse_files.py scpdb
