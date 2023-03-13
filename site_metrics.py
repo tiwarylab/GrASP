@@ -2,6 +2,7 @@ import numpy as np
 import MDAnalysis as mda
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 from rdkit import Chem
+from sklearn.neighbors import radius_neighbors_graph
 from sklearn.cluster import MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
 import networkx as nx 
 from networkx.algorithms.community import louvain_communities
@@ -19,6 +20,7 @@ import time
 import sys
 import argparse
 from joblib import Parallel, delayed
+import warnings
 
 
 def center_of_mass(coords, masses):
@@ -139,15 +141,46 @@ def cluster_atoms_louvain(all_coords, adj_matrix, predicted_probs, threshold=.5,
 
     return bind_coords, sorted_ids, all_ids
 
-def cluster_atoms_linkage(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+def cluster_atoms_single(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
         return None, None, None
     bind_coords = all_coords[predicted_labels]
     if bind_coords.shape[0] != 1:
-        link_clustering = AgglomerativeClustering(**kwargs).fit(bind_coords)
+        link_clustering = AgglomerativeClustering(linkage='single', **kwargs).fit(bind_coords)
         cluster_ids = link_clustering.labels_
+        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
+    else:
+        # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
+        # the clustering fails so we'll just call this one atom our best 'cluster'.
+        sorted_ids = np.ones(1)
+
+    all_ids = -1*np.ones(predicted_labels.shape) 
+    all_ids[predicted_labels] = sorted_ids
+
+    return bind_coords, sorted_ids, all_ids
+
+def cluster_atoms_ward(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    predicted_labels = predicted_probs[:,1] >= threshold
+    site_probs = predicted_probs[:,1]
+    site_probs[site_probs < threshold] = 0
+    connectivity = radius_neighbors_graph(all_coords, 5, mode='distance')
+    if np.sum(predicted_labels) == 0:
+        # No positive predictions were made with specified cutoff
+        return None, None, None
+    bind_coords = all_coords[predicted_labels]
+    if bind_coords.shape[0] != 1:
+        link_clustering = AgglomerativeClustering(connectivity=connectivity, **kwargs).fit(site_probs.reshape(-1,1))
+        cluster_ids = link_clustering.labels_
+        
+        unique_clusters = np.unique(cluster_ids)
+        exclusions = [c for c in unique_clusters if np.mean(site_probs[cluster_ids==c]) < threshold/2] # if mostly predicted as non-site, drop cluster
+        for e in exclusions:
+            cluster_ids[cluster_ids==e] = -1
+
+        cluster_ids = cluster_ids[predicted_labels] # only taking points predicted as sites
+
         sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
     else:
         # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
@@ -157,9 +190,7 @@ def cluster_atoms_linkage(all_coords, predicted_probs, threshold=.5, score_type=
     all_ids = -1*np.ones(predicted_labels.shape)
     all_ids[predicted_labels] = sorted_ids
 
-    # print(sorted_ids)
-    # print(all_ids)
-    return bind_coords, sorted_ids, all_ids    
+    return bind_coords, sorted_ids, all_ids 
 
 def hull_center(hull):
     hull_com = np.zeros(3)
@@ -330,8 +361,10 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
         bind_coords, sorted_ids, all_ids = cluster_atoms_DBSCAN(prot_coords, predicted_probs, threshold=threshold, eps=eps, score_type=score_type)
     elif method == "louvain":
         bind_coords, sorted_ids, all_ids = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, resolution=resolution, score_type=score_type)
-    elif method == "linkage":
-        bind_coords, sorted_ids, all_ids = cluster_atoms_linkage(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, linkage='single', distance_threshold=eps, score_type=score_type)
+    elif method == "single":
+        bind_coords, sorted_ids, all_ids = cluster_atoms_single(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
+    elif method == "ward":
+        bind_coords, sorted_ids, all_ids = cluster_atoms_ward(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
     
     if connolly_data is not None:
         bind_coords, sorted_ids, predicted_probs = get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indices, sorted_ids, predicted_probs, threshold)
@@ -348,7 +381,7 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
     if type(sorted_ids) == type(None):
         n_predicted = 0
     else:
-        n_predicted = np.unique(sorted_ids[sorted_ids >= 0])
+        n_predicted = len(np.unique(sorted_ids[sorted_ids >= 0]))
 
     if len(predicted_center_list) > 0:          
         DCC_lig_matrix = np.zeros([len(ligand_center_list), len(predicted_center_list)])
@@ -446,7 +479,7 @@ if __name__ == "__main__":
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
      "holo4k", "holo4k_mlig", "holo4k_intersect"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
-    parser.add_argument("-c", "--clustering_method", default="linkage", choices=["meanshift", "dbscan", "louvain", "linkage"], help="Clustering method.")
+    parser.add_argument("-c", "--clustering_method", default="single", choices=["meanshift", "dbscan", "louvain", "single", "ward"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[4], help="Distance thresholds for clustering.")
     parser.add_argument("-p", "--prob_threshold", type=float, default=.4, help="Probability threshold for atom classification.")
     parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,100], help="Number of additional sites to consider.")
