@@ -1,6 +1,7 @@
 import numpy as np
 import MDAnalysis as mda
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
+from MDAnalysis.analysis.distances import contact_matrix
 from rdkit import Chem
 from sklearn.neighbors import radius_neighbors_graph
 from sklearn.cluster import MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
@@ -302,9 +303,35 @@ def get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indice
     return bind_coords, sorted_ids, predicted_probs
 
 
-def multisite_metrics(prot_coords, lig_coord_list, ligand_mass_list, predicted_probs, top_n_plus=0, 
+def scPDB_ligand_merge(lig_coord_list, lig_mass_list, lig_center_list):
+    if len(lig_coord_list) == 1:
+        return lig_coord_list, lig_center_list
+    
+    lig_adjacency = contact_matrix(np.array(lig_center_list), cutoff=5)
+    if np.sum(lig_adjacency) == len(lig_coord_list): 
+        return lig_coord_list, lig_center_list
+    
+    new_coords = []
+    new_centers = []
+    lig_connections = nx.connected_components(nx.from_numpy_matrix(lig_adjacency))
+    for merge in lig_connections:
+        merge_coords = [lig_coord_list[i] for i in merge]
+        if len(merge) == 1:
+            new_coords += merge_coords
+            new_centers += [lig_center_list[i] for i in merge]
+        else:
+            merge_coords = np.row_stack(merge_coords)
+            merge_masses = np.concatenate([lig_mass_list[i] for i in merge])
+            merge_centers = center_of_mass(merge_coords, merge_masses)
+            new_coords.append(merge_coords)
+            new_centers.append(merge_centers)
+    
+    return new_coords, new_centers
+
+
+def multisite_metrics(prot_coords, lig_coord_list, lig_mass_list, predicted_probs, top_n_plus=0, 
 threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", 
-cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_indices=None):
+cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_indices=None, ligand_merge=False):
     """Cluster multiple binding sites and calculate distance from the ligand
 
     Parameters
@@ -315,7 +342,7 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
     lig_coord_list : list of numpy arrays
         Ligand atomic coordinates for each ligand.
         
-    ligand_mass_list: list of numpy arrays
+    lig_mass_list: list of numpy arrays
         Ligand atomic masses for each ligand.
 
     predicted_probs : list of numpy arrays
@@ -332,6 +359,9 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
 
     cluster_all : bool
         Whether to assign points outside kernels to the nearest cluster or leave them unlabeled.
+
+    ligand_merge: bool
+        Whether to merge ligands with center of mass within 5 A as is done in scPDB.
 
     Returns
     -------
@@ -369,9 +399,12 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
     if connolly_data is not None:
         bind_coords, sorted_ids, predicted_probs = get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indices, sorted_ids, predicted_probs, threshold)
         
-    ligand_center_list = [center_of_mass(lig_coord_list[i], ligand_mass_list[i]) for i in range(len(lig_coord_list))]
+    lig_center_list = [center_of_mass(lig_coord_list[i], lig_mass_list[i]) for i in range(len(lig_coord_list))]
 
-    n_sites = len(ligand_center_list)
+    if ligand_merge:
+        lig_coord_list, lig_center_list = scPDB_ligand_merge(lig_coord_list, lig_mass_list, lig_center_list)
+
+    n_sites = len(lig_center_list)
     if centroid_type == "hull":
         _, _, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites+top_n_plus)
     else:
@@ -384,17 +417,17 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
         n_predicted = len(np.unique(sorted_ids[sorted_ids >= 0]))
 
     if len(predicted_center_list) > 0:          
-        DCC_lig_matrix = np.zeros([len(ligand_center_list), len(predicted_center_list)])
-        DCA_matrix = np.zeros([len(ligand_center_list), len(predicted_center_list)])
+        DCC_lig_matrix = np.zeros([len(lig_center_list), len(predicted_center_list)])
+        DCA_matrix = np.zeros([len(lig_center_list), len(predicted_center_list)])
 
         for index, x in np.ndenumerate(DCA_matrix):
             true_ind, pred_ind = index
 
             predicted_center = predicted_center_list[pred_ind]
-            ligand_center = ligand_center_list[true_ind]
+            lig_center = lig_center_list[true_ind]
             lig_coords = lig_coord_list[true_ind]
 
-            DCC_lig_matrix[index] = np.sqrt(np.sum((predicted_center - ligand_center)**2))
+            DCC_lig_matrix[index] = np.sqrt(np.sum((predicted_center - lig_center)**2))
             DCA_matrix[index] = DCA_dist(predicted_center, lig_coords)
 
         DCC_lig = np.min(DCC_lig_matrix, axis=1)
@@ -403,13 +436,14 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
         return DCC_lig, DCA, n_predicted
 
     else:
-        nan_arr =  np.empty(len(ligand_center_list))
+        nan_arr =  np.empty(len(lig_center_list))
         nan_arr[:] = np.nan
 
         return nan_arr, nan_arr, n_predicted
 
 
-def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, use_surface=False, use_connolly=False):
+def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05,
+method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, use_surface=False, use_connolly=False, ligand_merge=False):
     DCC_lig_list = []
     DCA_list = []
 
@@ -437,21 +471,21 @@ def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshol
             # print(probs.shape)
 
             lig_coord_list = []
-            ligand_mass_list = []
+            lig_mass_list = []
             
             for file_path in sorted(glob(data_dir + '/ready_to_parse_mol2/' + assembly_name + '/*')):
                 # print(file_path)
                 if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
                     ligand = mda.Universe(file_path)
                     lig_coord_list.append(list(ligand.atoms.positions))
-                    ligand_mass_list.append(list(ligand.atoms.masses))
+                    lig_mass_list.append(list(ligand.atoms.masses))
             # TODO: MAKE THIS AN ACUTAL PATH
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             adj_matrix = subgraph_adjacency(adj_matrix, atom_indices)
-            DCC_lig, DCA, n_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, ligand_mass_list,
+            DCC_lig, DCA, n_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, lig_mass_list,
                 probs, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
                 centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask, connolly_data=connolly_data,
-                tracked_indices=tracked_indices)
+                tracked_indices=tracked_indices, ligand_merge=ligand_merge)
 
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCA)): 
                 no_prediction_count += 1
@@ -477,7 +511,7 @@ def extract_multi(metric_array):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
-     "holo4k", "holo4k_mlig", "holo4k_intersect"], help="Test set.")
+     "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
     parser.add_argument("-c", "--clustering_method", default="single", choices=["meanshift", "dbscan", "louvain", "single", "ward"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[4], help="Distance thresholds for clustering.")
@@ -490,6 +524,7 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--aggregation_function", default="square", choices=["mean", "sum", "square"], help="Function to combine atom scores into site scores.")
     parser.add_argument("-r", "--louvain_resolution", type=float, default=0.05, help="Resolution for Louvain community detection (not used in other methods).")
     parser.add_argument("-ct", "--centroid_type", default="hull", choices=["hull", "prob", "square", "centroid"], help="Type of centroid to use for site center.")
+    parser.add_argument("-lm", "--ligand_merge", action="store_true", help="Merge ligands that have center of mass within 5 A like in scPDB.")
     parser.add_argument("-n", "--n_tasks", type=int, default=15, help="Number of cpu workers.")
 
     args = parser.parse_args()
@@ -510,6 +545,7 @@ if __name__ == "__main__":
     use_surface = not args.all_atom_prediction
     use_connolly = args.use_connolly
     n_jobs = args.n_tasks
+    ligand_merge = args.ligand_merge
 
     is_label=args.use_labels
     if is_label:
@@ -518,6 +554,8 @@ if __name__ == "__main__":
         print("Using surface atoms to predict sites.")
     if use_connolly:
         print("Projecting sites onto Connolly surface.")
+    if ligand_merge:
+        print("scPDB style ligand merging.")
 
     set_to_use = args.test_set
     if set_to_use == 'val':
@@ -613,8 +651,8 @@ if __name__ == "__main__":
             path_to_mol2= data_dir + '/mol2/'
             path_to_labels= prepend + metric_dir + '/labels/' + model_name + '/'
             DCC_lig, DCA, n_predicted, no_prediction_count, names = compute_metrics_for_all(
-                path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution,
-                 method=method, score_type=score_type, centroid_type=centroid_type, use_surface=use_surface, use_connolly=use_connolly)
+            path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution,
+            method=method, score_type=score_type, centroid_type=centroid_type, use_surface=use_surface, use_connolly=use_connolly, ligand_merge=ligand_merge)
 
             print("Done. {}".format(time.time()- start))
             out.write("Done. {}\n".format(time.time()- start))
