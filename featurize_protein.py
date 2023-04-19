@@ -184,22 +184,28 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
     # Classes
     if parse_ligands:
         lig_coord_list = []
-        for file_path in glob(f'{path_to_files}/*'):
-            if 'ligand' in file_path and not 'site' in file_path:
+        lig_indices = []
+        for file_path in sorted(glob(f'{path_to_files}/*')):
+            if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
                 lig_univ = mda.Universe(file_path)
                 lig_coord_list.append(lig_univ.atoms.positions)
 
         prot_coords = protein.positions
         all_lig_coords = np.row_stack(lig_coord_list)
         distance_to_ligand = np.min(distance_array(prot_coords, all_lig_coords), axis=1)
+        closest_ligand = np.argmin(distance_array(prot_coords, all_lig_coords), axis=1)
+
     else:
+        prot_coords = protein.positions
         distance_to_ligand = 99 * np.ones(len(protein.atoms))
+        closest_ligand = -1 * np.ones(len(protein.atoms))
 
     # Creating edge_attributes dictionary. Only holds bond types, weights are stored in trimmed
     edge_attributes = {tuple(bond.atoms.ids):{"bond_type":bond_type_dict[bond.order]} for bond in protein.bonds}
 
     np.savez_compressed(save_directory + '/raw/' + structure_name, adj_matrix = trimmed,
                         feature_matrix = feature_array, ligand_distance_array = distance_to_ligand,
+                        coords = prot_coords, closest_ligand = closest_ligand, 
                         edge_attributes = edge_attributes, SASA_array = SASA_array)
     protein.atoms.write(save_directory + '/mol2/' + str(structure_name) +'.mol2')
 

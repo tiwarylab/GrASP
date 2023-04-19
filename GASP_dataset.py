@@ -69,8 +69,14 @@ class GASPData(Dataset):
         # Convert Labels from one-hot to 1D target
         distance_to_ligand = arr['ligand_distance_array']
         y = torch.FloatTensor(distance_to_ligand)
-        
-        graph = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)), edge_index=edge_index, edge_attr=edge_attr, y=y)
+
+        # Properties for EGNN
+        coords = torch.FloatTensor(arr['coords'])
+        closest_ligand = torch.Tensor(arr['closest_ligand'])
+
+
+        graph = Data(x=torch.FloatTensor(np.concatenate((arr['feature_matrix'], degrees), axis=1)),
+        edge_index=edge_index, edge_attr=edge_attr, y=y, coords=coords, closest_ligand=closest_ligand)
         graph.atom_index = torch.arange(graph.num_nodes)
         sasa = torch.FloatTensor(arr['SASA_array'])
         graph.surf_mask = sasa > self.sasa_thresold
