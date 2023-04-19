@@ -295,6 +295,7 @@ def process_p2rank_chains(path, ligand_df, data_dir):
         if not os.path.isdir(pdb_dir): os.makedirs(pdb_dir)
 
         univ = mda.Universe(path)
+        univ.dimensions = None # this prevents PBC bugs in distance calculation
         ligands = select_ligands_from_p2rank_df(univ, structure_name, ligand_df)
 
         if len(ligands) == 0:
