@@ -105,7 +105,7 @@ def extract_multi(metric_array):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
-     "holo4k", "holo4k_mlig", "holo4k_intersect"], help="Test set.")
+     "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains"], help="Test set.")
     parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,100], help="Number of additional sites to consider.")
     parser.add_argument("-n", "--n_tasks", type=int, default=15, help="Number of cpu workers.")
 

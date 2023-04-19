@@ -82,7 +82,7 @@ def initialize_model(parser_args):
 def parse():
     parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("infer_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect", 
-    "holo4k", "holo4k_mlig", "holo4k_intersect", "production"], help="Test or production set.")
+    "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains", "production"], help="Test or production set.")
     parser.add_argument("model_path", help="Path to the model from ./trained_models/")
     parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
         "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to test.")
