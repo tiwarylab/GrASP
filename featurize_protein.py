@@ -193,7 +193,9 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
         prot_coords = protein.positions
         all_lig_coords = np.row_stack(lig_coord_list)
         distance_to_ligand = np.min(distance_array(prot_coords, all_lig_coords), axis=1)
-        closest_ligand = np.argmin(distance_array(prot_coords, all_lig_coords), axis=1)
+        closest_ligand_atom = np.argmin(distance_array(prot_coords, all_lig_coords), axis=1)
+        atom_to_ligand_map = np.concatenate([i*np.ones(lig_coord_list[i].shape[0]) for i in range(len(lig_coord_list))])
+        closest_ligand = atom_to_ligand_map[closest_ligand_atom]
 
     else:
         prot_coords = protein.positions
