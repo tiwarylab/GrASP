@@ -193,7 +193,7 @@ def cluster_atoms_ward(all_coords, predicted_probs, threshold=.5, score_type='me
 
     return bind_coords, sorted_ids, all_ids 
 
-def cluster_atoms_groundtruth(all_coords, lig_coord_list, predicted_probs, threshold=.5, score_type='mean'):
+def cluster_atoms_groundtruth(all_coords, lig_coord_list, predicted_probs, threshold=.5, distance_threshold=5, score_type='mean'):
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -201,9 +201,11 @@ def cluster_atoms_groundtruth(all_coords, lig_coord_list, predicted_probs, thres
 
     bind_coords = all_coords[predicted_labels]
     all_lig_coords = np.row_stack(lig_coord_list)
+    ligand_distance = np.min(distance_array(bind_coords, all_lig_coords), axis=1)
     closest_ligand_atom = np.argmin(distance_array(bind_coords, all_lig_coords), axis=1)
     atom_to_ligand_map = np.concatenate([i*np.ones(len(lig_coord_list[i])) for i in range(len(lig_coord_list))])
     cluster_ids = atom_to_ligand_map[closest_ligand_atom]
+    cluster_ids[ligand_distance > distance_threshold] = -1
     sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
 
 
@@ -416,7 +418,7 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
     elif method == "ward":
         bind_coords, sorted_ids, all_ids = cluster_atoms_ward(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
     elif method == "groundtruth":
-        bind_coords, sorted_ids, all_ids = cluster_atoms_groundtruth(prot_coords, lig_coord_list, predicted_probs, threshold=threshold, score_type=score_type)
+        bind_coords, sorted_ids, all_ids = cluster_atoms_groundtruth(prot_coords, lig_coord_list, predicted_probs, threshold=threshold, distance_threshold=eps, score_type=score_type)
 
     if connolly_data is not None:
         bind_coords, sorted_ids, predicted_probs = get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indices, sorted_ids, predicted_probs, threshold)
