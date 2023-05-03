@@ -88,7 +88,6 @@ class EquivariantBlock(nn.Module):
         self.to(self.device)
 
     def forward(self, h, x, edge_index, edge_attr=None, node_mask=None, edge_mask=None, update_coords_mask=None):
-        # Edit Emiel: Remove velocity as input
         distances, coord_diff = coord2diff(x, edge_index, self.norm_constant)
         if self.sin_embedding is not None:
             distances = self.sin_embedding(distances)
@@ -99,7 +98,6 @@ class EquivariantBlock(nn.Module):
         x = self._modules["gcl_equiv"](h, x, edge_index, coord_diff, edge_attr=torch.cat([edge_attr, distances], dim=-1),
                                        node_mask=node_mask, edge_mask=edge_mask, update_coords_mask=update_coords_mask)
 
-        # Important, the bias of the last linear might be non-zero
         if node_mask is not None:
             h = h * node_mask
         return h, x
