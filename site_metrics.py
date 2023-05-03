@@ -1,7 +1,7 @@
 import numpy as np
 import MDAnalysis as mda
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
-from MDAnalysis.analysis.distances import contact_matrix
+from MDAnalysis.analysis.distances import contact_matrix, distance_array
 from rdkit import Chem
 from sklearn.neighbors import radius_neighbors_graph
 from sklearn.cluster import MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
@@ -192,6 +192,26 @@ def cluster_atoms_ward(all_coords, predicted_probs, threshold=.5, score_type='me
     all_ids[predicted_labels] = sorted_ids
 
     return bind_coords, sorted_ids, all_ids 
+
+def cluster_atoms_groundtruth(all_coords, lig_coord_list, predicted_probs, threshold=.5, score_type='mean'):
+    predicted_labels = predicted_probs[:,1] > threshold
+    if np.sum(predicted_labels) == 0:
+        # No positive predictions were made with specified cutoff
+        return None, None, None
+
+    bind_coords = all_coords[predicted_labels]
+    all_lig_coords = np.row_stack(lig_coord_list)
+    closest_ligand_atom = np.argmin(distance_array(bind_coords, all_lig_coords), axis=1)
+    atom_to_ligand_map = np.concatenate([i*np.ones(len(lig_coord_list[i])) for i in range(len(lig_coord_list))])
+    cluster_ids = atom_to_ligand_map[closest_ligand_atom]
+    sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
+
+
+
+    all_ids = -1*np.ones(predicted_labels.shape) 
+    all_ids[predicted_labels] = sorted_ids
+
+    return bind_coords, sorted_ids, all_ids
 
 def hull_center(hull):
     hull_com = np.zeros(3)
@@ -395,7 +415,9 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
         bind_coords, sorted_ids, all_ids = cluster_atoms_single(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
     elif method == "ward":
         bind_coords, sorted_ids, all_ids = cluster_atoms_ward(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
-    
+    elif method == "groundtruth":
+        bind_coords, sorted_ids, all_ids = cluster_atoms_groundtruth(prot_coords, lig_coord_list, predicted_probs, threshold=threshold, score_type=score_type)
+
     if connolly_data is not None:
         bind_coords, sorted_ids, predicted_probs = get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indices, sorted_ids, predicted_probs, threshold)
         
@@ -513,7 +535,7 @@ if __name__ == "__main__":
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
      "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
-    parser.add_argument("-c", "--clustering_method", default="single", choices=["meanshift", "dbscan", "louvain", "single", "ward"], help="Clustering method.")
+    parser.add_argument("-c", "--clustering_method", default="single", choices=["meanshift", "dbscan", "louvain", "single", "ward", "groundtruth"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[4], help="Distance thresholds for clustering.")
     parser.add_argument("-p", "--prob_threshold", type=float, default=.4, help="Probability threshold for atom classification.")
     parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,100], help="Number of additional sites to consider.")
