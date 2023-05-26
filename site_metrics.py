@@ -162,6 +162,46 @@ def cluster_atoms_single(all_coords, predicted_probs, threshold=.5, score_type='
 
     return bind_coords, sorted_ids, all_ids
 
+def cluster_atoms_complete(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    predicted_labels = predicted_probs[:,1] > threshold
+    if np.sum(predicted_labels) == 0:
+        # No positive predictions were made with specified cutoff
+        return None, None, None
+    bind_coords = all_coords[predicted_labels]
+    if bind_coords.shape[0] != 1:
+        link_clustering = AgglomerativeClustering(linkage='complete', **kwargs).fit(bind_coords)
+        cluster_ids = link_clustering.labels_
+        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
+    else:
+        # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
+        # the clustering fails so we'll just call this one atom our best 'cluster'.
+        sorted_ids = np.ones(1)
+
+    all_ids = -1*np.ones(predicted_labels.shape) 
+    all_ids[predicted_labels] = sorted_ids
+
+    return bind_coords, sorted_ids, all_ids
+
+def cluster_atoms_average(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    predicted_labels = predicted_probs[:,1] > threshold
+    if np.sum(predicted_labels) == 0:
+        # No positive predictions were made with specified cutoff
+        return None, None, None
+    bind_coords = all_coords[predicted_labels]
+    if bind_coords.shape[0] != 1:
+        link_clustering = AgglomerativeClustering(linkage='average', **kwargs).fit(bind_coords)
+        cluster_ids = link_clustering.labels_
+        sorted_ids = sort_clusters(cluster_ids, predicted_probs, predicted_labels, score_type=score_type)
+    else:
+        # Under rare circumstances only one atom may be predicted as the binding pocket. In this case
+        # the clustering fails so we'll just call this one atom our best 'cluster'.
+        sorted_ids = np.ones(1)
+
+    all_ids = -1*np.ones(predicted_labels.shape) 
+    all_ids[predicted_labels] = sorted_ids
+
+    return bind_coords, sorted_ids, all_ids
+    
 def cluster_atoms_ward(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
     predicted_labels = predicted_probs[:,1] >= threshold
     site_probs = predicted_probs[:,1]
@@ -415,6 +455,10 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
         bind_coords, sorted_ids, all_ids = cluster_atoms_louvain(prot_coords,adj_matrix,predicted_probs,threshold=threshold, cutoff=eps, resolution=resolution, score_type=score_type)
     elif method == "single":
         bind_coords, sorted_ids, all_ids = cluster_atoms_single(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
+    elif method == "complete":
+        bind_coords, sorted_ids, all_ids = cluster_atoms_complete(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
+    elif method == "average":
+        bind_coords, sorted_ids, all_ids = cluster_atoms_average(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
     elif method == "ward":
         bind_coords, sorted_ids, all_ids = cluster_atoms_ward(prot_coords, predicted_probs, threshold=threshold, n_clusters=None, distance_threshold=eps, score_type=score_type)
     elif method == "groundtruth":
@@ -537,9 +581,9 @@ if __name__ == "__main__":
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
      "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains"], help="Test set.")
     parser.add_argument("model_name", help="Model file path.")
-    parser.add_argument("-c", "--clustering_method", default="single", choices=["meanshift", "dbscan", "louvain", "single", "ward", "groundtruth"], help="Clustering method.")
-    parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[4], help="Distance thresholds for clustering.")
-    parser.add_argument("-p", "--prob_threshold", type=float, default=.4, help="Probability threshold for atom classification.")
+    parser.add_argument("-c", "--clustering_method", default="average", choices=["meanshift", "dbscan", "louvain", "single", "complete", "average", "ward", "groundtruth"], help="Clustering method.")
+    parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[15], help="Distance thresholds for clustering.")
+    parser.add_argument("-p", "--prob_threshold", type=float, default=.3, help="Probability threshold for atom classification.")
     parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,100], help="Number of additional sites to consider.")
     parser.add_argument("-o", "--compute_optimal", action="store_true", help="Option to compute optimal threshold.")
     parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
