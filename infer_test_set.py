@@ -84,6 +84,7 @@ def parse():
     parser.add_argument("infer_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect", 
     "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains", "production"], help="Test or production set.")
     parser.add_argument("model_path", help="Path to the model from ./trained_models/")
+    parser.add_argument("-f", "--fold", type=int, default=0, help="Cross-validation fold, only used for validation set.")
     parser.add_argument("-m", "--model", default="gatv2", choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats",
         "transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"], help="GNN architecture to test.")
     parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
@@ -135,9 +136,10 @@ def infer_test(args):
         print("Initializing Validation Set")
         path_to_dataset = prepend + '/scPDB_data_dir'
         metric_dir = '/test_metrics/validation'
+        fold = args.fold
 
         data_set = GASPData(path_to_dataset, num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
-        train_mask, val_mask = k_fold(data_set, prepend, 0) 
+        train_mask, val_mask = k_fold(data_set, prepend, fold) 
         val_set     = data_set[val_mask]
         val_dataloader = DataLoader(val_set, batch_size=1, shuffle=False, pin_memory=True, num_workers=num_cpus)
     else:  

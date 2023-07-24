@@ -107,6 +107,7 @@ def main(node_noise_std : float, training_split='cv'):
     label_midpoint, label_slope = args.sigmoid_params
     k_hops = args.k_hops
     sasa_threshold = args.sasa_threshold
+    fold_number = args.fold
     
     
     num_cpus = args.n_tasks
@@ -127,17 +128,16 @@ def main(node_noise_std : float, training_split='cv'):
         data_set = GASPData(prepend + '/scPDB_data_dir', num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
         
         do_validation = False
-        if training_split == 'cv' or training_split == 'cv_full':
+        if training_split == 'cv':
             do_validation = True
             val_paths = []
             train_paths = []
             
-            for fold_number in range(1 if training_split == 'cv' else 10):
-                val_paths.append(prepend + "/splits/test_ids_fold"  + str(fold_number))
-                train_paths.append(prepend + "/splits/train_ids_fold" + str(fold_number))
+            val_paths.append(prepend + "/splits/test_ids_fold"  + str(fold_number))
+            train_paths.append(prepend + "/splits/train_ids_fold" + str(fold_number))
             data_points = zip(train_paths,val_paths)
 
-            gen = (k_fold(data_set, train_path, val_path, i) for i, (train_path, val_path) in enumerate(data_points))
+            gen = (k_fold(data_set, train_path, val_path, fold_number) for (train_path, val_path) in data_points)
 
         elif training_split == 'train_full':
             do_validation = False
@@ -271,8 +271,8 @@ def main(node_noise_std : float, training_split='cv'):
             writer.add_scalar('Epoch_AUC/Train',  training_epoch_auc[-1],  train_epoch_num)
             writer.add_scalar('Epoch_PR_AUC/Train', training_epoch_pr_auc[-1], train_epoch_num)
 
-            if not os.path.isdir("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id,cv_iteration)):
-                os.makedirs("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id,cv_iteration))
+            if not os.path.isdir("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id, cv_iteration)):
+                os.makedirs("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id, cv_iteration))
             torch.save(model.module.state_dict(), "./trained_models/{}/trained_model_{}/cv_{}/epoch_{}".format(training_split, model_id, cv_iteration, train_epoch_num))
             
             train_epoch_num += 1
@@ -356,7 +356,8 @@ def main(node_noise_std : float, training_split='cv'):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a GNN for binding site prediction.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "cv_full", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen"], help="Training set.")
+    parser.add_argument("-s", "--training_split", default="cv", choices=["cv", "train_full", "coach420", "coach420_mlig", "holo4k", "holo4k_mlig", "chen"], help="Training set.")
+    parser.add_argument("-f", "--fold", type=int, default=0, help="Cross-validation fold, only used for -s cv.")
     parser.add_argument("-nn", "--node_noise_std", type=float, default=0.02, help="NoisyNodes standard deviation.")
     parser.add_argument("-m", "--model", default="gatv2", choices=["gat", "gatv2"], help="GNN architecture to train.")
     parser.add_argument("-e", "--num_epochs", type=int, default=50, help="Number of training epochs.")
@@ -368,7 +369,7 @@ if __name__ == "__main__":
     parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
     parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
-    parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
+    parser.add_argument("-ag", "--aggregator", default="multi", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
     parser.add_argument("-kh", "--k_hops", type=int, default=1, help="Number of hops for constructing a surface graph.")
     parser.add_argument("-st", "--sasa_threshold", type=float, default=1e-4, help="SASA above which atoms are considered on the surface.")
