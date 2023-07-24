@@ -2,43 +2,40 @@ import requests # this is used to access json files
 import pandas as pd
 import argparse
 import os
-from tqdm import tqdm
+from tqdm.contrib import tzip
 
 # adapted from https://gist.github.com/avrilcoghlan/e44ce43224ac601f53f1d58944ce93cf
 def get_uniprot(pdb_id, chain=None):
     full_url = f"https://www.ebi.ac.uk/pdbe/api/mappings/uniprot/{pdb_id}"
     json_results = requests.get(full_url).json() #This calls the information back from the API using the 'requests' module, and converts it to json format
 
-    if chain is not None:
-        uniprot_ids = [parse_uniprot_for_chain(json_results, pdb_id, chain)]
+    uniprot_ids = parse_uniprots(json_results, pdb_id, chain)
+
+    return uniprot_ids
+
+
+def parse_uniprots(uniprot_json, pdb_id, pdb_chain=None):
+    uniprot_dict = uniprot_json[pdb_id]['UniProt']
+    uniprot_ids = list(uniprot_dict.keys())
+    
+    if pdb_chain is None: return uniprot_ids
+
     else:
-        uniprot_ids = parse_all_uniprots(json_results, pdb_id)
+        for u_id in uniprot_ids:
+            chains = uniprot_dict[u_id]['mappings']
+            chain_ids = [chain['chain_id'].upper() for chain in chains]
+            if pdb_chain.upper() in chain_ids: return [u_id]
 
-    return uniprot_ids
-
-
-def parse_all_uniprots(uniprot_json, pdb_id):
-    uniprot_dict = uniprot_json[pdb_id]['UniProt']
-    uniprot_ids = list(uniprot_dict.keys())
-    
-    return uniprot_ids
+        return [] # when no uniprot is found
 
 
-def parse_uniprot_for_chain(uniprot_json, pdb_id, chain):
-    uniprot_dict = uniprot_json[pdb_id]['UniProt']
-    uniprot_ids = list(uniprot_dict.keys())
-    
-    for u_id in uniprot_ids:
-        chains = uniprot_dict[u_id]['mappings']
-        chain_ids = [chain['chain_id'].upper() for chain in chains]
-        if chain.upper() in chain_ids: return u_id
+def pdb_to_uniprot_df(pdb_id_list, chain_list=None):
+    if chain_list is None:
+        chain_list = [None]*len(pdb_id_list)
 
-
-def pdb_to_uniprot_df(pdb_id_list):
     uniprot_id_list = []
-    for pdb_id in tqdm(pdb_id_list):
-        uniprot_id = get_uniprot(pdb_id)
-        uniprot_id_list.append(uniprot_id)
+    for pdb_id, chain in tzip(pdb_id_list, chain_list):
+        uniprot_id_list.append(get_uniprot(pdb_id, chain))
     uniprot_df = pd.DataFrame({'PDB':pdb_id_list, 'UNIPROT':uniprot_id_list})
         
     return uniprot_df
@@ -46,7 +43,7 @@ def pdb_to_uniprot_df(pdb_id_list):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fetch UNIPROT ids for datasets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-s", "--set", default="scpdb", choices=["scpdb", "coach420", "holo4k", "coach420_mlig", "holo4k_mlig"], help="Data set.")
+    parser.add_argument("-s", "--set", default="scpdb", choices=["scpdb", "coach420", "holo4k", "coach420_mlig", "holo4k_mlig", "misato", "chen"], help="Data set.")
     args = parser.parse_args()
 
     if args.set == 'scpdb':
@@ -54,7 +51,6 @@ if __name__ == '__main__':
         scpdb_paths = os.listdir(f'{data_dir}/unprocessed_mol2')
         scpdb_pdbs = [path[:4] for path in scpdb_paths if path[0] != '.']
         pdb_to_uniprot_df(scpdb_pdbs).to_pickle(f'{data_dir}/scPDB_uniprot.pkl')
-
 
     if args.set == 'coach420':
         data_dir = './benchmark_data_dir'
@@ -82,5 +78,22 @@ if __name__ == '__main__':
         holo_mlig_pdbs = [path.split('/')[-1].split('.')[0] for path in holo_mlig_paths['path']]
         pdb_to_uniprot_df(holo_mlig_pdbs).to_pickle(f'{data_dir}/holo4k(mlig)_uniprot.pkl')
 
+    if args.set == 'misato':
+        data_dir = './benchmark_data_dir'
+        misato_pdbs = []
+        with open(f'{data_dir}/misato/train_MD.txt') as file:
+            misato_pdbs += file.read().lower().splitlines()
+        with open(f'{data_dir}/misato/val_MD.txt') as file:
+            misato_pdbs += file.read().lower().splitlines()
+        with open(f'{data_dir}/misato/test_MD.txt') as file:
+            misato_pdbs += file.read().lower().splitlines()
+        
+        pdb_to_uniprot_df(misato_pdbs).to_pickle(f'{data_dir}/misato_uniprot.pkl')
 
+    if args.set == "chen":
+        data_dir = './benchmark_data_dir'
+        chen_paths = pd.read_csv(f'{data_dir}/chen11.ds', names=['path'], skiprows=5)
+        chen_pdbs = [path.split('_')[-1].split('.')[0][:-1] for path in chen_paths['path']]
+        chen_chains = [path.split('_')[-1].split('.')[0][-1] for path in chen_paths['path']]
+        pdb_to_uniprot_df(chen_pdbs, chen_chains).to_pickle(f'{data_dir}/chen11_uniprot.pkl')
 
