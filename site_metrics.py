@@ -393,7 +393,8 @@ def scPDB_ligand_merge(lig_coord_list, lig_mass_list, lig_center_list):
 
 def multisite_metrics(prot_coords, lig_coord_list, lig_mass_list, predicted_probs, top_n_plus=0, 
 threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", 
-cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_indices=None, ligand_merge=False):
+cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_indices=None, 
+ligand_merge=False, known_n_sites=True):
     """Cluster multiple binding sites and calculate distance from the ligand
 
     Parameters
@@ -424,6 +425,9 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
 
     ligand_merge: bool
         Whether to merge ligands with center of mass within 5 A as is done in scPDB.
+
+    known_n_sites: bool
+        Whether to use the ground truth number of sites (True) or a static maximum (False).
 
     Returns
     -------
@@ -472,7 +476,9 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
     if ligand_merge:
         lig_coord_list, lig_center_list = scPDB_ligand_merge(lig_coord_list, lig_mass_list, lig_center_list)
 
-    n_sites = len(lig_center_list)
+    if known_n_sites: n_sites = len(lig_center_list)
+    else: n_sites = 0 # just use the static term
+
     if centroid_type == "hull":
         _, _, predicted_center_list = hulls_from_clusters(bind_coords, sorted_ids, n_sites+top_n_plus)
     else:
@@ -481,8 +487,10 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
 
     if type(sorted_ids) == type(None):
         n_predicted = 0
+        top_predicted = 0
     else:
         n_predicted = len(np.unique(sorted_ids[sorted_ids >= 0]))
+        top_predicted = len(predicted_center_list)
 
     if len(predicted_center_list) > 0:          
         DCC_lig_matrix = np.zeros([len(lig_center_list), len(predicted_center_list)])
@@ -501,17 +509,18 @@ cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_
         DCC_lig = np.min(DCC_lig_matrix, axis=1)
         DCA = np.min(DCA_matrix, axis=1)
 
-        return DCC_lig, DCA, n_predicted
+        return DCC_lig, DCA, n_predicted, top_predicted
 
     else:
         nan_arr =  np.empty(len(lig_center_list))
         nan_arr[:] = np.nan
 
-        return nan_arr, nan_arr, n_predicted
+        return nan_arr, nan_arr, n_predicted, top_predicted
 
 
 def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05,
-method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, use_surface=False, use_connolly=False, ligand_merge=False):
+method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, use_surface=False, use_connolly=False, 
+ligand_merge=False, known_n_sites=True):
     DCC_lig_list = []
     DCA_list = []
 
@@ -550,14 +559,14 @@ method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, us
             # TODO: MAKE THIS AN ACUTAL PATH
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             adj_matrix = subgraph_adjacency(adj_matrix, atom_indices)
-            DCC_lig, DCA, n_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, lig_mass_list,
+            DCC_lig, DCA, n_predicted, top_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, lig_mass_list,
                 probs, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution, method=method, score_type=score_type,
                 centroid_type=centroid_type, cluster_all=cluster_all, adj_matrix=adj_matrix, surf_mask=surf_mask, connolly_data=connolly_data,
-                tracked_indices=tracked_indices, ligand_merge=ligand_merge)
+                tracked_indices=tracked_indices, ligand_merge=ligand_merge, known_n_sites=known_n_sites)
 
             if np.all(np.isnan(DCC_lig)) and np.all(np.isnan(DCA)): 
                 no_prediction_count += 1
-            return DCC_lig, DCA, n_predicted, no_prediction_count
+            return DCC_lig, DCA, n_predicted, top_predicted, no_prediction_count
 
         except Exception as e:
             print("ERROR")
@@ -565,15 +574,19 @@ method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, us
             raise e
 
     r = Parallel(n_jobs=n_jobs)(delayed(helper)(file) for file in tqdm(os.listdir(path_to_labels)[:],  position=0, leave=True))
-    DCC_lig_list, DCA_list, n_predicted, no_prediction_count = zip(*r)
+    DCC_lig_list, DCA_list, n_predicted, top_predicted, no_prediction_count = zip(*r)
     names = [file for file in os.listdir(path_to_labels)]
-    return DCC_lig_list, DCA_list, n_predicted, no_prediction_count, names
+    return DCC_lig_list, DCA_list, n_predicted, top_predicted, no_prediction_count, names
 
-def extract_multi(metric_array):
-    success_rate = np.mean(np.concatenate(metric_array) < 4)
-    mean = np.nanmean(np.concatenate(metric_array))
+def criteria_to_metrics(metric_array, top_predicted):
+    recall = np.mean(np.concatenate(metric_array) <= 4)
+
+    # for precision we don't want to count a success if it exceeds the number of predictions
+    # (from prediction site being within 4 A of multiple sites)
+    capped_success = [min(np.sum(metric_array[i] <= 4), top_predicted[i]) for i in range(len(metric_array))]
+    precision = np.sum(capped_success) / np.sum(top_predicted)
         
-    return success_rate, mean
+    return recall, precision
 #######################################################################################
 # model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
 if __name__ == "__main__":
@@ -584,7 +597,8 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--clustering_method", default="average", choices=["meanshift", "dbscan", "louvain", "single", "complete", "average", "ward", "groundtruth"], help="Clustering method.")
     parser.add_argument("-d", "--dist_thresholds", type=float, nargs="+", default=[15], help="Distance thresholds for clustering.")
     parser.add_argument("-p", "--prob_threshold", type=float, default=.3, help="Probability threshold for atom classification.")
-    parser.add_argument("-tn", "--top_n_plus", type=int, nargs="+", default=[0,2,100], help="Number of additional sites to consider.")
+    parser.add_argument("-np", "--top_n_plus", type=int, nargs="+", default=[0,2,1000], help="Number of additional sites to consider.")
+    parser.add_argument("-tn", "--top_n", type=int, nargs="+", default=[3,5], help="Static number of sites to consider.")
     parser.add_argument("-o", "--compute_optimal", action="store_true", help="Option to compute optimal threshold.")
     parser.add_argument("-l", "--use_labels", action="store_true", help="Option to cluster true labels.")
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
@@ -607,7 +621,8 @@ if __name__ == "__main__":
     resolution = args.louvain_resolution
     method = args.clustering_method
     compute_optimal = args.compute_optimal
-    top_n_list=args.top_n_plus
+    top_n_list = args.top_n_plus
+    top_list = args.top_n
     score_type = args.aggregation_function
     centroid_type = args.centroid_type
     use_surface = not args.all_atom_prediction
@@ -718,7 +733,7 @@ if __name__ == "__main__":
             start = time.time()
             path_to_mol2= data_dir + '/mol2/'
             path_to_labels= prepend + metric_dir + '/labels/' + model_name + '/'
-            DCC_lig, DCA, n_predicted, no_prediction_count, names = compute_metrics_for_all(
+            DCC_lig, DCA, n_predicted, top_predicted, no_prediction_count, names = compute_metrics_for_all(
             path_to_mol2, path_to_labels, top_n_plus=top_n_plus, threshold=threshold, eps=eps, resolution=resolution,
             method=method, score_type=score_type, centroid_type=centroid_type, use_surface=use_surface, use_connolly=use_connolly, ligand_merge=ligand_merge)
 
@@ -751,25 +766,86 @@ if __name__ == "__main__":
             out.write("-----------------------------------------------------------------------------------\n")
             out.write(f"Number of systems with no predictions: {np.sum(no_prediction_count)}\n")
     
-            DCC_lig_succ, DCC_lig_mean = extract_multi(DCC_lig)
-            DCA_succ, DCA_mean = extract_multi(DCA)
+            DCC_lig_recall, DCC_lig_precision = criteria_to_metrics(DCC_lig, top_predicted)
+            DCA_recall, DCA_precision = criteria_to_metrics(DCA, top_predicted)
 
-            print(f"Average DCC_lig: {DCC_lig_mean}", flush=True)
-            print(f"DCC_lig Success: {DCC_lig_succ}", flush=True)
+            
+            print(f"DCC_lig Recall: {DCC_lig_recall}", flush=True)
+            print(f"DCC_lig Precision: {DCC_lig_precision}", flush=True)
 
-
-            print(f"Average DCA: {DCA_mean}", flush=True)
-            print(f"DCA Success: {DCA_succ}", flush=True)
-
+            print(f"DCA Recall: {DCA_recall}", flush=True)
+            print(f"DCA Precision: {DCA_precision}", flush=True)
 
             print(f"Average n_predicted: {np.nanmean(n_predicted)}", flush=True)
 
-            out.write(f"Average DCC_lig: {DCC_lig_mean}\n")
-            out.write(f"DCC_lig Success: {DCC_lig_succ}\n")
+            
+            out.write(f"DCC_lig Recall: {DCC_lig_recall}\n")
+            out.write(f"DCC_lig Precision: {DCC_lig_precision}\n")
 
+            out.write(f"DCA Recall: {DCA_recall}\n")
+            out.write(f"DCA Precision: {DCA_precision}\n")
 
-            out.write(f"Average DCA: {DCA_mean}\n")
-            out.write(f"DCA Success: {DCA_succ}\n")
+            out.write(f"Average n_predicted: {np.nanmean(n_predicted)}\n")
+            #######################################################################################
+
+        for top in top_list:
+            print(f"Calculating top {top} metrics for {threshold} threshold with distance cutoff {eps}.", flush=True)
+            out.write(f"Calculating top {top} metrics for {threshold} threshold with distance cutoff {eps}.\n")
+            start = time.time()
+            path_to_mol2= data_dir + '/mol2/'
+            path_to_labels= prepend + metric_dir + '/labels/' + model_name + '/'
+            DCC_lig, DCA, n_predicted, top_predicted, no_prediction_count, names = compute_metrics_for_all(
+            path_to_mol2, path_to_labels, top_n_plus=top, threshold=threshold, eps=eps, resolution=resolution,
+            method=method, score_type=score_type, centroid_type=centroid_type, use_surface=use_surface, use_connolly=use_connolly, 
+            ligand_merge=ligand_merge, known_n_sites=False)
+
+            print("Done. {}".format(time.time()- start))
+            out.write("Done. {}\n".format(time.time()- start))
+            
+            overlap_path = f"{prepend}{metric_dir}/overlaps/{model_name}"
+            if not os.path.isdir(overlap_path):
+                os.makedirs(overlap_path)
+            
+
+            np.savez(f"{overlap_path}/{argstring}_top{top}.npz", DCC_lig=np.array(DCC_lig, dtype=object), DCA=np.array(DCA, dtype=object),
+             n_predicted=n_predicted, names=names)
+
+            n_predicted = np.array(n_predicted)
+
+            print("-----------------------------------------------------------------------------------", flush=True)
+            print(f"Method: {method}")
+            print(f"Cutoff (Prediction Threshold): {threshold}")
+            print(f"EPS: {eps}")
+            print(f"top {top} prediction")
+            print("-----------------------------------------------------------------------------------", flush=True)
+            print(f"Number of systems with no predictions: {np.sum(no_prediction_count)}", flush=True)
+
+            out.write(f"Method: {method}\n")
+            out.write("-----------------------------------------------------------------------------------\n")
+            out.write(f"Cutoff (Prediction Threshold): {threshold}\n")
+            out.write(f"EPS: {eps}\n")
+            out.write(f"top {top} prediction\n")
+            out.write("-----------------------------------------------------------------------------------\n")
+            out.write(f"Number of systems with no predictions: {np.sum(no_prediction_count)}\n")
+    
+            DCC_lig_recall, DCC_lig_precision = criteria_to_metrics(DCC_lig, top_predicted)
+            DCA_recall, DCA_precision = criteria_to_metrics(DCA, top_predicted)
+
+            
+            print(f"DCC_lig Recall: {DCC_lig_recall}", flush=True)
+            print(f"DCC_lig Precision: {DCC_lig_precision}", flush=True)
+
+            print(f"DCA Recall: {DCA_recall}", flush=True)
+            print(f"DCA Precision: {DCA_precision}", flush=True)
+
+            print(f"Average n_predicted: {np.nanmean(n_predicted)}", flush=True)
+
+            
+            out.write(f"DCC_lig Recall: {DCC_lig_recall}\n")
+            out.write(f"DCC_lig Precision: {DCC_lig_precision}\n")
+
+            out.write(f"DCA Recall: {DCA_recall}\n")
+            out.write(f"DCA Precision: {DCA_precision}\n")
 
             out.write(f"Average n_predicted: {np.nanmean(n_predicted)}\n")
             #######################################################################################
