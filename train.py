@@ -39,7 +39,7 @@ from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData
 from model import GAT_model
-from utils import distance_sigmoid
+from utils import distance_sigmoid, initialize_model
 
 
 job_start_time = time.time()
@@ -70,24 +70,6 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
     assert train_mask.sum() > val_mask.sum()
 
     return (dataset[train_mask], dataset[val_mask], i)
-
-def initialize_model(parser_args):
-    model_name = parser_args.model
-    weight_groups = parser_args.weight_groups
-    group_layers = parser_args.group_layers
-    aggr = parser_args.aggregator
-
-    if model_name == 'gat':
-        print("Using GAT")
-        model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATConv,
-         weight_groups=weight_groups, group_layers=group_layers, GAT_aggr=aggr)
-    elif model_name == 'gatv2':
-        print("Using GATv2")
-        model = GAT_model(input_dim=60,GAT_heads=4, GAT_style=GATv2Conv,
-         weight_groups=weight_groups,group_layers=group_layers, GAT_aggr=aggr)
-    else:
-        raise ValueError("Unknown Model Type:", model_name)
-    return model
 
 def main(node_noise_std : float, training_split='cv'):
     # Hyperparameters
