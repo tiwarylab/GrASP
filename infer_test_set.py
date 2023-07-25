@@ -330,7 +330,7 @@ def infer_test(args):
 
 
 def infer_production(args):
-    """Perform inference and evaluation on a given test or validation set using the specified GNN model.
+    """Perform inference and evaluation on a given structure or set of structures using a pretrained GrASP model.
 
     Parameters
     ----------
