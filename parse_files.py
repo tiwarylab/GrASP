@@ -1,10 +1,5 @@
-from dataclasses import field
-from turtle import end_fill
 from featurize_protein import process_system
-from merge import write_fragment
 import MDAnalysis as mda
-from MDAnalysis.analysis.distances import distance_array
-from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 import os
 import numpy as np
 import pandas as pd
@@ -16,32 +11,75 @@ from glob import glob
 import re
 import argparse
 
-allowed_residues = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
-allowed_elements = ['C', 'N', 'O', 'S']
-res_selection_str = " or ".join([f'resname {x}' for x in allowed_residues])
-atom_selection_str = " or ".join([f'element {x}' for x in allowed_elements]) # ignore post-translational modification
-exclusion_list = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
+ALLOWED_RESIUDES = ['ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS', 'MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']
+ALLOWED_ELEMENTS = ['C', 'N', 'O', 'S']
+RES_SELECTION_STR = " or ".join([f'resname {x}' for x in ALLOWED_RESIUDES])
+ATOM_SELECTION_STR = " or ".join([f'element {x}' for x in ALLOWED_ELEMENTS]) # ignore post-translational modification
+EXCLUSION_LIST = ['HOH', 'DOD', 'WAT', 'NAG', 'MAN', 'UNK', 'GLC', 'ABA', 'MPD', 'GOL', 'SO4', 'PO4']
 
 
 def cleanup_residues(univ):
-        res_names = univ.residues.resnames
-        new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
-        univ.residues.resnames = new_names
-        
-        return univ
+    """Clean up residue names in a Universe object.
+
+    This function modifies the residue names in the provided Universe object
+    by removing any numeric characters and converting the residue names to uppercase.
+
+    Parameters
+    ----------
+    univ : MDAnalysis.core.groups.Universe
+        The Universe object representing the molecular system.
+
+    Returns
+    -------
+    MDAnalysis.core.groups.Universe
+        A modified Universe object with cleaned up residue names.
+    """
+    res_names = univ.residues.resnames
+    new_names = [ "".join(re.findall(".*[a-zA-Z]+", name)).upper() for name in res_names]
+    univ.residues.resnames = new_names
+    
+    return univ
 
 
 def undo_se_modification(univ):
+    """Modify selenium (Se) atoms to sulfur (S) atoms in a Universe object.
+
+    This function  changes selenium (Se) atoms in the provided Universe object
+    to sulfur (S) atoms. This is done to revert the selenomethionine post translational modification.
+
+    Parameters
+    ----------
+    univ : MDAnalysis.core.groups.Universe
+        The Universe object representing the molecular system.
+
+    Returns
+    -------
+    MDAnalysis.core.groups.Universe
+        A modified Universe object with selenium (Se) atoms converted back to sulfur (S) atoms.
+    """
     se_atoms = univ.select_atoms('protein and element Se')
     se_atoms.elements = 'S'
     
     return univ
 
 
-def clean_alternate_positions(input_dir, output_dir):
+def clean_alternate_positions(input_dir:str, output_dir:str):
+    """Clean PDB files in the input directory by removing alternate positions of residues.
+
+    This function reads all the PDB files in the input directory, removes the alternate positions of residues
+    (keeping only the first position), and writes the cleaned PDB files to the output directory.
+
+    Parameters
+    ----------
+    input_dir : str
+        The path to the directory containing the input PDB files.
+
+    output_dir : str
+        The path to the directory where cleaned PDB files will be written.
+    """
     if not os.path.isdir(output_dir): os.makedirs(output_dir)
     
-    res_group = '|'.join(allowed_residues)
+    res_group = '|'.join(ALLOWED_RESIUDES)
     r = re.compile(f'^ATOM.*([2-9]|[B-Z])({res_group})')
     
     for file_path in glob(f'{input_dir}/*.pdb'):
@@ -56,26 +94,58 @@ def clean_alternate_positions(input_dir, output_dir):
     
 
 def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format='pdb', out_name='protein', parse_prot=True):
-    ob_input = in_file
+    """Convert a molecular structure file to the MOL2 format with optional additional preprocessing steps.
+
+    This function takes a molecular structure file in a specified format and converts it to the MOL2 format.
+    Optionally, it performs preprocessing steps on the molecular structure, such as adding hydrogens,
+    cleaning up residue names, and undoing selenium (Se) to sulfur (S) modifications.
+
+    Parameters
+    ----------
+    in_file : str
+        The path to the input molecular structure file.
+
+    structure_name : str
+        The name of the structure or system being processed.
+
+    out_directory : str
+        The path to the output directory where the MOL2 file will be saved.
+
+    addH : bool, optional
+        If True, remove and readd hydrogen atoms to the structure before converting to MOL2.
+        If False, remove all hydrogens, by default True.
+
+    in_format : str, optional
+        The format of the input molecular structure file. For example, 'pdb', 'mol2', etc., by default 'pdb'.
+
+    out_name : str, optional
+        The base name of the output MOL2 file (excluding the extension), by default 'protein'.
+
+    parse_prot : bool, optional
+        If True, perform residue name cleanup on mol2 file.
+
+    """
+    ob_input = in_file                                          # File to be input into openbabel for conversion to mol2
     output_path = out_directory + structure_name
     if not os.path.isdir(output_path): os.makedirs(output_path)
     
+    # Optionally clean protein
     if parse_prot:
         univ = mda.Universe(in_file)
         univ = cleanup_residues(univ)
         univ = undo_se_modification(univ)
-        prot_atoms = univ.select_atoms(f'protein and ({res_selection_str}) and ({atom_selection_str})')
+        prot_atoms = univ.select_atoms(f'protein and ({RES_SELECTION_STR}) and ({ATOM_SELECTION_STR})')
         ob_input = f'{output_path}/{out_name}.{in_format}'
         mda.coordinates.writer(ob_input).write(prot_atoms)
         
+    # Use OpenBabel to convert protein to mol2 format
     obConversion = openbabel.OBConversion()
     obConversion.SetInAndOutFormats(in_format, "mol2")
-
     output_mol2_path  = f'{output_path}/{out_name}.mol2'
-
     mol = openbabel.OBMol()
-
     obConversion.ReadFile(mol, ob_input)
+    
+    # Remove all hydrogens and optionally add them with OpenBabel so that they're added in a unified way
     mol.DeleteHydrogens()
     if addH: 
         mol.CorrectForPH()
@@ -83,6 +153,7 @@ def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format
     
     obConversion.WriteFile(mol, output_mol2_path)
     
+    # Optionally cleanup residue names
     if parse_prot:
         if ob_input != output_mol2_path:
             os.remove(ob_input) # cleaning temp file
@@ -92,6 +163,31 @@ def convert_to_mol2(in_file, structure_name, out_directory, addH=True, in_format
 
 
 def load_p2rank_set(file, skiprows=0, pdb_dir='unprocessed_pdb', joined_style=False):
+    """Load P2Rank dataset file and convert paths to proper file paths.
+
+    This function reads the P2Rank dataset file and converts the paths in the file to proper file paths
+    by prepending the root directory (benchmark_data_dir) and the specified pdb_dir to each path.
+
+    Parameters
+    ----------
+    file : str
+        The path to the P2Rank dataset file to be loaded.
+
+    skiprows : int, optional
+        The number of rows to skip while reading the dataset file, by default 0.
+
+    pdb_dir : str, optional
+        The directory where the PDB files are located, by default 'unprocessed_pdb'.
+
+    joined_style : bool, optional
+        If True, the P2Rank dataset file contains paths in a joined-style format, where subset directories are removed.
+        The function will then append 'benchmark_data_dir' to the path before adding 'pdb_dir', by default False.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A DataFrame containing the proper file paths after preprocessing.
+    """
     df = pd.read_csv(file, sep='\s+', names=['path'], index_col=False, skiprows=skiprows)
     if joined_style: df['path'] = ['/'.join(file.split('/')[::2]) for file in df['path']] #removing subset directory
     df['path'] = ['benchmark_data_dir/'+f'/{pdb_dir}/'.join(file.split('/')) for file in df['path']]
@@ -100,6 +196,29 @@ def load_p2rank_set(file, skiprows=0, pdb_dir='unprocessed_pdb', joined_style=Fa
 
 
 def load_p2rank_mlig(file, skiprows, pdb_dir='unprocessed_pdb'):
+    """Load P2Rank MLigands dataset file and preprocess ligands information.
+
+    This function reads the P2Rank MLigands dataset file and preprocesses the ligands information by removing rows
+    with '<CONFLICTS>' as ligands. It also converts the paths in the file to proper file paths by prepending the root
+    directory (benchmark_data_dir) and the specified pdb_dir to each path.
+
+    Parameters
+    ----------
+    file : str
+        The path to the P2Rank MLigands dataset csv to be loaded.
+
+    skiprows : int or list-like or callable, optional
+        The number of rows to skip while reading the dataset file or list of row indices to skip,
+        or a callable that takes a row index as input and returns True if the row should be skipped, by default 0.
+
+    pdb_dir : str, optional
+        The directory where the PDB files are located, by default 'unprocessed_pdb'.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A DataFrame containing the proper file paths and preprocessed ligands information.
+    """
     df = pd.read_csv(file, sep='\s+', names=['path', 'ligands'], index_col=False, skiprows=skiprows)
     df = df[df['ligands'] != '<CONFLICTS>']
     df['path'] = ['benchmark_data_dir/'+f'/{pdb_dir}/'.join(file.split('/')) for file in df['path']]
@@ -109,6 +228,17 @@ def load_p2rank_mlig(file, skiprows, pdb_dir='unprocessed_pdb'):
 
 
 def write_mlig(df, out_file):
+    """Write ligands information for each pdb file to an output file.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A DataFrame containing ligands information. It must have two columns: 'path' and 'ligands'.
+        The 'path' column contains file paths to protein structures, and the 'ligands' column contains lists of ligands.
+
+    out_file : str
+        The path to the output file where ligands information for each pdb file will be written.
+    """
     with open(out_file, 'w') as f:
         f.write('HEADER: protein ligand_codes\n\n')
         for val in df.values:
@@ -117,6 +247,21 @@ def write_mlig(df, out_file):
 
 
 def load_p2rank_test_ligands(p2rank_file):
+    """Load P2Rank test ligands information from a CSV file.
+
+    This function reads the P2Rank test ligands information from a CSV file and processes the data into a Pandas dataframe.
+
+    Parameters
+    ----------
+    p2rank_file : str
+        The path to the CSV file containing P2Rank test ligands information.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A DataFrame containing preprocessed P2Rank test ligands information.
+
+    """
     ligand_df = pd.read_csv(p2rank_file, delimiter=', ', engine='python')
     ligand_df['atomIds'] = [[int(atom) for atom in row.split(' ')] for row in ligand_df['atomIds']]
     ligand_df['ligand'] = [row.split('&') for row in ligand_df['ligand']]
@@ -125,6 +270,25 @@ def load_p2rank_test_ligands(p2rank_file):
 
 
 def extract_ligands_from_p2rank_df(path, name, out_dir, ligand_df):
+    """Extract ligands from a P2Rank DataFrame and save them as individual PDB files.
+
+        This function extracts ligands from a molecular structure file stored in 'path' based on the information
+        provided in the 'ligand_df' DataFrame. The extracted ligands are saved as individual PDB files in the 'out_dir'.
+
+        Parameters
+        ----------
+        path : str
+            The path to the molecular structure file from which to extract ligands.
+
+        name : str
+            The name of the file (without extension) from which to extract ligands.
+
+        out_dir : str
+            The path to the output directory where the extracted ligands will be saved as individual PDB files.
+
+        ligand_df : pandas.DataFrame
+            A DataFrame containing ligand information, such as 'file', 'ligand', '#atoms', and 'atomIds'.
+    """
     univ = mda.Universe(path)
     selected_rows = ligand_df[ligand_df['file'] == f'{name}.pdb']
     
@@ -142,6 +306,27 @@ def extract_ligands_from_p2rank_df(path, name, out_dir, ligand_df):
 
 
 def select_ligands_from_p2rank_df(univ, name, ligand_df):
+    """Select ligands from a P2Rank DataFrame based on the molecular structure.
+
+        This function selects ligands from the mdanalysis universe 'univ'
+        based on the information provided in the 'ligand_df' DataFrame.
+
+        Parameters
+        ----------
+        univ : MDAnalysis.Universe
+            The MDAnalysis Universe object representing the molecular structure.
+
+        name : str
+            The name of the molecular structure (without extension) for which to select ligands.
+
+        ligand_df : pandas.DataFrame
+            A DataFrame containing ligand information, such as 'file', 'ligand', '#atoms', and 'atomIds'.
+
+        Returns
+        -------
+        list of MDAnalysis.AtomGroup
+            A list of MDAnalysis AtomGroup objects, each representing a selected ligand.
+    """
     selected_rows = ligand_df[ligand_df['file'] == f'{name}.pdb']
     
     ligands = []
@@ -159,6 +344,24 @@ def select_ligands_from_p2rank_df(univ, name, ligand_df):
 
 
 def chains_bound_to(univ, ligands):
+    """Find chains bound to the specified ligands in a molecular structure.
+
+        This function identifies the chains that are bound to the specified ligands in the molecular structure
+        represented by the MDAnalysis Universe object 'univ'.
+
+        Parameters
+        ----------
+        univ : MDAnalysis.Universe
+            The MDAnalysis Universe object representing the molecular structure.
+
+        ligands : list of MDAnalysis.AtomGroup
+            A list of MDAnalysis AtomGroup objects, each representing a ligand to which chains are bound.
+
+        Returns
+        -------
+        list of numpy.ndarray
+            A list of NumPy arrays, each containing the unique chainIDs of chains bound to the corresponding ligand.
+    """
     chain_sets = []
     for ligand in ligands:
         nearby = univ.select_atoms('protein and around 4 group ligand', ligand=ligand)
@@ -168,6 +371,20 @@ def chains_bound_to(univ, ligands):
 
 
 def chain_graph_components(chain_sets):
+    """Find connected components of the chain graph.
+
+    This function creates a chain graph from the provided chain sets and finds the connected components in the graph.
+
+    Parameters
+    ----------
+    chain_sets : list of numpy.ndarray
+        A list of NumPy arrays, where each array contains the unique chainIDs of chains bound to a ligand.
+
+    Returns
+    -------
+    comp : generator of sets
+        A generator of connected components in the chain graph.
+    """
     bound_chains = np.unique([chain for subset in chain_sets for chain in subset])
     chain_graph = nx.Graph()
 
@@ -182,6 +399,25 @@ def chain_graph_components(chain_sets):
 
 
 def p2rank_df_intersect(mlig_df, p2rank_df):
+    """Intersect two P2Rank DataFrames to find common ligands.
+
+        This function intersects two P2Rank DataFrames, 'mlig_df' and 'p2rank_df', to find common ligands
+        based on their 'ligand', '#atoms', and 'atomIds' attributes.
+
+        Parameters
+        ----------
+        mlig_df : pandas.DataFrame
+            The first P2Rank DataFrame containing ligand information.
+
+        p2rank_df : pandas.DataFrame
+            The second P2Rank DataFrame containing ligand information.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A new DataFrame containing the common ligands between 'mlig_df' and 'p2rank_df'.
+
+    """
     concat_list = [pd.DataFrame(columns=mlig_df.columns)]
 
     for i in mlig_df.index:
@@ -202,6 +438,24 @@ def p2rank_df_intersect(mlig_df, p2rank_df):
 
 
 def check_p2rank_criteria(prot_univ, lig_univ):
+    """Check if a protein-ligand complex meets P2Rank criteria.
+
+        This function checks if a protein-ligand complex meets the criteria required by P2Rank.
+        This criteria seeks to eliminate crawling ligands from the dataset.
+
+        Parameters
+        ----------
+        prot_univ : MDAnalysis.Universe
+            The MDAnalysis Universe object representing the protein in the complex.
+
+        lig_univ : MDAnalysis.Universe
+            The MDAnalysis Universe object representing the ligand in the complex.
+
+        Returns
+        -------
+        bool
+            True if the complex meets the P2Rank criteria, False otherwise.
+    """
     prot_univ.add_TopologyAttr('record_type')
     prot_univ.atoms.record_types = 'protein'
     lig_univ.add_TopologyAttr('record_type')
@@ -211,8 +465,8 @@ def check_p2rank_criteria(prot_univ, lig_univ):
     univ = mda.Merge(prot_univ.atoms, lig_univ.atoms)
     univ.dimensions = None # this prevents PBC bugs in distance calculation
 
-    valid_resnames = np.all([res.resname not in exclusion_list for res in lig_univ.residues])
-    not_prot = np.all([res.resname not in allowed_residues for res in lig_univ.residues])
+    valid_resnames = np.all([res.resname not in EXCLUSION_LIST for res in lig_univ.residues])
+    not_prot = np.all([res.resname not in ALLOWED_RESIUDES for res in lig_univ.residues])
     nearby = univ.select_atoms('record_type ligand and around 4 protein').n_atoms > 0
     if valid_resnames and not_prot and nearby and (lig_univ.atoms.n_atoms >= 5):
         com = lig_univ.atoms.center_of_mass()
@@ -225,6 +479,25 @@ def check_p2rank_criteria(prot_univ, lig_univ):
 
 
 def process_train_p2rank_style(file, output_dir): 
+    """Process a protein-ligand complex in P2Rank style for the training set.
+
+        This function processes a protein-ligand complex in P2Rank style for the training set. It converts the protein and ligand
+        structures into MOL2 format, checks if the ligand meets the P2Rank criteria, and saves the valid ligands in the
+        appropriate directories.
+
+        Parameters
+        ----------
+        file : str
+            The name of the protein-ligand complex to process.
+
+        output_dir : str
+            The directory where the processed files will be saved.
+
+        Raises
+        ------
+        AssertionError
+            If the function fails to find a ligand in the provided file.
+    """
     try:
         prepend = os.getcwd()
         structure_name = file
@@ -259,6 +532,30 @@ def process_train_p2rank_style(file, output_dir):
         
 
 def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=False):
+    """Process a protein-ligand complex in P2Rank style.
+
+        This function processes a protein-ligand complex in P2Rank style. It converts the protein and ligand structures into MOL2 format,
+        extracts valid ligands based on the provided ligand DataFrame, and saves the valid ligands in the appropriate directories.
+
+        Parameters
+        ----------
+        path : str
+            The path to the protein-ligand complex in P2Rank set format.
+
+        ligand_df : pandas.DataFrame
+            The DataFrame containing ligand information, typically obtained from loading the ligand file in P2Rank format.
+
+        data_dir : str, optional
+            The directory where the processed files will be saved, by default "benchmark_data_dir".
+
+        chen_fix : bool, optional
+            Use mdanalysis to fix pdb formatting for chen dataset.
+
+        Raises
+        ------
+        AssertionError
+            If the function fails to find a ligand in the provided structure_name.
+    """
     try:
         prepend = os.getcwd()
         structure_name = '.'.join(path.split('/')[-1].split('.')[:-1])
@@ -287,6 +584,29 @@ def process_p2rank_set(path, ligand_df, data_dir="benchmark_data_dir", chen_fix=
 
 
 def process_p2rank_chains(path, ligand_df, data_dir):
+    """Process a protein-ligand complex with multiple chains in P2Rank format.
+
+    This function processes a protein-ligand complex with multiple chains in P2Rank format. It splits the complex into
+    interconnected subsystems based on the ligand-protein interactions and processes each subsystem separately. The
+    chains are not processed seperately if there is a bound ligand near the interface.
+
+    Parameters
+    ----------
+    path : str
+        The path to the protein-ligand complex in P2Rank format.
+
+    ligand_df : pandas.DataFrame
+        The DataFrame containing ligand information.
+
+    data_dir : str
+        The directory where the processed files will be saved.
+
+    Raises
+    ------
+    AssertionError
+        If the function fails to find a ligand in the provided structure.
+
+    """
     try:
         prepend = os.getcwd()
         structure_name = '.'.join(path.split('/')[-1].split('.')[:-1])
@@ -334,6 +654,24 @@ def process_p2rank_chains(path, ligand_df, data_dir):
 
 
 def process_production_set(path, data_dir="benchmark_data_dir/production"):
+    """Process a protein-ligand complex in production set format.
+
+    This function processes a protein. It converts the complex to mol2 format
+    and saves the processed files in the specified output directory.
+
+    Parameters
+    ----------
+    path : str
+        The path to the protein-ligand complex in production set format.
+
+    data_dir : str, optional
+        The directory where the processed files will be saved, by default "benchmark_data_dir/production".
+
+    Raises
+    ------
+    Exception
+        If any error occurs during processing.
+    """
     try:
         prepend = os.getcwd()
         structure_name = path.split('/')[-1].split('.')[0]
