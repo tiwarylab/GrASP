@@ -1,10 +1,24 @@
-import os
-import numpy as np
 import pyximport; pyximport.install()
 
-
 def process_system(path_to_protein_mol2_files, save_directory='./data_dir', parse_ligands=True):
-    # I really wish I didn't have to do this but the way some of these paackages pickle I have no other way. If you know a better alternative feel free to reach out
+    """Process a protein-ligand complex in MOL2 format.
+
+    This function processes a protein-ligand complex in MOL2 format. It calculates various features for each atom
+    and saves the processed data in the specified output directory.
+
+    Parameters
+    ----------
+    path_to_protein_mol2_files : str
+        The path to the directory containing the protein-ligand complex files in MOL2 format.
+
+    save_directory : str, optional
+        The directory where the processed data will be saved, by default './data_dir'.
+
+    parse_ligands : bool, optional
+        If True, calculate the identity and distance to the closest ligand for each atom, by default True.
+    """
+    
+    # Some of the packages don't pickle nicely and therefore don't work with joblib.Parallel. So, we import them inside the function
     import re
     import MDAnalysis as mda
     from MDAnalysis.analysis.distances import distance_array
@@ -64,26 +78,24 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
         'am':[0,0,0,1,0,0],
         'un':[0,0,0,0,1,0]  # Unkown Bond Type
     }
+    
     selection_str = " or ".join([f'resname {x}' for x in list(residue_dict.keys())])
     feature_factory = ChemicalFeatures.BuildFeatureFactory(str(Path(RDConfig.RDDataDir) / "BaseFeatures.fdef"))
     
-    # Adjacency Matrix
+    # Load File in mdanalysis and rdkit 
     path_to_files = path_to_protein_mol2_files
     structure_name = path_to_protein_mol2_files.split('/')[-1]
-    try:
-        protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
-        rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
+    
+    protein_w_H = mda.Universe(path_to_files + '/protein.mol2', format='mol2')
+    rdkit_protein_w_H = Chem.MolFromMol2File(path_to_files + '/protein.mol2', removeHs = False, sanitize=False, cleanupSubstructures=False)
 
-    except Exception as e: 
-        raise e
-        print("Failed to compute charges for the following file due to a structure error. This file will be skipped:", path_to_files + '/protein.mol2', flush=True)
-        return
     res_names = protein_w_H.residues.resnames
     new_names = [ "".join(re.findall("[a-zA-Z]+", name)).upper() for name in res_names]
     protein_w_H.residues.resnames = new_names
     
     protein_w_H = protein_w_H.select_atoms(selection_str)
-    # Calculate SAS for each atom, this needs to be done before hydrogens are dropped
+    
+    # Calculate solvent accessible surface area for each atom, this needs to be done before hydrogens are dropped
     try:
         traj = mdtrajload(path_to_files + '/protein.mol2')
         SAS = shrake_rupley(traj, mode='atom')
@@ -105,11 +117,13 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
         # be a very rare occasion as must things other than solvents are not droppped.
         local_SAS = np.array([SAS[atom_idx[1]]  for atom_idx in atom.bonds.indices])    
         SAS[atom.index] += np.sum(local_SAS * is_bonded_to_H)       # Only take the values from hydrogens
+    
     # Drop Hydrogens
     protein_w_H.ids = np.arange(0, len(protein_w_H.atoms))
     protein = protein_w_H.select_atoms("not element H")
     protein.ids = np.arange(0, len(protein.atoms))              # Reindex atoms ids to make them zero-indexed and contiguous
 
+    # Compute sparse adjacency matrix with a threshold of 10, leaves room to be trimmed down later
     trimmed = scipy.sparse.lil_matrix((len(protein.atoms.positions), len(protein.atoms.positions)), dtype='float')
     get_distance_matrix(protein.atoms.positions, trimmed, 10)
     trimmed = trimmed.tocsr()
@@ -117,6 +131,7 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
     feature_array = []  # Will contain all of the features for a given molecule
     SASA_array = []
 
+    # Calculate hydrogen donor, acceptor, hydrophobe, and lumped_hydrophobe properties
     try:
         rdkit_protein_w_H.UpdatePropertyCache(strict=False)
         Chem.rdmolops.SetHybridization(rdkit_protein_w_H)
@@ -125,16 +140,17 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
         return
     acceptor_indices          = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Acceptor")]
     donor_indices             = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Donor")]
-    hydrophobe_indices        = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Hydrophobe")]                # Seems to be the slow one, comparitively
+    hydrophobe_indices        = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="Hydrophobe")]
     lumped_hydrophobe_indices = [x.GetAtomIds()[0] for x in feature_factory.GetFeaturesForMol(rdkit_protein_w_H, includeOnly="LumpedHydrophobe")]
 
 
+    # Generate a feature vector for each atom
     bins = np.arange(0,11)
     for atom in protein.atoms:                                              # Iterate through atoms and create vectors of features for each atom
         name = "".join(re.findall("^[a-zA-Z]+", atom.resname)).upper()      # Clean resname 
         element = atom.element.upper()
         try:
-            # rdf calculation where dr = 1 and r_max = 10
+            # radial density function (rdf) calculation where dr = 1 and r_max = 10
             d = trimmed[np.where(protein.ids == atom.id)[0][0]]
             n, bins = np.histogram(d[d>0], bins =bins)
             r = bins[1:]                                            # using the exterior radius of the shell
@@ -168,23 +184,21 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
             assert not np.any(np.isnan(hydrophobe)) 
             assert not np.any(np.isnan(lumped_hydrophobe))
 
-            # Warning, any change to SAS's index must be reflected in infer_test_set.py
-            # Add feature vector with                  0-27               28-31        32-40       41               42                  43               44-45        46-47      48      49-50        51-52    53-54    55-56     57-58 (59  is degree)
-            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))  #,formal_charge     25                       # Add corresponding features to feature array
+            # WARNING: any change to SAS's index must be reflected in infer_test_set.py
+
+            feature_array.append(np.concatenate((residue_dict[name], atom_dict[element], g, [SAS[atom.index]], formal_charge, num_bonds_w_heavy_atoms, is_in_ring, is_aromatic, mass, hybridization, acceptor, donor, hydrophobe, lumped_hydrophobe)))
             SASA_array.append(SAS[atom.index])
         except Exception as e:
             print("Error while feautrizing atom {} for file {}.{}".format(atom.id, path_to_files,e), flush=True)
             return -2
-            # raise ValueError ("Value not included in dictionary \"{}\" while generating feature vector for {}.".format(name, path_to_files)) from e
 
 
     if trimmed.shape[0] != len(feature_array):  # Sanity Check
         raise ValueError ("Adjacency matrix shape ({}) did not match feature array shape ({}). {}".format(np.array(trimmed).shape, np.array(feature_array).shape, structure_name))
 
-    # Classes
+    # Optionally calculate identity of closest ligand for each atom
     if parse_ligands:
         lig_coord_list = []
-        lig_indices = []
         for file_path in sorted(glob(f'{path_to_files}/*')):
             if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
                 lig_univ = mda.Universe(file_path)
