@@ -1,58 +1,53 @@
 import os
-from re import X
-from networkx.generators import directed
 import numpy as np
-import scipy
-import multiprocessing
-from glob import glob
 import sys
 import argparse
-from joblib import Parallel, delayed
 
-import networkx as nx
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torch.distributed as dist
-import torch.multiprocessing as mp
 from torch_geometric.nn import DataParallel
-
-from torch_geometric.nn import GATConv, GATv2Conv
-from torch_geometric.loader import DataLoader, DataListLoader
-from torch_geometric.data import Data, Dataset
-from torch_geometric.nn.norm import BatchNorm
-from torch_geometric.utils import dropout_adj, from_scipy_sparse_matrix
-import torch_geometric
+from torch_geometric.loader import DataListLoader
 
 from sklearn.metrics import accuracy_score, roc_auc_score, average_precision_score
 from sklearn.metrics import matthews_corrcoef as mcc
 
-
 from torch.utils.tensorboard import SummaryWriter
-from datetime import datetime
 import time
 
-from torch.autograd import Variable
-from torch.nn.modules.loss import _WeightedLoss
-
 from GASP_dataset import GASPData
-from model import GAT_model
 from utils import distance_sigmoid, initialize_model
-
 
 job_start_time = time.time()
 prepend = str(os.getcwd())
 
-
-#ref: https://github.com/pyg-team/pytorch_geometric/blob/master/benchmark/kernel/train_eval.py#L82-L97
 def k_fold(dataset:GASPData,train_path:str, val_path, i):
+    """Returns a boolean mask over the dataset that seperates it into training and validation portions
+     by UniProt ID. Cross-validation (CV) splits were precomputed in    
+    Stepniewska-Dziubinska, M.M., Zielenkiewicz, P. & Siedlecki, P. Improving detection of 
+    protein-ligand binding sites with 3D segmentation. Sci Rep 10, 5035 (2020). 
+    https://doi.org/10.1038/s41598-020-61860-
+
+    Parameters
+    ----------
+    dataset : GASPData
+        GASPData object represented a dataset.
+    prepend : str
+        Prepend path where CV splits are stored.
+    fold_number : int
+        Which CV split to use
+
+    Returns
+    -------
+    Tuple of (torch.Tensor, torch.Tensor, int)
+        A tuple of (training_mask, validation_mask, fold_number) which can be used as boolean masks over the dataset.
+    """    
     val_names    = np.loadtxt(val_path, dtype=str)
     train_names   = np.loadtxt(train_path, dtype=str)
     
     train_indices, val_indices = [], []
-    
+    # Iterate over the raw dataset file names and check if they're in the training or validation file.
     for idx, name in enumerate(dataset.raw_file_names):
         if name[:4] in val_names: 
             val_indices.append(idx)
@@ -61,18 +56,30 @@ def k_fold(dataset:GASPData,train_path:str, val_path, i):
 
     train_mask = torch.ones(len(dataset), dtype=torch.bool)
     val_mask = torch.ones(len(dataset), dtype=torch.bool)
+    
+    # Remove all val_indices from the training set and vice-versa
     train_mask[val_indices] = 0
     val_mask[train_mask] = 0
-    
-    # Temporary sanity check to make sure I got this right
-    # print(train_mask.sum())
-    # print(val_mask.sum())
-    assert train_mask.sum() > val_mask.sum()
 
     return (dataset[train_mask], dataset[val_mask], i)
 
 def main(node_noise_std : float, training_split='cv'):
-    # Hyperparameters
+    """Train a GrASP model.
+
+    Parameters
+    ----------
+    node_noise_std : float
+        The standard distribution of the noise added to nodes for the Noisy Nodes protocol. 
+        For more information see:
+        Godwin, J.; Schaarschmidt, M.; Gaunt, A. L.; Sanchez-
+        Gonzalez, A.; Rubanova, Y.; Veliˇckovi ́c, P.; Kirkpatrick, J.;
+        Battaglia, P. Simple GNN Regularisation for 3D Molecular Prop-
+        erty Prediction and Beyond. International Conference on Learn-
+        ing Representations. 2022.
+    training_split : str, optional
+        Which dataset to use. If 'cv' use the cross validation splits, by default 'cv'
+    """
+    # Training Hyperparameters
     num_epochs = args.num_epochs
     batch_size = args.batch_size
     learning_rate = args.learning_rate
@@ -80,11 +87,13 @@ def main(node_noise_std : float, training_split='cv'):
     label_smoothing = args.label_smoothing
     head_loss_weight = args.head_loss_weight
     label_midpoint, label_slope = args.sigmoid_params
+    
+    # Dataset Parameters
     k_hops = args.k_hops
     sasa_threshold = args.sasa_threshold
     fold_number = args.fold
     
-    
+    # Device Parameters
     num_cpus = args.n_tasks
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -92,6 +101,7 @@ def main(node_noise_std : float, training_split='cv'):
     
     head_loss_weight = torch.tensor(head_loss_weight).to(device)
 
+    # Initialize Training Split for Each Dataset
     if training_split == 'chen':
         do_validation = True
         train_set = GASPData(f'{prepend}/benchmark_data_dir/chen11', num_cpus, cutoff=5, surface_subgraph_hops=k_hops, sasa_threshold=sasa_threshold)
@@ -120,6 +130,7 @@ def main(node_noise_std : float, training_split='cv'):
 
         else:
             train_prefix = '/splits/train_ids_'
+            # Training splits for different test sets
             if training_split == 'coach420':
                 train_names = np.loadtxt(prepend + f'{train_prefix}coach420_uniprot', dtype=str)
             elif training_split == 'coach420_mlig':
@@ -129,6 +140,7 @@ def main(node_noise_std : float, training_split='cv'):
             elif training_split == 'holo4k_mlig':
                 train_names = np.loadtxt(prepend + f'{train_prefix}holo4k(mlig)_uniprot', dtype=str)
             train_indices = []
+            # Iterate over training names and add to the train set if included in the split
             for idx, name in enumerate(data_set.raw_file_names):
                 if name.split('_')[0] in train_names:
                     train_indices.append(idx)
@@ -175,15 +187,17 @@ def main(node_noise_std : float, training_split='cv'):
             training_batch_auc = 0.0
             training_batch_pr_auc = 0.0
             for batch in train_dataloader:
+                # Strip batches of raw file names
                 batch = list(map(lambda x: x[0].to(device), batch))
                 
                 unperturbed_x = torch.cat([data.x for data in batch]).clone().detach().to(device)
                 for data in batch:
-                    data.x += (data.x.std(dim=0) * node_noise_std) * torch.randn_like(data.x)
-                    data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
+                    data.x += (data.x.std(dim=0) * node_noise_std) * torch.randn_like(data.x)   # Add noise for Noisy Nodes Regularization
+                    data.y = distance_sigmoid(data.y, label_midpoint, label_slope)              # Compute soft labels with sigmoid of distnace
                     data.y = torch.stack([1-data.y, data.y], dim=1)
-                labels  = torch.cat([data.y for data in batch]).clone().detach().cpu().numpy()
-                y       = torch.cat([data.y for data in batch]).to(device)
+                    
+                labels  = torch.cat([data.y for data in batch]).clone().detach().cpu().numpy()  # Labels for metrics
+                y       = torch.cat([data.y for data in batch]).to(device)                      # Labels for training
                 surf_mask = torch.cat([data.surf_mask for data in batch]).to(device)
             
                 optimizer.zero_grad(set_to_none=True)
@@ -197,8 +211,9 @@ def main(node_noise_std : float, training_split='cv'):
                     out = out[surf_mask]
                     out_recon = out_recon[surf_mask]
 
-                weighted_xent_l, mse_l = head_loss_weight[0] * loss_fn(out,y), head_loss_weight[1] * F.mse_loss(out_recon, unperturbed_x)           
-
+                weighted_xent_l = head_loss_weight[0] * loss_fn(out,y),  
+                mse_l           = head_loss_weight[1] * F.mse_loss(out_recon, unperturbed_x)          
+                
                 loss = weighted_xent_l + mse_l
                 loss.backward() 
                 optimizer.step()
@@ -209,6 +224,7 @@ def main(node_noise_std : float, training_split='cv'):
 
                 l = loss.detach().cpu().item()
                 
+                # Compute and save batch training statistics
                 bl = l 
                 ba = accuracy_score(hard_labels, preds)
                 bm = mcc(hard_labels, preds)
@@ -230,6 +246,7 @@ def main(node_noise_std : float, training_split='cv'):
             scheduler.step()
             print("******* EPOCH END, EPOCH TIME: {}".format(time.time() - epoch_start))
             
+            # Compute and save epoch training statistics
             training_epoch_loss.append(training_batch_loss/len(train_dataloader))
             training_epoch_acc.append(training_batch_acc/len(train_dataloader))
             training_epoch_mcc.append(training_batch_mcc/len(train_dataloader))
@@ -246,6 +263,7 @@ def main(node_noise_std : float, training_split='cv'):
             writer.add_scalar('Epoch_AUC/Train',  training_epoch_auc[-1],  train_epoch_num)
             writer.add_scalar('Epoch_PR_AUC/Train', training_epoch_pr_auc[-1], train_epoch_num)
 
+            # Save model checkpoint
             if not os.path.isdir("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id, cv_iteration)):
                 os.makedirs("./trained_models/{}/trained_model_{}/cv_{}/".format(training_split, model_id, cv_iteration))
             torch.save(model.module.state_dict(), "./trained_models/{}/trained_model_{}/cv_{}/epoch_{}".format(training_split, model_id, cv_iteration, train_epoch_num))
@@ -262,45 +280,44 @@ def main(node_noise_std : float, training_split='cv'):
                     val_batch_pr_auc = 0.0
 
                     for batch in val_dataloader:
+                        # Strip batches of raw file names
                         batch = list(map(lambda x: x[0].to(device), batch))
                 
-                        #unperturbed_x = torch.cat([data.x.clone().detach().to(device) for data in batch]) # This isn't used in validation so we won't use it
+                        # Note: we do not apply the Noisy Nodes protocol to validation samples
+                        
                         for data in batch:
-                            data.y = distance_sigmoid(data.y, label_midpoint, label_slope)
+                            data.y = distance_sigmoid(data.y, label_midpoint, label_slope)              # Compute soft labels with sigmoid of distnace
                             data.y = torch.stack([1-data.y, data.y], dim=1)
-                        labels  = torch.cat([data.y for data in batch]).clone().detach().cpu().numpy()
-                        y       = torch.cat([data.y for data in batch]).to(device)
-                        surf_mask = torch.cat([data.surf_mask for data in batch]).to(device)
+                        labels  = torch.cat([data.y for data in batch]).clone().detach().cpu().numpy()  # Labels for metrics
+                        y       = torch.cat([data.y for data in batch]).to(device)                      # Labels for loss computation
+                        surf_mask = torch.cat([data.surf_mask for data in batch]).to(device)            
                     
                         optimizer.zero_grad(set_to_none=True)
 
                         out, _ = model.forward(batch)
-                        # loss = F.cross_entropy(out, batch.y)
 
                         if surface_only:
                             labels = labels[surf_mask.detach().cpu().numpy()]
                             y = y[surf_mask]
-
                             out = out[surf_mask]
 
                         loss = loss_fn(out,y)
                         probs = out.softmax(dim=-1).detach().cpu().numpy()
                         preds = np.argmax(probs, axis=1)
                         hard_labels = np.argmax(labels, axis=1) # converting to binary labels for metrics
+                        
+                        # Compute and save batch training statistics
                         bl = loss.detach().cpu().item()
-
                         ba = accuracy_score(hard_labels, preds)
                         bm = mcc(hard_labels, preds)
                         bc = roc_auc_score(hard_labels, probs[:,1])
                         bpr = average_precision_score(hard_labels, probs[:,1])
-                            
                         val_batch_loss += bl
                         val_batch_acc  += ba
                         val_batch_mcc  += bm
                         val_batch_auc  += bc
                         val_batch_pr_auc += bpr
-                        # print("Validation Batch Loss:", val_batch_loss[-1])
-                        # print("Validation Batch Accu:", val_batch_acc[-1
+
                         writer.add_scalar('Batch_Loss/Val', bl, val_batch_num)
                         writer.add_scalar('Batch_ACC/Val',  ba,  val_batch_num)
                         writer.add_scalar('Batch_MCC/Val',  bm,  val_batch_num)
@@ -308,7 +325,7 @@ def main(node_noise_std : float, training_split='cv'):
                         writer.add_scalar('Batch_PR_AUC/Val', bpr, val_batch_num)
                         val_batch_num += 1
 
-
+                    # Compute and save epoch training statistics
                     val_epoch_loss.append(val_batch_loss/len(val_dataloader))
                     val_epoch_acc.append(val_batch_acc/len(val_dataloader))
                     val_epoch_mcc.append(val_batch_mcc/len(val_dataloader))
