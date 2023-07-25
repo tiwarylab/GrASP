@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch_geometric.nn import GATConv, GATv2Conv
+from torch_geometric.nn import GATv2Conv
 from torch_geometric.nn.norm import InstanceNorm
 from torch_geometric.nn.aggr import MultiAggregation
 
