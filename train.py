@@ -39,6 +39,7 @@ from torch.nn.modules.loss import _WeightedLoss
 
 from GASP_dataset import GASPData
 from model import GAT_model
+from utils import distance_sigmoid
 
 
 job_start_time = time.time()
@@ -87,14 +88,6 @@ def initialize_model(parser_args):
     else:
         raise ValueError("Unknown Model Type:", model_name)
     return model
-   
-
-def distance_sigmoid(data, midpoint, slope):
-    x = -slope*(data-midpoint)
-    sigmoid = torch.sigmoid(x)
-    
-    return sigmoid
-
 
 def main(node_noise_std : float, training_split='cv'):
     # Hyperparameters
