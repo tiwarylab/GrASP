@@ -2,19 +2,16 @@ import numpy as np
 import MDAnalysis as mda
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 from MDAnalysis.analysis.distances import contact_matrix, distance_array
-from rdkit import Chem
 from sklearn.neighbors import radius_neighbors_graph
 from sklearn.cluster import MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
 import networkx as nx 
 from networkx.algorithms.community import louvain_communities
-from scipy.spatial import ConvexHull, HalfspaceIntersection, Delaunay
+from scipy.spatial import ConvexHull, Delaunay
 from scipy.optimize import linprog
 import os
 from tqdm import tqdm
 from glob import glob
 
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import matthews_corrcoef as mcc
 from sklearn.metrics import roc_curve, auc 
 import time
 
@@ -25,9 +22,46 @@ import warnings
 
 
 def center_of_mass(coords, masses):
+    """Compute center of mass for a set of atoms.
+
+    Parameters
+    ----------
+    coords : numpy.ndarray
+        Array of atomic coordinates.
+    masses: numpy.ndarray
+        Array of atomic masses.
+
+    Returns
+    -------
+    numpy.ndarray
+        Center of mass.
+    """
+
     return np.sum(coords*np.tile(masses, (3,1)).T, axis=0)/np.sum(masses)
 
 def sort_clusters(cluster_ids, probs, labels, score_type='mean'):
+    """Sort clusters according to binding site scores.
+
+    Parameters
+    ----------
+    cluster_ids : numpy.ndarray
+        Cluster label for each atom.
+        
+    probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+        
+    labels: numpy.ndarray
+        Model predicting classes (binding/non-binding) for each atom.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Resorted clusters labels with highest scoring first.
+    """
+
     c_probs = []
     unique_ids = np.unique(cluster_ids)
 
@@ -52,6 +86,43 @@ def sort_clusters(cluster_ids, probs, labels, score_type='mean'):
     return sorted_ids
 
 def cluster_atoms_meanshift(all_coords, predicted_probs, threshold=.5, quantile=.3, bw=None, score_type='mean', **kwargs):
+    """Cluster atoms into sites with meanshift clustering.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    quantile: float
+        Quantile for determining meanshift bandwidth.
+
+    bw: float
+        Static meanshift bandwidth (as opposed to quantile-based).
+
+    score_type: str
+        Option for atom score aggregation.
+
+    **kwargs
+        Additional meanshift kwargs.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -65,7 +136,6 @@ def cluster_atoms_meanshift(all_coords, predicted_probs, threshold=.5, quantile=
         try:
             ms_clustering = MeanShift(bandwidth=bw, **kwargs).fit(bind_coords)
         except Exception as e:
-            # print(bind_coords, flush=True)
             raise e
         cluster_ids = ms_clustering.labels_
         
@@ -78,11 +148,44 @@ def cluster_atoms_meanshift(all_coords, predicted_probs, threshold=.5, quantile=
     all_ids = -1*np.ones(predicted_labels.shape)
     all_ids[predicted_labels] = sorted_ids
 
-    # print(sorted_ids)
-    # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
 def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_samples=5, score_type='mean'):
+    """Cluster atoms into sites with DBSCAN clustering.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    eps: float
+        DBSCAN neighbor distance cutoff.
+
+    min_samples: int
+        Minimum neighbors for a point to be considered a core point.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -101,11 +204,47 @@ def cluster_atoms_DBSCAN(all_coords, predicted_probs, threshold=.5, eps=3, min_s
     all_ids = -1*np.ones(predicted_labels.shape)
     all_ids[predicted_labels] = sorted_ids
 
-    # print(sorted_ids)
-    # print(all_ids)
     return bind_coords, sorted_ids, all_ids
 
 def cluster_atoms_louvain(all_coords, adj_matrix, predicted_probs, threshold=.5, cutoff=5, resolution=0.05, score_type='mean'):
+    """Cluster atoms into sites with Louvain community detection.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+
+    adj_matrix: numpy.ndarray
+        Distance matrix to construct the graph for community detection.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    cutoff: float
+        Distance cutoff to connect atoms in the graph.
+
+    resolution: int
+        Louvain community detection resolution.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+
     predicted_labels=predicted_probs[:,1] > threshold
     
     G = nx.from_scipy_sparse_array(adj_matrix, edge_attribute="distance")
@@ -143,6 +282,38 @@ def cluster_atoms_louvain(all_coords, adj_matrix, predicted_probs, threshold=.5,
     return bind_coords, sorted_ids, all_ids
 
 def cluster_atoms_single(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    """Cluster atoms into sites with single linkage clustering.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    **kwargs
+        Additional agglomerative clustering kwargs.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+    
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -163,6 +334,38 @@ def cluster_atoms_single(all_coords, predicted_probs, threshold=.5, score_type='
     return bind_coords, sorted_ids, all_ids
 
 def cluster_atoms_complete(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    """Cluster atoms into sites with complete linkage clustering.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    **kwargs
+        Additional agglomerative clustering kwargs.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -183,6 +386,38 @@ def cluster_atoms_complete(all_coords, predicted_probs, threshold=.5, score_type
     return bind_coords, sorted_ids, all_ids
 
 def cluster_atoms_average(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    """Cluster atoms into sites with average linkage clustering.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    **kwargs
+        Additional agglomerative clustering kwargs.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -203,6 +438,38 @@ def cluster_atoms_average(all_coords, predicted_probs, threshold=.5, score_type=
     return bind_coords, sorted_ids, all_ids
     
 def cluster_atoms_ward(all_coords, predicted_probs, threshold=.5, score_type='mean', **kwargs):
+    """Cluster atoms into sites with ward agglomerative clustering.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    **kwargs
+        Additional agglomerative clustering kwargs.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+
     predicted_labels = predicted_probs[:,1] >= threshold
     site_probs = predicted_probs[:,1]
     site_probs[site_probs < threshold] = 0
@@ -234,6 +501,43 @@ def cluster_atoms_ward(all_coords, predicted_probs, threshold=.5, score_type='me
     return bind_coords, sorted_ids, all_ids 
 
 def cluster_atoms_groundtruth(all_coords, lig_coord_list, predicted_probs, threshold=.5, distance_threshold=5, score_type='mean'):
+    """Associate binding site atoms with the nearest ligand.
+
+    For analyzing whether clustering or GNN is the source of error, not for method comparison.
+
+    Parameters
+    ----------
+    all_coords: numpy.ndarray
+        Protein atomic coordinates.
+
+    lig_coord_list: list
+        List of atomic coordinates for each ligand.
+        
+    predicted_probs: numpy.ndarray
+        Model predicted binding site probabilities for each atom.
+
+    threshold: float
+        Probability threshold to classify atoms as site/non-site.
+
+    distance_threshold: float
+        Maximum distance to consider a site atom associated with a ligand.
+
+    score_type: str
+        Option for atom score aggregation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinates of all binding site atoms.
+    
+    numpy.ndarray
+        Sorted cluster ids for binding site atoms.
+
+
+    numpy.ndarray
+        Sorted cluster ids for all atoms with -1 representing non-site.
+    """
+
     predicted_labels = predicted_probs[:,1] > threshold
     if np.sum(predicted_labels) == 0:
         # No positive predictions were made with specified cutoff
@@ -256,6 +560,19 @@ def cluster_atoms_groundtruth(all_coords, lig_coord_list, predicted_probs, thres
     return bind_coords, sorted_ids, all_ids
 
 def hull_center(hull):
+    """Compute the center of a convex hull.
+
+    Parameters
+    ----------
+    hull: scipy.spatial.ConvexHull
+        Convex hull to compute the center of.
+
+    Returns
+    -------
+    numpy.ndarray
+        Convex hull center of mass.
+    """
+
     hull_com = np.zeros(3)
     tetras = Delaunay(hull.points[hull.vertices])
 
@@ -274,29 +591,69 @@ def hull_center(hull):
     return hull_com
 
 def get_centroid(coords):
+    """Compute the centroid of a set of coordinates.
+
+    Parameters
+    ----------
+    coords: numpy.ndarray
+        Array of coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        Centroid of input coordinates.
+    """
+
     return np.mean(coords, axis=0)
 
 def DCA_dist(center, lig_coords):
+    """Compute the distance to the nearest ligand heavy atom for a binding site center.
+
+    Parameters
+    ----------
+    center: numpy.ndarray
+        Binding site center.
+    
+    lig_coords: numpy.ndarray
+        Heavy atom coordinates for all ligands.
+
+    Returns
+    -------
+    numpy.ndarray
+        Minimum distance from site center to ligand heavy atoms.
+    """
+
     distances = np.sqrt(np.sum((center - lig_coords)**2, axis=1))
     shortest = np.min(distances)
     
     return shortest
 
-def cheb_center(halfspaces):
-    norm_vector = np.reshape(np.linalg.norm(halfspaces[:, :-1], axis=1),
-    (halfspaces.shape[0], 1))
-    c = np.zeros((halfspaces.shape[1],))
-    c[-1] = -1
-    A = np.hstack((halfspaces[:, :-1], norm_vector))
-    b = - halfspaces[:, -1:]
-    res = linprog(c, A_ub=A, b_ub=b, bounds=(None, None))
-    center = res.x[:-1]
-    radius = res.x[-1]
-    
-    return center, radius
-
-
 def hulls_from_clusters(bind_coords, sorted_ids, n_sites):
+    """Compute the convex hull for each binding site cluster.
+
+    Parameters
+    ----------
+    bind_coords: numpy.ndarray
+        Coordinates for all binding site atoms.
+    
+    sorted_ids: numpy.ndarray
+        Cluster labels for all binding site atoms.
+
+    n_sites: int
+        Maximum number of binding sites.
+
+    Returns
+    -------
+    list of np.ndarrays
+        List of atom coordinates for each site.
+
+    list of scipy.spatial.ConvexHulls
+        Convex hull for each site.
+
+    list of np.ndarrays
+        Convex hull center for each site.
+    """
+
     top_ids = np.unique(sorted_ids)[::-1][:n_sites]
     predicted_points_list = []
     predicted_hull_list = []
@@ -318,6 +675,31 @@ def hulls_from_clusters(bind_coords, sorted_ids, n_sites):
     return predicted_points_list, predicted_hull_list, predicted_center_list
 
 def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, type='prob'):
+    """Compute the probability-weighted center for each binding site.
+
+    Parameters
+    ----------
+    bind_coords: numpy.ndarray
+        Coordinates for all binding site atoms.
+
+    bind_probs: numpy.ndarray
+        Site probabilites for each site atom.
+    
+    sorted_ids: numpy.ndarray
+        Cluster labels for all binding site atoms.
+
+    n_sites: int
+        Maximum number of binding sites.
+
+    type: str
+        Option for weight type (probability, square of probability,  uniform/centroid).
+
+    Returns
+    -------
+    list of np.ndarrays
+        List of centers for each site.
+    """
+
     top_ids = np.unique(sorted_ids)[::-1][:n_sites]
     predicted_center_list = []
     
@@ -336,16 +718,80 @@ def center_of_probability(bind_coords, bind_probs, sorted_ids, n_sites, type='pr
     return predicted_center_list
 
 def subgraph_adjacency(adjacency, indices):
+    """Compute the adjacency matrix for a subgraph induced by a specified index set.
+
+    Parameters
+    ----------
+    adjacency: numpy.ndarray
+        Original adjacency matrix.
+    
+    indices: numpy.ndarray
+        Subset of indices for inducing the subgraph.
+
+    Returns
+    -------
+    np.ndarray
+        Subgraph adjacency matrix.
+    """
+    
     return adjacency[indices].T[indices].T
 
-
 def convert_atom_indices_to_array_indices(input_atom_order, atom_array):
+    """Convert the indexing from protein atoms to Connolly surface.
+
+    Parameters
+    ----------
+    adjacency: numpy.ndarray
+        Connolly index order.
+    
+    atom_array: numpy.ndarray
+        Original index order.
+
+    Returns
+    -------
+    np.ndarray
+        Map between index orders.
+    """
+    
     array_indices = np.array([np.where(atom_array == atom)[0][0] for atom in input_atom_order])
 
     return array_indices
 
-
 def get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indices, sorted_ids, predicted_probs, threshold):
+    """Map atoms and their associated sites to the Connolly surface mesh.
+
+    Parameters
+    ----------
+    connolly_vertices: numpy.ndarray
+        Connolly gridpoint coordinates.
+
+    connolly_atoms: numpy.ndarray
+        Atoms corresponding to Connolly gridpoints.
+    
+    tracked_indices: numpy.ndarray
+        Indices of tracked atom set (surface or all).
+
+    sorted_ids: numpy.ndarray
+        Sorted bind site cluster for each
+    
+    predicted_probs: numpy.ndarray
+        Tracked atom binding site probabilities.
+
+    threshold: float
+        Probability threshold to predict binding site atoms.
+
+    Returns
+    -------
+    numpy.ndarray
+        Binding site mesh coordinates.
+
+    numpy.ndarray
+        Mesh cluster membership.
+
+    numpy.ndarray
+        Mesh predicted probabilites.
+    """
+
     predicted_labels = predicted_probs[:,1] > threshold
     predicted_probs = predicted_probs[predicted_labels]
     tracked_indices = tracked_indices[predicted_labels]
@@ -366,6 +812,28 @@ def get_clusters_from_connolly(connolly_vertices, connolly_atoms, tracked_indice
 
 
 def scPDB_ligand_merge(lig_coord_list, lig_mass_list, lig_center_list):
+    """Merge ligands with center of mass within 5 A as is done in scPDB.
+
+    Parameters
+    ----------
+    lig_coord_list: list of numpy.ndarrays
+        Heavy atom coordinates for each ligand.
+    
+    lig_mass_list: list of numpy.ndarrays
+        Heavy atom masses for each ligand.
+
+    lig_center_list: list of numpy.ndarrays
+        Heavy atom center of mass for each ligand.
+    
+    Returns
+    -------
+    list of numpy.ndarrays
+        Heavy atom coordinates for each ligand after merging.
+    
+    list of numpy.ndarrays
+        Heavy atom masses for each ligand after merging.
+    """
+
     if len(lig_coord_list) == 1:
         return lig_coord_list, lig_center_list
     
@@ -395,33 +863,57 @@ def multisite_metrics(prot_coords, lig_coord_list, lig_mass_list, predicted_prob
 threshold=.5, eps=3, resolution=0.05, method="louvain", score_type="mean", centroid_type="hull", 
 cluster_all=False, adj_matrix=None, surf_mask=None, connolly_data=None, tracked_indices=None, 
 ligand_merge=False, known_n_sites=True):
-    """Cluster multiple binding sites and calculate distance from the ligand
+    """Cluster multiple binding sites and calculate distance from each ligand.
 
     Parameters
     ----------
-    prot_coords : numpy array
+    prot_coords: numpy.ndarray
         Protein atomic coordinates.
         
-    lig_coord_list : list of numpy arrays
+    lig_coord_list: list of numpy.ndarrays
         Ligand atomic coordinates for each ligand.
         
-    lig_mass_list: list of numpy arrays
+    lig_mass_list: list of numpy.ndarrays
         Ligand atomic masses for each ligand.
 
-    predicted_probs : list of numpy arrays
+    predicted_probs: list of numpy.ndarrays
         Class probabilities for not site in column 0 and site in column 1.
         
-    top_n_plus : int
+    top_n_plus: int
         Number of predicted sites to include compared to number of true sites (eg. 1 means 1 more predicted).
 
-    threshold : float
+    threshold: float
         Probability threshold to predict binding site atoms.
 
-    quantile : float
-        Quantile used in bandwidth selection for mean shift clustering.
+    eps: float
+        Distance threshold used for clustering.
 
-    cluster_all : bool
+    resolution: float
+        Resolution only used for Louvain communuty detection.
+
+    method: str
+        Clustering method to use.
+
+    score_type: str
+        Score function to aggregate atomic scores into site scores.
+
+    centroid_type: str
+        Function to compute the site centers.
+
+    cluster_all: bool
         Whether to assign points outside kernels to the nearest cluster or leave them unlabeled.
+
+    adj_matrix: numpy.ndarray
+        Adjacency for Louvain community detection.
+
+    surf_mask: numpy.ndarray
+        Mask for selecting only surface atoms.
+
+    connolly_data: dict
+        Connolly surface points for optional surface mesh clustering.
+
+    tracked_indices: numpy.ndarray
+        Indices for optional Connolly surface clustering.
 
     ligand_merge: bool
         Whether to merge ligands with center of mass within 5 A as is done in scPDB.
@@ -431,15 +923,17 @@ ligand_merge=False, known_n_sites=True):
 
     Returns
     -------
-    DCC_lig: numpy array
-        List of distances from predicted site center to ligand center of mass. 
+    numpy.ndarray
+        Array of distances from predicted site center to ligand center of mass. 
         
-    DCA: numpy array
-        List of closest distances from predicted site center to any ligand heavy atom. 
+    numpy.ndarray
+        Array of closest distances from predicted site center to any ligand heavy atom. 
 
-    n_predicted: int
+    int
         Total number of binding sites predicted.
 
+    int 
+        Number of sites predicted within the limit (top N+M or static M).
     """
 
     if surf_mask is not None:
@@ -521,10 +1015,102 @@ ligand_merge=False, known_n_sites=True):
 def compute_metrics_for_all(path_to_mol2, path_to_labels, top_n_plus=0, threshold = 0.5, eps=3, resolution=0.05,
 method="louvain", score_type="mean", centroid_type="hull", cluster_all=False, use_surface=False, use_connolly=False, 
 ligand_merge=False, known_n_sites=True):
+    """Cluster multiple binding sites and calculate distance from each ligand.
+
+    Parameters
+    ----------
+    path_to_mol2: str
+        Path to protein mol2 files.
+
+    path_to_labels: str
+        Path to atomic class (site/non-site) labels.
+        
+    top_n_plus: int
+        Number of predicted sites to include compared to number of true sites (eg. 1 means 1 more predicted).
+
+    threshold: float
+        Probability threshold to predict binding site atoms.
+
+    eps: float
+        Distance threshold used for clustering.
+
+    resolution: float
+        Resolution only used for Louvain communuty detection.
+
+    method: str
+        Clustering method to use.
+
+    score_type: str
+        Score function to aggregate atomic scores into site scores.
+
+    centroid_type: str
+        Function to compute the site centers.
+
+    cluster_all: bool
+        Whether to assign points outside kernels to the nearest cluster or leave them unlabeled.
+
+    use_surface: bool
+        Whether to only use surface atoms.
+
+    use_connolly: bool
+        Whether to use a Connolly surface mesh.
+
+    ligand_merge: bool
+        Whether to merge ligands with center of mass within 5 A as is done in scPDB.
+
+    known_n_sites: bool
+        Whether to use the ground truth number of sites (True) or a static maximum (False).
+
+    Returns
+    -------
+    list of numpy.ndarrays
+        List of DCC for each system. 
+        
+    list of numpy.ndarrays
+        List of DCA for each system.
+
+    list of int
+        List of total number of binding sites predicted for each system.
+
+    list of int 
+        List of number of sites predicted within the limit (top N+M or static M) for each system.
+
+    list of int
+        Number of systems without predictions.
+
+    list of str
+        System names.
+    """
+
     DCC_lig_list = []
     DCA_list = []
 
     def helper(file):
+        """Helper function to load and analyze each system.
+
+        Parameters
+        ----------
+        file: str
+            System file path.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of distances from predicted site center to ligand center of mass. 
+            
+        numpy.ndarray
+            Array of closest distances from predicted site center to any ligand heavy atom. 
+
+        int
+            Total number of binding sites predicted.
+
+        int 
+            Number of sites predicted within the limit (top N+M or static M).
+
+        int
+            Number of systems without predictions.
+        """
+
         no_prediction_count = 0
         assembly_name = file.split('.')[-2]
         try:
@@ -542,21 +1128,17 @@ ligand_merge=False, known_n_sites=True):
                 connolly_dir = '/'.join(path_to_mol2.split('/')[:-2])+'/connolly'
                 connolly_data = np.load(f'{connolly_dir}/{assembly_name}.npz')
                 tracked_indices = atom_indices
-            # print(probs.shape)
-            ############### THIS IS TEMPORARY AF REMOVE BEFORE PUBLICAITON ##############
+
             if is_label: probs = labels
-            # print(probs.shape)
 
             lig_coord_list = []
             lig_mass_list = []
             
             for file_path in sorted(glob(data_dir + '/ready_to_parse_mol2/' + assembly_name + '/*')):
-                # print(file_path)
                 if 'ligand' in file_path.split('/')[-1] and not 'site' in file_path.split('/')[-1]:
                     ligand = mda.Universe(file_path)
                     lig_coord_list.append(list(ligand.atoms.positions))
                     lig_mass_list.append(list(ligand.atoms.masses))
-            # TODO: MAKE THIS AN ACUTAL PATH
             adj_matrix = np.load(data_dir+'/raw/' + assembly_name + '.npz', allow_pickle=True)['adj_matrix'].item()
             adj_matrix = subgraph_adjacency(adj_matrix, atom_indices)
             DCC_lig, DCA, n_predicted, top_predicted = multisite_metrics(trimmed_protein.atoms[atom_indices].positions, lig_coord_list, lig_mass_list,
@@ -579,6 +1161,25 @@ ligand_merge=False, known_n_sites=True):
     return DCC_lig_list, DCA_list, n_predicted, top_predicted, no_prediction_count, names
 
 def criteria_to_metrics(metric_array, top_predicted):
+    """Compute the precision and recall for a given criteria.
+
+    Parameters
+    ----------
+    metric_array: list of numpy.ndarray
+        Distance measure (DCC or DCA) for each ligand in each system.
+    
+    top_predicted: list of int
+        Number of predictions subject to maximum number of prediction (top N+M or M) for each system.
+
+    Returns
+    -------
+    float
+        Recall on the input criteria.
+
+    float
+        Precison on the input criteria.
+    """
+
     recall = np.mean(np.concatenate(metric_array) <= 4)
 
     # for precision we don't want to count a success if it exceeds the number of predictions
@@ -587,8 +1188,9 @@ def criteria_to_metrics(metric_array, top_predicted):
     precision = np.sum(capped_success) / np.sum(top_predicted)
         
     return recall, precision
+
 #######################################################################################
-# model_name = "holo4k/trained_model_1656153741.4964042/epoch_49"
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
@@ -615,7 +1217,7 @@ if __name__ == "__main__":
 
     model_name = args.model_name
 
-    prepend = str(os.getcwd()) #+ "/chen_benchmark_site_metrics/"
+    prepend = str(os.getcwd())
     eps_list = args.dist_thresholds
     threshold = args.prob_threshold
     resolution = args.louvain_resolution
@@ -708,10 +1310,6 @@ if __name__ == "__main__":
         print("Negative Class AUC:", roc_auc[0])
         print("Positive Class AUC:", roc_auc[1])
 
-        # np.savez(roc_path + "/roc_auc", roc_auc)
-        # np.savez(roc_path + "/tpr", tpr)
-        # np.savez(roc_path + "/fpr", fpr)
-        # np.savez(roc_path + "/thresholds", thresholds)
         print("Done. {}".format(time.time()- start))
         
     #######################################################################################

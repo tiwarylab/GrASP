@@ -2,19 +2,10 @@ import numpy as np
 import pandas as pd
 import MDAnalysis as mda
 from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
-from rdkit import Chem
-from sklearn.cluster import MeanShift, estimate_bandwidth, DBSCAN, AgglomerativeClustering
-import networkx as nx 
-from networkx.algorithms.community import louvain_communities
-from scipy.spatial import ConvexHull, HalfspaceIntersection, Delaunay
-from scipy.optimize import linprog
 import os
 from tqdm import tqdm
 from glob import glob
 
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import matthews_corrcoef as mcc
-from sklearn.metrics import roc_curve, auc 
 import time
 
 import sys
@@ -23,6 +14,22 @@ from joblib import Parallel, delayed
 
 
 def DCA_dist(center, lig_coords):
+    """Compute the distance to the nearest ligand heavy atom for a binding site center.
+
+    Parameters
+    ----------
+    center: numpy.ndarray
+        Binding site center.
+    
+    lig_coords: numpy.ndarray
+        Heavy atom coordinates for all ligands.
+
+    Returns
+    -------
+    numpy.ndarray
+        Minimum distance from site center to ligand heavy atoms.
+    """
+
     distances = np.sqrt(np.sum((center - lig_coords)**2, axis=1))
     shortest = np.min(distances)
     
@@ -30,6 +37,22 @@ def DCA_dist(center, lig_coords):
 
 
 def get_p2rank_centers(prediction_dir, system):
+    """Load P2Rank site centers.
+
+    Parameters
+    ----------
+    prediction_dir: str
+        Directory containing P2Rank predictions.
+    
+    system: str
+        System to load predictions for.
+
+    Returns
+    -------
+    numpy.ndarray
+        P2Rank site centers.
+    """
+
     pred_df = pd.read_csv(f'{prediction_dir}/{system}.pdb_predictions.csv', delimiter='\s*,\s*', engine='python')
     predicted_centers = pred_df[['center_x', 'center_y', 'center_z']].to_numpy()
     
@@ -37,6 +60,34 @@ def get_p2rank_centers(prediction_dir, system):
 
 
 def multisite_metrics(lig_coord_list, predicted_center_list, top_n_plus=0, known_n_sites=True):
+    """Calculate distance from each ligand using P2Rank predictions.
+
+    Parameters
+    ----------
+    lig_coord_list: list of numpy.ndarrays
+        Ligand atomic coordinates for each ligand.
+        
+    predicted_center_list: list of numpy.ndarrays
+        Precalculated site centers from P2Rank.
+        
+    top_n_plus: int
+        Number of predicted sites to include compared to number of true sites (eg. 1 means 1 more predicted).
+
+    known_n_sites: bool
+        Whether to use the ground truth number of sites (True) or a static maximum (False).
+
+    Returns
+    -------  
+    numpy.ndarray
+        Array of closest distances from predicted site center to any ligand heavy atom. 
+
+    int
+        Total number of binding sites predicted.
+
+    int 
+        Number of sites predicted within the limit (top N+M or static M).
+    """
+
     if known_n_sites: n_sites = len(lig_coord_list)
     else: n_sites = 0
 
@@ -68,9 +119,65 @@ def multisite_metrics(lig_coord_list, predicted_center_list, top_n_plus=0, known
 
 
 def compute_metrics_for_all(path_to_mol2, path_to_predictions, top_n_plus=0, known_n_sites=True):
+    """Calculate distance from each ligand using P2Rank predictions for all systems.
+
+    Parameters
+    ----------
+    path_to_mol2: str
+        Path to protein mol2 files.
+
+    path_to_predictions: str
+        Path to P2Rank predictions.
+        
+    top_n_plus: int
+        Number of predicted sites to include compared to number of true sites (eg. 1 means 1 more predicted).
+
+    known_n_sites: bool
+        Whether to use the ground truth number of sites (True) or a static maximum (False).
+
+    Returns
+    -------  
+    list of numpy.ndarrays
+        List of DCA for each system.
+
+    list of int
+        List of total number of binding sites predicted for each system.
+
+    list of int 
+        List of number of sites predicted within the limit (top N+M or static M) for each system.
+    
+    list of int
+        Number of systems without predictions.
+
+    list of str
+        System names.
+    """
+
     DCA_list = []
 
     def helper(file):
+        """Helper function to load and analyze each system.
+
+        Parameters
+        ----------
+        file: str
+            System file path.
+
+        Returns
+        -------            
+        numpy.ndarray
+            Array of closest distances from predicted site center to any ligand heavy atom. 
+
+        int
+            Total number of binding sites predicted.
+
+        int 
+            Number of sites predicted within the limit (top N+M or static M).
+
+        int
+            Number of systems without predictions.
+        """
+
         no_prediction_count = 0
         assembly_name = file.split('.')[-2]
         predicted_center_list = get_p2rank_centers(path_to_predictions, assembly_name)
@@ -101,6 +208,25 @@ def compute_metrics_for_all(path_to_mol2, path_to_predictions, top_n_plus=0, kno
     return DCA_list, n_predicted, top_predicted, no_prediction_count, names
 
 def criteria_to_metrics(metric_array, top_predicted):
+    """Compute the precision and recall for a given criteria.
+
+    Parameters
+    ----------
+    metric_array: list of numpy.ndarray
+        Distance measure (DCC or DCA) for each ligand in each system.
+    
+    top_predicted: list of int
+        Number of predictions subject to maximum number of prediction (top N+M or M) for each system.
+
+    Returns
+    -------
+    float
+        Recall on the input criteria.
+
+    float
+        Precison on the input criteria.
+    """
+
     recall = np.mean(np.concatenate(metric_array) <= 4)
 
     # for precision we don't want to count a success if it exceeds the number of predictions
@@ -109,7 +235,9 @@ def criteria_to_metrics(metric_array, top_predicted):
     precision = np.sum(capped_success) / np.sum(top_predicted)
         
     return recall, precision
+
 #######################################################################################
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster GNN predictions into binding sites.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("test_set", choices=["val", "coach420", "coach420_mlig", "coach420_intersect",
