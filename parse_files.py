@@ -1,5 +1,6 @@
 from featurize_protein import process_system
 import MDAnalysis as mda
+from MDA_fix.MOL2Parser import MOL2Parser # fix added in MDA development build
 import os
 import numpy as np
 import pandas as pd
