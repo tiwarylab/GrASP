@@ -84,7 +84,7 @@ def parse():
     parser.add_argument("-sp", "--sigmoid_params", type=float, nargs=2, default=[5, 3], help="Parameters for sigmoid labels [label_midpoint, label_slope].")
     parser.add_argument("-wg", "--weight_groups", type=int, default=1, help="Number of weight-sharing groups.")
     parser.add_argument("-gl", "--group_layers", type=int, default=12, help="Number of layers per weight-sharing group.")
-    parser.add_argument("-ag", "--aggregator", default="mean", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
+    parser.add_argument("-ag", "--aggregator", default="multi", choices=["mean", "sum", "multi"], help="GNN message aggregation operator.")
     
     # Prediction parameters
     parser.add_argument("-ao", "--all_atom_prediction", action="store_true", help="Option to perform inference on all atoms as opposed to solvent exposed.")
