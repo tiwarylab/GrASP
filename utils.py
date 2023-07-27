@@ -1,4 +1,6 @@
 import torch
+from model import GAT_model
+from torch_geometric.nn import GATConv, GATv2Conv
 
 def distance_sigmoid(data, midpoint, slope):
     """Calculate the distance-based sigmoid function.

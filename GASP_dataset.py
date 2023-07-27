@@ -56,7 +56,7 @@ class GASPData(Dataset):
         """int: Returns the number of raw files associated with the dataset."""        
         return len(self.raw_file_names)
 
-    def __process_helper(self, processed_dir:str, raw_path:str, i:int, cutoff:float):
+    def process_helper(self, processed_dir:str, raw_path:str, i:int, cutoff:float):
         """A helper function to process graphs in parallel. This method primarily transforms the data 
         from a numpy record array into a pytorch_geometric.data.Data object. Additionally, it removes 
         edges greater than cutoff, generates continuous labels for the data, and optionally creates the 
@@ -142,7 +142,7 @@ class GASPData(Dataset):
     def process(self):
         """Processes all raw files in the root directory into processed files stored in the processed directory.
         """        
-        Parallel(n_jobs=self.num_cpus)(delayed(self.__process_helper)(self.processed_dir, raw_path, i, cutoff=self.cutoff) for i, raw_path in enumerate(sorted(self.raw_paths)))
+        Parallel(n_jobs=self.num_cpus)(delayed(self.process_helper)(self.processed_dir, raw_path, i, cutoff=self.cutoff) for i, raw_path in enumerate(sorted(self.raw_paths)))
         print("Finished Dataset Processing")
 
     def get(self,idx:int):
@@ -166,5 +166,5 @@ class GASPData(Dataset):
         except Exception as e:
             print("Failed Loading File {}/data_{}.pt".format(self.processed_dir,idx), flush=True)
             print(self.cutoff)
-            self.__process_helper(self.processed_dir, self.raw_paths[idx], idx, cutoff=self.cutoff)
+            self.process_helper(self.processed_dir, self.raw_paths[idx], idx, cutoff=self.cutoff)
             return torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx))), self.raw_file_names[idx]
