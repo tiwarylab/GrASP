@@ -11,4 +11,4 @@
 module load anaconda3
 conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 conda activate clustering
-python3 site_metrics.py val cv/trained_model_ag_multi_1672951703.4392676/cv_0/epoch_49
+python3 site_metrics.py val cv/trained_model_ag_multi_f_1_1688426705.5809176/cv_1/epoch_49

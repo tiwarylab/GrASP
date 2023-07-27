@@ -13,4 +13,4 @@ conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/11.7.1
 conda activate pytorch_env
 sh reset_sasa.sh holo4k_chains
-python3 infer_test_set.py holo4k_chains holo4k_mlig/trained_model_s_holo4k_mlig_ag_multi_1672951807.304454/cv_0/epoch_49 -ag multi
+python3 infer_test_set.py holo4k_mlig/trained_model_s_holo4k_mlig_ag_multi_1672951807.304454/cv_0/epoch_49 -s holo4k_chains -ag multi

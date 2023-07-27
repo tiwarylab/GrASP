@@ -13,4 +13,4 @@ conda activate # source /opt/packages/anaconda3/etc/profile.d/conda.sh
 module load cuda/11.7.1
 conda activate pytorch_env
 sh reset_sasa.sh coach420_intersect
-python3 infer_test_set.py coach420_intersect coach420_mlig/trained_model_s_coach420_mlig_ag_multi_1672951806.257937/cv_0/epoch_49 -ag multi
+python3 infer_test_set.py coach420_mlig/trained_model_s_coach420_mlig_ag_multi_1672951806.257937/cv_0/epoch_49 -s coach420_intersect -ag multi
