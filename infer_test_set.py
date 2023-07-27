@@ -68,13 +68,14 @@ def parse():
     """
     parser = argparse.ArgumentParser(description="Evaluate site prediction on test sets.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
+    # Saved model path
+    parser.add_argument("model_path", nargs="?", default="train_full/trained_model_s_train_full_ag_multi_1680643832.8660116/cv_0/epoch_49",
+    help="Path to the model from ./trained_models/")
+
     # Dataset options
     dataset_choises = ["val", "coach420", "coach420_mlig", "coach420_intersect","holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains", "production"]
-    parser.add_argument("infer_set", choices=dataset_choises, help="Test or production set.")
+    parser.add_argument("-s", "--infer_set", default="production", choices=dataset_choises, help="Test or production set.")
     parser.add_argument("-f", "--fold", type=int, default=0, help="Cross-validation fold, only used for validation set.")
-    
-    # Saved model path
-    parser.add_argument("model_path", help="Path to the model from ./trained_models/")
     
     # Model architecture
     model_choices=["transformer", "transformer_gn", "transformer_in", "transformer_in_stats","transformer_pn", "transformer_gns", "transformer_aon", "transformer_no_norm", "gat", "gatv2"]
