@@ -1,4 +1,6 @@
 # Graph Attention Site Prediction (GrASP)
+## Preprint
+https://biorxiv.org/content/10.1101/2023.07.25.550565v1
 
 ## Colab
 Coming soon!
