@@ -681,7 +681,7 @@ def process_production_set(path, data_dir="benchmark_data_dir/production", clean
         structure_name = path.split('/')[-1].split('.')[0]
         mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
         format = path.split('.')[-1]
-        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, add_H=cleanup_hydrogens, in_format=format, out_name='protein', parse_prot=True)
+        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, addH=cleanup_hydrogens, in_format=format, out_name='protein', parse_prot=True)
         if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
         if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
         process_system(mol2_dir + structure_name, save_directory=f'{prepend}/{data_dir}', parse_ligands=False)
