@@ -654,7 +654,7 @@ def process_p2rank_chains(path, ligand_df, data_dir):
         raise e
 
 
-def process_production_set(path, data_dir="benchmark_data_dir/production", cleanup_hydrogens=False):
+def process_production_set(path, data_dir="benchmark_data_dir/production", skip_hydrogen_cleanup=False):
     """Process a protein-ligand complex in production set format.
 
     This function processes a protein. It converts the complex to mol2 format
@@ -668,8 +668,8 @@ def process_production_set(path, data_dir="benchmark_data_dir/production", clean
     data_dir : str, optional
         The directory where the processed files will be saved, by default "benchmark_data_dir/production".
 
-    cleanup_hydrogens: bool, optional
-        If true: remove and readd hydrogens. If false: reuse existing hydrogents, false by default.
+    skip_hydrogen_cleanup: bool, optional
+        If true: reuse existing hydrogents, if false: remove and readd hydrogens with OpenBabel, false by default.
         
     Raises
     ------
@@ -681,7 +681,8 @@ def process_production_set(path, data_dir="benchmark_data_dir/production", clean
         structure_name = path.split('/')[-1].split('.')[0]
         mol2_dir = f'{prepend}/{data_dir}/ready_to_parse_mol2/'
         format = path.split('.')[-1]
-        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, addH=cleanup_hydrogens, in_format=format, out_name='protein', parse_prot=True)
+        addH = not skip_hydrogen_cleanup
+        convert_to_mol2(f'{prepend}/{path}', structure_name, mol2_dir, addH=addH, in_format=format, out_name='protein', parse_prot=True)
         if not os.path.isdir(f'{prepend}/{data_dir}/raw'): os.makedirs(f'{prepend}/{data_dir}/raw')
         if not os.path.isdir(f'{prepend}/{data_dir}/mol2'): os.makedirs(f'{prepend}/{data_dir}/mol2')
         process_system(mol2_dir + structure_name, save_directory=f'{prepend}/{data_dir}', parse_ligands=False)
@@ -698,11 +699,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("dataset", choices=["scpdb", "coach420", "coach420_mlig", "coach420_intersect",
     "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains", "production"], help="Dataset to prepare.")
-    parser.add_argument("--cleanup_hydrogens", help="Remove and readd hydrogens for the prouction set.", action="store_true")
+    parser.add_argument("-sh", "--skip_hydrogen_cleanup", help="Remove and readd hydrogens for the prouction set.", action="store_true")
     args = parser.parse_args()
     dataset = args.dataset
     
-    if args.dataset != "production" and args.cleanup_hydrogens:
+    if args.dataset != "production" and args.skip_hydrogen_cleanup:
         print("Hydrogen cleanup arg is only supported for the productiond dataset.")
         exit(1)
  
@@ -778,4 +779,4 @@ if __name__ == "__main__":
     elif dataset == "production":
         prod_dir = f'benchmark_data_dir/production'
         paths = glob(f'{prod_dir}/unprocessed_inputs/*')
-        Parallel(n_jobs=num_cores)(delayed(process_production_set)(path, prod_dir, args.cleanup_hydrogens) for path in tqdm(paths))
+        Parallel(n_jobs=num_cores)(delayed(process_production_set)(path, prod_dir, args.skip_hydrogen_cleanup) for path in tqdm(paths))
