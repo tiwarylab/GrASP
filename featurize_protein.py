@@ -39,14 +39,8 @@ def process_system(path_to_protein_mol2_files, save_directory='./data_dir', pars
 
     import warnings
 
-    # Function to filter out the specific warning
-    def ignore_mdtraj_warning(message, category, filename, lineno, file=None, line=None):
-        if "top= kwargs ignored since this file parser does not support it" in str(message):
-            return True
-        return False
-    
-    # Adding the filter to suppress the warning
-    warnings.filterwarnings("ignore", category=UserWarning, message=ignore_mdtraj_warning)
+    # Adding the filter to suppress the mdtraj warning
+    warnings.filterwarnings("ignore", category=UserWarning, message="top= kwargs ignored since this file parser does not support it")
 
     #                     [One hot encoding of residue name     polar Y/N     Acidic,Basic,Neutral  Pos/Neg/Neutral Charge]
     residue_dict = {'ALA':[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,   0,1,    0,     0,     1,      0,  0,  1], 
