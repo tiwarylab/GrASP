@@ -3,7 +3,10 @@
 https://biorxiv.org/content/10.1101/2023.07.25.550565v1
 
 ## Colab
-Coming soon!
+Fetch a PDB file and try GrASP on it in our colab demo.
+
+[![Open in Collab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tiwarylab/GrASP/blob/colab/GrASP.ipynb)
+
 
 ## Download Datasets
 Coming soon!
