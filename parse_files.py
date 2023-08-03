@@ -699,7 +699,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare datasets for GNN inference.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("dataset", choices=["scpdb", "coach420", "coach420_mlig", "coach420_intersect",
     "holo4k", "holo4k_mlig", "holo4k_intersect", "holo4k_chains", "production"], help="Dataset to prepare.")
-    parser.add_argument("-sh", "--skip_hydrogen_cleanup", help="Remove and readd hydrogens for the prouction set.", action="store_true")
+    parser.add_argument("-sh", "--skip_hydrogen_cleanup", help="Remove and re-add hydrogens for the production set.", action="store_true")
     args = parser.parse_args()
     dataset = args.dataset
     
