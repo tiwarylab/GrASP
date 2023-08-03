@@ -3,9 +3,9 @@
 https://biorxiv.org/content/10.1101/2023.07.25.550565v1
 
 ## Colab
-Fetch a PDB file and try GrASP on it in our colab demo.
+Fetch a PDB file and try GrASP on it in our Colab demo.
 
-[![Open in Collab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tiwarylab/GrASP/blob/colab/GrASP.ipynb)
+[![Open in Collab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tiwarylab/GrASP/blob/main/GrASP.ipynb)
 
 
 ## Download Datasets
