@@ -178,4 +178,3 @@ dependencies:
   - zstd=1.5.2=ha4553b6_0
   - pip:
     - pyg-lib==0.1.0+pt113cu117
-prefix: /home/zsmith7/scratch/anaconda3/envs/pytorch_env

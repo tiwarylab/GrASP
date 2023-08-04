@@ -149,4 +149,3 @@ dependencies:
   - xz=5.2.6=h166bdaf_0
   - zlib=1.2.13=h166bdaf_4
   - zstd=1.5.2=h6239696_4
-prefix: /jet/home/zsmith7/.conda/envs/clustering
