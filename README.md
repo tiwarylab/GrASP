@@ -35,4 +35,5 @@ Currently, only production mode on a pre-trained model is supported until datase
  conda deactivate; conda activate ob
  python3 color_pdb.py
  ```
-
+## Supported Formats
+PDB and mol2 formats are supported and validated. Other formats supported by both MDAnalysis and OpenBabel 2.4.1 may be working but have not been tested.
