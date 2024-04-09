@@ -1,0 +1,513 @@
+@<TRIPOS>MOLECULE
+1hmp_5GP_1_protein
+36 38 429 0 0
+PROTEIN
+NO_CHARGES
+@<TRIPOS>ATOM
+   1    P       40.5970   12.3610   10.4470  P.3 424 5GP800  0.0000
+   2  O1P       39.2370   12.8800   10.1520 O.co2 424 5GP800  0.0000
+   3  O2P       40.6070   11.2590   11.4650 O.co2 424 5GP800 -1.0000
+   4  O3P       41.4530   12.1240    9.2700 O.co2 424 5GP800 -1.0000
+   5  O5'       41.2360   13.6240   11.1660  O.3 424 5GP800  0.0000
+   6  C5'       40.8690   13.6510   12.5470  C.3 424 5GP800  0.0000
+   7  C4'       41.5710   14.7660   13.2740  C.3 424 5GP800  0.0000
+   8  O4'       42.0110   14.3720   14.6110  O.3 424 5GP800  0.0000
+   9  C3'       42.8290   15.1770   12.5940  C.3 424 5GP800  0.0000
+  10  O3'       42.4690   15.9420   11.5290  O.3 424 5GP800  0.0000
+  11  C2'       43.4500   16.0060   13.6990  C.3 424 5GP800  0.0000
+  12  O2'       42.7240   17.2130   13.9030  O.3 424 5GP800  0.0000
+  13  C1'       43.2650   15.0260   14.8630  C.3 424 5GP800  0.0000
+  14   N9       44.3270   14.0230   14.8560 N.pl3 424 5GP800  0.0000
+  15   C8       44.6680   12.9000   14.1450  C.2 424 5GP800  0.0000
+  16   N7       45.8190   12.3990   14.5070  N.2 424 5GP800  0.0000
+  17   C5       46.2800   13.2610   15.4830  C.2 424 5GP800  0.0000
+  18   C6       47.4830   13.2430   16.2170  C.2 424 5GP800  0.0000
+  19   O6       48.4170   12.4590   16.1160  O.2 424 5GP800  0.0000
+  20   N1       47.5820   14.3120   17.0990 N.pl3 424 5GP800  0.0000
+  21   C2       46.7140   15.3390   17.1480  C.2 424 5GP800  0.0000
+  22   N2       47.0090   16.2400   18.0560 N.pl3 424 5GP800  0.0000
+  23   N3       45.5670   15.3990   16.4660  N.2 424 5GP800  0.0000
+  24   C4       45.4060   14.3100   15.6640  C.2 424 5GP800  0.0000
+  25 H5'1       41.1185   12.7790   12.9681    H 424 5GP800  0.0000
+  26 H5'2       39.8807   13.7855   12.6195    H 424 5GP800  0.0000
+  27  H4'       40.9589   15.5537   13.3445    H 424 5GP800  0.0000
+  28  H3'       43.3975   14.3969   12.3326    H 424 5GP800  0.0000
+  29   H5       43.1473   15.8405   10.8012    H 424 5GP800  0.0000
+  30  H2'       44.4176   16.1861   13.5221    H 424 5GP800  0.0000
+  31   H7       43.1536   17.7406   14.6359    H 424 5GP800  0.0000
+  32  H1'       43.2422   15.5126   15.7363    H 424 5GP800  0.0000
+  33   H9       44.0957   12.5065   13.4255    H 424 5GP800  0.0000
+  34  H10       48.3494   14.3186   17.7401    H 424 5GP800  0.0000
+  35  H11       46.4247   17.0432   18.1717    H 424 5GP800  0.0000
+  36  H12       47.8181   16.1231   18.6320    H 424 5GP800  0.0000
+
+@<TRIPOS>BOND
+    1     1     2 ar
+    2     1     3 ar
+    3     1     4 ar
+    4     1     5  1
+    5     5     6  1
+    6     6     7  1
+    7     6    25  1
+    8     6    26  1
+    9     7     8  1
+   10     7     9  1
+   11     7    27  1
+   12     8    13  1
+   13     9    10  1
+   14     9    11  1
+   15     9    28  1
+   16    10    29  1
+   17    11    12  1
+   18    11    13  1
+   19    11    30  1
+   20    12    31  1
+   21    13    14  1
+   22    13    32  1
+   23    14    15  1
+   24    14    24  1
+   25    15    16  2
+   26    15    33  1
+   27    16    17  1
+   28    17    18  1
+   29    17    24  2
+   30    18    19  2
+   31    18    20  1
+   32    20    21  1
+   33    20    34  1
+   34    21    22  1
+   35    21    23  2
+   36    22    35  1
+   37    22    36  1
+   38    23    24  1
+
+@<TRIPOS>SUBSTRUCTURE
+     1 SER4        1 RESIDUE           4 A     SER     0 **** SER A   4
+     2 PRO5       12 RESIDUE           4 A     PRO     0 **** PRO A   5
+     3 GLY6       26 RESIDUE           4 A     GLY     0 **** GLY A   6
+     4 VAL7       33 RESIDUE           4 A     VAL     0 **** VAL A   7
+     5 VAL8       49 RESIDUE           4 A     VAL     0 **** VAL A   8
+     6 ILE9       65 RESIDUE           4 A     ILE     0 **** ILE A   9
+     7 SER10      84 RESIDUE           4 A     SER     0 **** SER A  10
+     8 ASP11      95 RESIDUE           4 A     ASP     0 **** ASP A  11
+     9 ASP12     107 RESIDUE           4 A     ASP     0 **** ASP A  12
+    10 GLU13     119 RESIDUE           4 A     GLU     0 **** GLU A  13
+    11 PRO14     134 RESIDUE           4 A     PRO     0 **** PRO A  14
+    12 GLY15     148 RESIDUE           4 A     GLY     0 **** GLY A  15
+    13 TYR16     155 RESIDUE           4 A     TYR     0 **** TYR A  16
+    14 ASP17     176 RESIDUE           4 A     ASP     0 **** ASP A  17
+    15 LEU18     189 RESIDUE           4 A     LEU     0 **** LEU A  18
+    16 ASP19     208 RESIDUE           4 A     ASP     0 **** ASP A  19
+    17 LEU20     220 RESIDUE           4 A     LEU     0 **** LEU A  20
+    18 PHE21     239 RESIDUE           4 A     PHE     0 **** PHE A  21
+    19 CYS22     259 RESIDUE           4 A     CYS     0 **** CYS A  22
+    20 ILE23     270 RESIDUE           4 A     ILE     0 **** ILE A  23
+    21 PRO24     289 RESIDUE           4 A     PRO     0 **** PRO A  24
+    22 ASN25     303 RESIDUE           4 A     ASN     0 **** ASN A  25
+    23 HIS26     317 RESIDUE           4 A     HIS     0 **** HIS A  26
+    24 TYR27     334 RESIDUE           4 A     TYR     0 **** TYR A  27
+    25 ALA28     355 RESIDUE           4 A     ALA     0 **** ALA A  28
+    26 GLU29     365 RESIDUE           4 A     GLU     0 **** GLU A  29
+    27 ASP30     380 RESIDUE           4 A     ASP     0 **** ASP A  30
+    28 LEU31     392 RESIDUE           4 A     LEU     0 **** LEU A  31
+    29 GLU32     411 RESIDUE           4 A     GLU     0 **** GLU A  32
+    30 ARG33     426 RESIDUE           4 A     ARG     0 **** ARG A  33
+    31 VAL34     450 RESIDUE           4 A     VAL     0 **** VAL A  34
+    32 PHE35     466 RESIDUE           4 A     PHE     0 **** PHE A  35
+    33 ILE36     486 RESIDUE           4 A     ILE     0 **** ILE A  36
+    34 PRO37     505 RESIDUE           4 A     PRO     0 **** PRO A  37
+    35 HIS38     519 RESIDUE           4 A     HIS     0 **** HIS A  38
+    36 GLY39     536 RESIDUE           4 A     GLY     0 **** GLY A  39
+    37 LEU40     543 RESIDUE           4 A     LEU     0 **** LEU A  40
+    38 ILE41     562 RESIDUE           4 A     ILE     0 **** ILE A  41
+    39 MET42     581 RESIDUE           4 A     MET     0 **** MET A  42
+    40 ASP43     598 RESIDUE           4 A     ASP     0 **** ASP A  43
+    41 ARG44     610 RESIDUE           4 A     ARG     0 **** ARG A  44
+    42 THR45     634 RESIDUE           4 A     THR     0 **** THR A  45
+    43 GLU46     648 RESIDUE           4 A     GLU     0 **** GLU A  46
+    44 ARG47     663 RESIDUE           4 A     ARG     0 **** ARG A  47
+    45 LEU48     687 RESIDUE           4 A     LEU     0 **** LEU A  48
+    46 ALA49     706 RESIDUE           4 A     ALA     0 **** ALA A  49
+    47 ARG50     716 RESIDUE           4 A     ARG     0 **** ARG A  50
+    48 ASP51     740 RESIDUE           4 A     ASP     0 **** ASP A  51
+    49 VAL52     752 RESIDUE           4 A     VAL     0 **** VAL A  52
+    50 MET53     768 RESIDUE           4 A     MET     0 **** MET A  53
+    51 LYS54     785 RESIDUE           4 A     LYS     0 **** LYS A  54
+    52 GLU55     807 RESIDUE           4 A     GLU     0 **** GLU A  55
+    53 MET56     822 RESIDUE           4 A     MET     0 **** MET A  56
+    54 GLY57     839 RESIDUE           4 A     GLY     0 **** GLY A  57
+    55 GLY58     846 RESIDUE           4 A     GLY     0 **** GLY A  58
+    56 HIS59     853 RESIDUE           4 A     HIS     0 **** HIS A  59
+    57 HIS60     870 RESIDUE           4 A     HIS     0 **** HIS A  60
+    58 ILE61     887 RESIDUE           4 A     ILE     0 **** ILE A  61
+    59 VAL62     906 RESIDUE           4 A     VAL     0 **** VAL A  62
+    60 ALA63     922 RESIDUE           4 A     ALA     0 **** ALA A  63
+    61 LEU64     932 RESIDUE           4 A     LEU     0 **** LEU A  64
+    62 CYS65     951 RESIDUE           4 A     CYS     0 **** CYS A  65
+    63 VAL66     962 RESIDUE           4 A     VAL     0 **** VAL A  66
+    64 LEU67     978 RESIDUE           4 A     LEU     0 **** LEU A  67
+    65 LYS68     997 RESIDUE           4 A     LYS     0 **** LYS A  68
+    66 GLY69    1019 RESIDUE           4 A     GLY     0 **** GLY A  69
+    67 GLY70    1026 RESIDUE           4 A     GLY     0 **** GLY A  70
+    68 TYR71    1033 RESIDUE           4 A     TYR     0 **** TYR A  71
+    69 LYS72    1054 RESIDUE           4 A     LYS     0 **** LYS A  72
+    70 PHE73    1076 RESIDUE           4 A     PHE     0 **** PHE A  73
+    71 PHE74    1096 RESIDUE           4 A     PHE     0 **** PHE A  74
+    72 ALA75    1116 RESIDUE           4 A     ALA     0 **** ALA A  75
+    73 ASP76    1126 RESIDUE           4 A     ASP     0 **** ASP A  76
+    74 LEU77    1138 RESIDUE           4 A     LEU     0 **** LEU A  77
+    75 LEU78    1157 RESIDUE           4 A     LEU     0 **** LEU A  78
+    76 ASP79    1176 RESIDUE           4 A     ASP     0 **** ASP A  79
+    77 TYR80    1188 RESIDUE           4 A     TYR     0 **** TYR A  80
+    78 ILE81    1209 RESIDUE           4 A     ILE     0 **** ILE A  81
+    79 LYS82    1228 RESIDUE           4 A     LYS     0 **** LYS A  82
+    80 ALA83    1250 RESIDUE           4 A     ALA     0 **** ALA A  83
+    81 LEU84    1260 RESIDUE           4 A     LEU     0 **** LEU A  84
+    82 ASN85    1279 RESIDUE           4 A     ASN     0 **** ASN A  85
+    83 ARG86    1293 RESIDUE           4 A     ARG     0 **** ARG A  86
+    84 ASN87    1317 RESIDUE           4 A     ASN     0 **** ASN A  87
+    85 SER88    1331 RESIDUE           4 A     SER     0 **** SER A  88
+    86 ASP89    1342 RESIDUE           4 A     ASP     0 **** ASP A  89
+    87 ARG90    1354 RESIDUE           4 A     ARG     0 **** ARG A  90
+    88 SER91    1378 RESIDUE           4 A     SER     0 **** SER A  91
+    89 ILE92    1389 RESIDUE           4 A     ILE     0 **** ILE A  92
+    90 PRO93    1408 RESIDUE           4 A     PRO     0 **** PRO A  93
+    91 MET94    1422 RESIDUE           4 A     MET     0 **** MET A  94
+    92 THR95    1439 RESIDUE           4 A     THR     0 **** THR A  95
+    93 VAL96    1453 RESIDUE           4 A     VAL     0 **** VAL A  96
+    94 ASP97    1469 RESIDUE           4 A     ASP     0 **** ASP A  97
+    95 PHE98    1481 RESIDUE           4 A     PHE     0 **** PHE A  98
+    96 ILE99    1501 RESIDUE           4 A     ILE     0 **** ILE A  99
+    97 ARG100   1520 RESIDUE           4 A     ARG     0 **** ARG A 100
+    98 LEU101   1544 RESIDUE           4 A     LEU     0 **** LEU A 101
+    99 LYS102   1553 RESIDUE           4 A     LYS     0 **** LYS A 102
+   100 SER103   1575 RESIDUE           4 A     SER     0 **** SER A 103
+   101 TYR104   1586 RESIDUE           4 A     TYR     0 **** TYR A 104
+   102 CYS105   1607 RESIDUE           4 A     CYS     0 **** CYS A 105
+   103 ASN106   1618 RESIDUE           4 A     ASN     0 **** ASN A 106
+   104 ASP107   1632 RESIDUE           4 A     ASP     0 **** ASP A 107
+   105 GLN108   1644 RESIDUE           4 A     GLN     0 **** GLN A 108
+   106 SER109   1661 RESIDUE           4 A     SER     0 **** SER A 109
+   107 THR110   1672 RESIDUE           4 A     THR     0 **** THR A 110
+   108 GLY111   1686 RESIDUE           4 A     GLY     0 **** GLY A 111
+   109 ASP112   1693 RESIDUE           4 A     ASP     0 **** ASP A 112
+   110 ILE113   1702 RESIDUE           4 A     ILE     0 **** ILE A 113
+   111 LYS114   1721 RESIDUE           4 A     LYS     0 **** LYS A 114
+   112 VAL115   1743 RESIDUE           4 A     VAL     0 **** VAL A 115
+   113 ILE116   1751 RESIDUE           4 A     ILE     0 **** ILE A 116
+   114 GLY117   1759 RESIDUE           4 A     GLY     0 **** GLY A 117
+   115 GLY118   1766 RESIDUE           4 A     GLY     0 **** GLY A 118
+   116 ASP119   1773 RESIDUE           4 A     ASP     0 **** ASP A 119
+   117 ASP120   1782 RESIDUE           4 A     ASP     0 **** ASP A 120
+   118 LEU121   1791 RESIDUE           4 A     LEU     0 **** LEU A 121
+   119 SER122   1810 RESIDUE           4 A     SER     0 **** SER A 122
+   120 THR123   1821 RESIDUE           4 A     THR     0 **** THR A 123
+   121 LEU124   1835 RESIDUE           4 A     LEU     0 **** LEU A 124
+   122 THR125   1854 RESIDUE           4 A     THR     0 **** THR A 125
+   123 GLY126   1868 RESIDUE           4 A     GLY     0 **** GLY A 126
+   124 LYS127   1875 RESIDUE           4 A     LYS     0 **** LYS A 127
+   125 ASN128   1897 RESIDUE           4 A     ASN     0 **** ASN A 128
+   126 VAL129   1911 RESIDUE           4 A     VAL     0 **** VAL A 129
+   127 LEU130   1927 RESIDUE           4 A     LEU     0 **** LEU A 130
+   128 ILE131   1946 RESIDUE           4 A     ILE     0 **** ILE A 131
+   129 VAL132   1965 RESIDUE           4 A     VAL     0 **** VAL A 132
+   130 GLU133   1981 RESIDUE           4 A     GLU     0 **** GLU A 133
+   131 ASP134   1996 RESIDUE           4 A     ASP     0 **** ASP A 134
+   132 ILE135   2008 RESIDUE           4 A     ILE     0 **** ILE A 135
+   133 ILE136   2027 RESIDUE           4 A     ILE     0 **** ILE A 136
+   134 ASP137   2046 RESIDUE           4 A     ASP     0 **** ASP A 137
+   135 THR138   2058 RESIDUE           4 A     THR     0 **** THR A 138
+   136 GLY139   2072 RESIDUE           4 A     GLY     0 **** GLY A 139
+   137 LYS140   2079 RESIDUE           4 A     LYS     0 **** LYS A 140
+   138 THR141   2101 RESIDUE           4 A     THR     0 **** THR A 141
+   139 MET142   2115 RESIDUE           4 A     MET     0 **** MET A 142
+   140 GLN143   2132 RESIDUE           4 A     GLN     0 **** GLN A 143
+   141 THR144   2149 RESIDUE           4 A     THR     0 **** THR A 144
+   142 LEU145   2163 RESIDUE           4 A     LEU     0 **** LEU A 145
+   143 LEU146   2182 RESIDUE           4 A     LEU     0 **** LEU A 146
+   144 SER147   2201 RESIDUE           4 A     SER     0 **** SER A 147
+   145 LEU148   2212 RESIDUE           4 A     LEU     0 **** LEU A 148
+   146 VAL149   2231 RESIDUE           4 A     VAL     0 **** VAL A 149
+   147 ARG150   2247 RESIDUE           4 A     ARG     0 **** ARG A 150
+   148 GLN151   2271 RESIDUE           4 A     GLN     0 **** GLN A 151
+   149 TYR152   2288 RESIDUE           4 A     TYR     0 **** TYR A 152
+   150 ASN153   2309 RESIDUE           4 A     ASN     0 **** ASN A 153
+   151 PRO154   2323 RESIDUE           4 A     PRO     0 **** PRO A 154
+   152 LYS155   2337 RESIDUE           4 A     LYS     0 **** LYS A 155
+   153 MET156   2359 RESIDUE           4 A     MET     0 **** MET A 156
+   154 VAL157   2376 RESIDUE           4 A     VAL     0 **** VAL A 157
+   155 LYS158   2392 RESIDUE           4 A     LYS     0 **** LYS A 158
+   156 VAL159   2414 RESIDUE           4 A     VAL     0 **** VAL A 159
+   157 ALA160   2430 RESIDUE           4 A     ALA     0 **** ALA A 160
+   158 SER161   2440 RESIDUE           4 A     SER     0 **** SER A 161
+   159 LEU162   2451 RESIDUE           4 A     LEU     0 **** LEU A 162
+   160 LEU163   2470 RESIDUE           4 A     LEU     0 **** LEU A 163
+   161 VAL164   2489 RESIDUE           4 A     VAL     0 **** VAL A 164
+   162 LYS165   2505 RESIDUE           4 A     LYS     0 **** LYS A 165
+   163 ARG166   2527 RESIDUE           4 A     ARG     0 **** ARG A 166
+   164 THR167   2551 RESIDUE           4 A     THR     0 **** THR A 167
+   165 PRO168   2565 RESIDUE           4 A     PRO     0 **** PRO A 168
+   166 ARG169   2579 RESIDUE           4 A     ARG     0 **** ARG A 169
+   167 SER170   2603 RESIDUE           4 A     SER     0 **** SER A 170
+   168 VAL171   2614 RESIDUE           4 A     VAL     0 **** VAL A 171
+   169 GLY172   2630 RESIDUE           4 A     GLY     0 **** GLY A 172
+   170 TYR173   2637 RESIDUE           4 A     TYR     0 **** TYR A 173
+   171 LYS174   2658 RESIDUE           4 A     LYS     0 **** LYS A 174
+   172 PRO175   2680 RESIDUE           4 A     PRO     0 **** PRO A 175
+   173 ASP176   2694 RESIDUE           4 A     ASP     0 **** ASP A 176
+   174 PHE177   2706 RESIDUE           4 A     PHE     0 **** PHE A 177
+   175 VAL178   2726 RESIDUE           4 A     VAL     0 **** VAL A 178
+   176 GLY179   2742 RESIDUE           4 A     GLY     0 **** GLY A 179
+   177 PHE180   2749 RESIDUE           4 A     PHE     0 **** PHE A 180
+   178 GLU181   2769 RESIDUE           4 A     GLU     0 **** GLU A 181
+   179 ILE182   2784 RESIDUE           4 A     ILE     0 **** ILE A 182
+   180 PRO183   2803 RESIDUE           4 A     PRO     0 **** PRO A 183
+   181 ASP184   2817 RESIDUE           4 A     ASP     0 **** ASP A 184
+   182 LYS185   2829 RESIDUE           4 A     LYS     0 **** LYS A 185
+   183 PHE186   2851 RESIDUE           4 A     PHE     0 **** PHE A 186
+   184 VAL187   2871 RESIDUE           4 A     VAL     0 **** VAL A 187
+   185 VAL188   2887 RESIDUE           4 A     VAL     0 **** VAL A 188
+   186 GLY189   2903 RESIDUE           4 A     GLY     0 **** GLY A 189
+   187 TYR190   2910 RESIDUE           4 A     TYR     0 **** TYR A 190
+   188 ALA191   2931 RESIDUE           4 A     ALA     0 **** ALA A 191
+   189 LEU192   2941 RESIDUE           4 A     LEU     0 **** LEU A 192
+   190 ASP193   2960 RESIDUE           4 A     ASP     0 **** ASP A 193
+   191 TYR194   2972 RESIDUE           4 A     TYR     0 **** TYR A 194
+   192 ASN195   2993 RESIDUE           4 A     ASN     0 **** ASN A 195
+   193 GLU196   3007 RESIDUE           4 A     GLU     0 **** GLU A 196
+   194 TYR197   3022 RESIDUE           4 A     TYR     0 **** TYR A 197
+   195 PHE198   3043 RESIDUE           4 A     PHE     0 **** PHE A 198
+   196 ARG199   3063 RESIDUE           4 A     ARG     0 **** ARG A 199
+   197 ASP200   3087 RESIDUE           4 A     ASP     0 **** ASP A 200
+   198 LEU201   3099 RESIDUE           4 A     LEU     0 **** LEU A 201
+   199 ASN202   3118 RESIDUE           4 A     ASN     0 **** ASN A 202
+   200 HIS203   3132 RESIDUE           4 A     HIS     0 **** HIS A 203
+   201 VAL204   3149 RESIDUE           4 A     VAL     0 **** VAL A 204
+   202 CYS205   3165 RESIDUE           4 A     CYS     0 **** CYS A 205
+   203 VAL206   3176 RESIDUE           4 A     VAL     0 **** VAL A 206
+   204 ILE207   3192 RESIDUE           4 A     ILE     0 **** ILE A 207
+   205 SER208   3211 RESIDUE           4 A     SER     0 **** SER A 208
+   206 GLU209   3222 RESIDUE           4 A     GLU     0 **** GLU A 209
+   207 THR210   3237 RESIDUE           4 A     THR     0 **** THR A 210
+   208 GLY211   3251 RESIDUE           4 A     GLY     0 **** GLY A 211
+   209 LYS212   3258 RESIDUE           4 A     LYS     0 **** LYS A 212
+   210 ALA213   3280 RESIDUE           4 A     ALA     0 **** ALA A 213
+   211 LYS214   3290 RESIDUE           4 A     LYS     0 **** LYS A 214
+   212 TYR215   3312 RESIDUE           4 A     TYR     0 **** TYR A 215
+   213 LYS216   3333 RESIDUE           4 A     LYS     0 **** LYS A 216
+   214 ALA217   3355 RESIDUE           4 A     ALA     0 **** ALA A 217
+   215 SER4     3366 RESIDUE           4 B     SER     0 **** SER B   4
+   216 PRO5     3377 RESIDUE           4 B     PRO     0 **** PRO B   5
+   217 GLY6     3391 RESIDUE           4 B     GLY     0 **** GLY B   6
+   218 VAL7     3398 RESIDUE           4 B     VAL     0 **** VAL B   7
+   219 VAL8     3414 RESIDUE           4 B     VAL     0 **** VAL B   8
+   220 ILE9     3430 RESIDUE           4 B     ILE     0 **** ILE B   9
+   221 SER10    3449 RESIDUE           4 B     SER     0 **** SER B  10
+   222 ASP11    3460 RESIDUE           4 B     ASP     0 **** ASP B  11
+   223 ASP12    3472 RESIDUE           4 B     ASP     0 **** ASP B  12
+   224 GLU13    3484 RESIDUE           4 B     GLU     0 **** GLU B  13
+   225 PRO14    3499 RESIDUE           4 B     PRO     0 **** PRO B  14
+   226 GLY15    3513 RESIDUE           4 B     GLY     0 **** GLY B  15
+   227 TYR16    3520 RESIDUE           4 B     TYR     0 **** TYR B  16
+   228 ASP17    3541 RESIDUE           4 B     ASP     0 **** ASP B  17
+   229 LEU18    3553 RESIDUE           4 B     LEU     0 **** LEU B  18
+   230 ASP19    3572 RESIDUE           4 B     ASP     0 **** ASP B  19
+   231 LEU20    3584 RESIDUE           4 B     LEU     0 **** LEU B  20
+   232 PHE21    3603 RESIDUE           4 B     PHE     0 **** PHE B  21
+   233 CYS22    3623 RESIDUE           4 B     CYS     0 **** CYS B  22
+   234 ILE23    3634 RESIDUE           4 B     ILE     0 **** ILE B  23
+   235 PRO24    3653 RESIDUE           4 B     PRO     0 **** PRO B  24
+   236 ASN25    3667 RESIDUE           4 B     ASN     0 **** ASN B  25
+   237 HIS26    3681 RESIDUE           4 B     HIS     0 **** HIS B  26
+   238 TYR27    3699 RESIDUE           4 B     TYR     0 **** TYR B  27
+   239 ALA28    3720 RESIDUE           4 B     ALA     0 **** ALA B  28
+   240 GLU29    3730 RESIDUE           4 B     GLU     0 **** GLU B  29
+   241 ASP30    3745 RESIDUE           4 B     ASP     0 **** ASP B  30
+   242 LEU31    3757 RESIDUE           4 B     LEU     0 **** LEU B  31
+   243 GLU32    3776 RESIDUE           4 B     GLU     0 **** GLU B  32
+   244 ARG33    3791 RESIDUE           4 B     ARG     0 **** ARG B  33
+   245 VAL34    3815 RESIDUE           4 B     VAL     0 **** VAL B  34
+   246 PHE35    3831 RESIDUE           4 B     PHE     0 **** PHE B  35
+   247 ILE36    3851 RESIDUE           4 B     ILE     0 **** ILE B  36
+   248 PRO37    3870 RESIDUE           4 B     PRO     0 **** PRO B  37
+   249 HIS38    3884 RESIDUE           4 B     HIS     0 **** HIS B  38
+   250 GLY39    3901 RESIDUE           4 B     GLY     0 **** GLY B  39
+   251 LEU40    3908 RESIDUE           4 B     LEU     0 **** LEU B  40
+   252 ILE41    3927 RESIDUE           4 B     ILE     0 **** ILE B  41
+   253 MET42    3946 RESIDUE           4 B     MET     0 **** MET B  42
+   254 ASP43    3963 RESIDUE           4 B     ASP     0 **** ASP B  43
+   255 ARG44    3975 RESIDUE           4 B     ARG     0 **** ARG B  44
+   256 THR45    3999 RESIDUE           4 B     THR     0 **** THR B  45
+   257 GLU46    4013 RESIDUE           4 B     GLU     0 **** GLU B  46
+   258 ARG47    4028 RESIDUE           4 B     ARG     0 **** ARG B  47
+   259 LEU48    4052 RESIDUE           4 B     LEU     0 **** LEU B  48
+   260 ALA49    4071 RESIDUE           4 B     ALA     0 **** ALA B  49
+   261 ARG50    4081 RESIDUE           4 B     ARG     0 **** ARG B  50
+   262 ASP51    4105 RESIDUE           4 B     ASP     0 **** ASP B  51
+   263 VAL52    4117 RESIDUE           4 B     VAL     0 **** VAL B  52
+   264 MET53    4133 RESIDUE           4 B     MET     0 **** MET B  53
+   265 LYS54    4150 RESIDUE           4 B     LYS     0 **** LYS B  54
+   266 GLU55    4172 RESIDUE           4 B     GLU     0 **** GLU B  55
+   267 MET56    4187 RESIDUE           4 B     MET     0 **** MET B  56
+   268 GLY57    4204 RESIDUE           4 B     GLY     0 **** GLY B  57
+   269 GLY58    4211 RESIDUE           4 B     GLY     0 **** GLY B  58
+   270 HIS59    4218 RESIDUE           4 B     HIS     0 **** HIS B  59
+   271 HIS60    4235 RESIDUE           4 B     HIS     0 **** HIS B  60
+   272 ILE61    4252 RESIDUE           4 B     ILE     0 **** ILE B  61
+   273 VAL62    4271 RESIDUE           4 B     VAL     0 **** VAL B  62
+   274 ALA63    4287 RESIDUE           4 B     ALA     0 **** ALA B  63
+   275 LEU64    4297 RESIDUE           4 B     LEU     0 **** LEU B  64
+   276 CYS65    4316 RESIDUE           4 B     CYS     0 **** CYS B  65
+   277 VAL66    4327 RESIDUE           4 B     VAL     0 **** VAL B  66
+   278 LEU67    4343 RESIDUE           4 B     LEU     0 **** LEU B  67
+   279 LYS68    4362 RESIDUE           4 B     LYS     0 **** LYS B  68
+   280 GLY69    4384 RESIDUE           4 B     GLY     0 **** GLY B  69
+   281 GLY70    4391 RESIDUE           4 B     GLY     0 **** GLY B  70
+   282 TYR71    4398 RESIDUE           4 B     TYR     0 **** TYR B  71
+   283 LYS72    4419 RESIDUE           4 B     LYS     0 **** LYS B  72
+   284 PHE73    4441 RESIDUE           4 B     PHE     0 **** PHE B  73
+   285 PHE74    4461 RESIDUE           4 B     PHE     0 **** PHE B  74
+   286 ALA75    4481 RESIDUE           4 B     ALA     0 **** ALA B  75
+   287 ASP76    4491 RESIDUE           4 B     ASP     0 **** ASP B  76
+   288 LEU77    4503 RESIDUE           4 B     LEU     0 **** LEU B  77
+   289 LEU78    4522 RESIDUE           4 B     LEU     0 **** LEU B  78
+   290 ASP79    4541 RESIDUE           4 B     ASP     0 **** ASP B  79
+   291 TYR80    4553 RESIDUE           4 B     TYR     0 **** TYR B  80
+   292 ILE81    4574 RESIDUE           4 B     ILE     0 **** ILE B  81
+   293 LYS82    4593 RESIDUE           4 B     LYS     0 **** LYS B  82
+   294 ALA83    4615 RESIDUE           4 B     ALA     0 **** ALA B  83
+   295 LEU84    4625 RESIDUE           4 B     LEU     0 **** LEU B  84
+   296 ASN85    4644 RESIDUE           4 B     ASN     0 **** ASN B  85
+   297 ARG86    4658 RESIDUE           4 B     ARG     0 **** ARG B  86
+   298 ASN87    4682 RESIDUE           4 B     ASN     0 **** ASN B  87
+   299 SER88    4696 RESIDUE           4 B     SER     0 **** SER B  88
+   300 ASP89    4707 RESIDUE           4 B     ASP     0 **** ASP B  89
+   301 ARG90    4719 RESIDUE           4 B     ARG     0 **** ARG B  90
+   302 SER91    4743 RESIDUE           4 B     SER     0 **** SER B  91
+   303 ILE92    4754 RESIDUE           4 B     ILE     0 **** ILE B  92
+   304 PRO93    4773 RESIDUE           4 B     PRO     0 **** PRO B  93
+   305 MET94    4787 RESIDUE           4 B     MET     0 **** MET B  94
+   306 THR95    4804 RESIDUE           4 B     THR     0 **** THR B  95
+   307 VAL96    4818 RESIDUE           4 B     VAL     0 **** VAL B  96
+   308 ASP97    4834 RESIDUE           4 B     ASP     0 **** ASP B  97
+   309 PHE98    4846 RESIDUE           4 B     PHE     0 **** PHE B  98
+   310 ILE99    4866 RESIDUE           4 B     ILE     0 **** ILE B  99
+   311 ARG100   4885 RESIDUE           4 B     ARG     0 **** ARG B 100
+   312 LEU101   4909 RESIDUE           4 B     LEU     0 **** LEU B 101
+   313 LYS102   4928 RESIDUE           4 B     LYS     0 **** LYS B 102
+   314 SER103   4937 RESIDUE           4 B     SER     0 **** SER B 103
+   315 TYR104   4946 RESIDUE           4 B     TYR     0 **** TYR B 104
+   316 SER109   4955 RESIDUE           4 B     SER     0 **** SER B 109
+   317 THR110   4964 RESIDUE           4 B     THR     0 **** THR B 110
+   318 GLY111   4972 RESIDUE           4 B     GLY     0 **** GLY B 111
+   319 ASP112   4979 RESIDUE           4 B     ASP     0 **** ASP B 112
+   320 ILE113   4988 RESIDUE           4 B     ILE     0 **** ILE B 113
+   321 LYS114   4996 RESIDUE           4 B     LYS     0 **** LYS B 114
+   322 VAL115   5005 RESIDUE           4 B     VAL     0 **** VAL B 115
+   323 ILE116   5013 RESIDUE           4 B     ILE     0 **** ILE B 116
+   324 GLY117   5021 RESIDUE           4 B     GLY     0 **** GLY B 117
+   325 GLY118   5028 RESIDUE           4 B     GLY     0 **** GLY B 118
+   326 ASP119   5035 RESIDUE           4 B     ASP     0 **** ASP B 119
+   327 ASP120   5044 RESIDUE           4 B     ASP     0 **** ASP B 120
+   328 SER122   5053 RESIDUE           4 B     SER     0 **** SER B 122
+   329 THR123   5062 RESIDUE           4 B     THR     0 **** THR B 123
+   330 LEU124   5076 RESIDUE           4 B     LEU     0 **** LEU B 124
+   331 THR125   5095 RESIDUE           4 B     THR     0 **** THR B 125
+   332 GLY126   5109 RESIDUE           4 B     GLY     0 **** GLY B 126
+   333 LYS127   5116 RESIDUE           4 B     LYS     0 **** LYS B 127
+   334 ASN128   5138 RESIDUE           4 B     ASN     0 **** ASN B 128
+   335 VAL129   5152 RESIDUE           4 B     VAL     0 **** VAL B 129
+   336 LEU130   5168 RESIDUE           4 B     LEU     0 **** LEU B 130
+   337 ILE131   5187 RESIDUE           4 B     ILE     0 **** ILE B 131
+   338 VAL132   5206 RESIDUE           4 B     VAL     0 **** VAL B 132
+   339 GLU133   5222 RESIDUE           4 B     GLU     0 **** GLU B 133
+   340 ASP134   5237 RESIDUE           4 B     ASP     0 **** ASP B 134
+   341 ILE135   5249 RESIDUE           4 B     ILE     0 **** ILE B 135
+   342 ILE136   5268 RESIDUE           4 B     ILE     0 **** ILE B 136
+   343 ASP137   5287 RESIDUE           4 B     ASP     0 **** ASP B 137
+   344 THR138   5299 RESIDUE           4 B     THR     0 **** THR B 138
+   345 GLY139   5313 RESIDUE           4 B     GLY     0 **** GLY B 139
+   346 LYS140   5320 RESIDUE           4 B     LYS     0 **** LYS B 140
+   347 THR141   5342 RESIDUE           4 B     THR     0 **** THR B 141
+   348 MET142   5356 RESIDUE           4 B     MET     0 **** MET B 142
+   349 GLN143   5373 RESIDUE           4 B     GLN     0 **** GLN B 143
+   350 THR144   5390 RESIDUE           4 B     THR     0 **** THR B 144
+   351 LEU145   5404 RESIDUE           4 B     LEU     0 **** LEU B 145
+   352 LEU146   5423 RESIDUE           4 B     LEU     0 **** LEU B 146
+   353 SER147   5442 RESIDUE           4 B     SER     0 **** SER B 147
+   354 LEU148   5453 RESIDUE           4 B     LEU     0 **** LEU B 148
+   355 VAL149   5472 RESIDUE           4 B     VAL     0 **** VAL B 149
+   356 ARG150   5488 RESIDUE           4 B     ARG     0 **** ARG B 150
+   357 GLN151   5512 RESIDUE           4 B     GLN     0 **** GLN B 151
+   358 TYR152   5529 RESIDUE           4 B     TYR     0 **** TYR B 152
+   359 ASN153   5550 RESIDUE           4 B     ASN     0 **** ASN B 153
+   360 PRO154   5564 RESIDUE           4 B     PRO     0 **** PRO B 154
+   361 LYS155   5578 RESIDUE           4 B     LYS     0 **** LYS B 155
+   362 MET156   5600 RESIDUE           4 B     MET     0 **** MET B 156
+   363 VAL157   5617 RESIDUE           4 B     VAL     0 **** VAL B 157
+   364 LYS158   5633 RESIDUE           4 B     LYS     0 **** LYS B 158
+   365 VAL159   5655 RESIDUE           4 B     VAL     0 **** VAL B 159
+   366 ALA160   5671 RESIDUE           4 B     ALA     0 **** ALA B 160
+   367 SER161   5681 RESIDUE           4 B     SER     0 **** SER B 161
+   368 LEU162   5692 RESIDUE           4 B     LEU     0 **** LEU B 162
+   369 LEU163   5711 RESIDUE           4 B     LEU     0 **** LEU B 163
+   370 VAL164   5730 RESIDUE           4 B     VAL     0 **** VAL B 164
+   371 LYS165   5746 RESIDUE           4 B     LYS     0 **** LYS B 165
+   372 ARG166   5768 RESIDUE           4 B     ARG     0 **** ARG B 166
+   373 THR167   5792 RESIDUE           4 B     THR     0 **** THR B 167
+   374 PRO168   5806 RESIDUE           4 B     PRO     0 **** PRO B 168
+   375 ARG169   5820 RESIDUE           4 B     ARG     0 **** ARG B 169
+   376 SER170   5844 RESIDUE           4 B     SER     0 **** SER B 170
+   377 VAL171   5855 RESIDUE           4 B     VAL     0 **** VAL B 171
+   378 GLY172   5871 RESIDUE           4 B     GLY     0 **** GLY B 172
+   379 TYR173   5878 RESIDUE           4 B     TYR     0 **** TYR B 173
+   380 LYS174   5899 RESIDUE           4 B     LYS     0 **** LYS B 174
+   381 PRO175   5921 RESIDUE           4 B     PRO     0 **** PRO B 175
+   382 ASP176   5935 RESIDUE           4 B     ASP     0 **** ASP B 176
+   383 PHE177   5947 RESIDUE           4 B     PHE     0 **** PHE B 177
+   384 VAL178   5967 RESIDUE           4 B     VAL     0 **** VAL B 178
+   385 GLY179   5983 RESIDUE           4 B     GLY     0 **** GLY B 179
+   386 PHE180   5990 RESIDUE           4 B     PHE     0 **** PHE B 180
+   387 GLU181   6010 RESIDUE           4 B     GLU     0 **** GLU B 181
+   388 ILE182   6025 RESIDUE           4 B     ILE     0 **** ILE B 182
+   389 PRO183   6044 RESIDUE           4 B     PRO     0 **** PRO B 183
+   390 ASP184   6058 RESIDUE           4 B     ASP     0 **** ASP B 184
+   391 LYS185   6070 RESIDUE           4 B     LYS     0 **** LYS B 185
+   392 PHE186   6092 RESIDUE           4 B     PHE     0 **** PHE B 186
+   393 VAL187   6112 RESIDUE           4 B     VAL     0 **** VAL B 187
+   394 VAL188   6128 RESIDUE           4 B     VAL     0 **** VAL B 188
+   395 GLY189   6144 RESIDUE           4 B     GLY     0 **** GLY B 189
+   396 TYR190   6151 RESIDUE           4 B     TYR     0 **** TYR B 190
+   397 ALA191   6172 RESIDUE           4 B     ALA     0 **** ALA B 191
+   398 LEU192   6182 RESIDUE           4 B     LEU     0 **** LEU B 192
+   399 ASP193   6201 RESIDUE           4 B     ASP     0 **** ASP B 193
+   400 TYR194   6213 RESIDUE           4 B     TYR     0 **** TYR B 194
+   401 ASN195   6234 RESIDUE           4 B     ASN     0 **** ASN B 195
+   402 GLU196   6248 RESIDUE           4 B     GLU     0 **** GLU B 196
+   403 TYR197   6263 RESIDUE           4 B     TYR     0 **** TYR B 197
+   404 PHE198   6284 RESIDUE           4 B     PHE     0 **** PHE B 198
+   405 ARG199   6304 RESIDUE           4 B     ARG     0 **** ARG B 199
+   406 ASP200   6328 RESIDUE           4 B     ASP     0 **** ASP B 200
+   407 LEU201   6340 RESIDUE           4 B     LEU     0 **** LEU B 201
+   408 ASN202   6359 RESIDUE           4 B     ASN     0 **** ASN B 202
+   409 HIS203   6373 RESIDUE           4 B     HIS     0 **** HIS B 203
+   410 VAL204   6390 RESIDUE           4 B     VAL     0 **** VAL B 204
+   411 CYS205   6406 RESIDUE           4 B     CYS     0 **** CYS B 205
+   412 VAL206   6417 RESIDUE           4 B     VAL     0 **** VAL B 206
+   413 ILE207   6433 RESIDUE           4 B     ILE     0 **** ILE B 207
+   414 SER208   6452 RESIDUE           4 B     SER     0 **** SER B 208
+   415 GLU209   6463 RESIDUE           4 B     GLU     0 **** GLU B 209
+   416 THR210   6478 RESIDUE           4 B     THR     0 **** THR B 210
+   417 GLY211   6492 RESIDUE           4 B     GLY     0 **** GLY B 211
+   418 LYS212   6499 RESIDUE           4 B     LYS     0 **** LYS B 212
+   419 ALA213   6521 RESIDUE           4 B     ALA     0 **** ALA B 213
+   420 LYS214   6531 RESIDUE           4 B     LYS     0 **** LYS B 214
+   421 TYR215   6553 RESIDUE           4 B     TYR     0 **** TYR B 215
+   422 LYS216   6574 RESIDUE           4 B     LYS     0 **** LYS B 216
+   423 ALA217   6596 RESIDUE           4 B     ALA     0 **** ALA B 217
+   424 5GP800   6607 GROUP             4 B     5GP     0 **** 5GP B 800
+   425 HOH878   6643 RESIDUE           4 A     HOH     0 **** HOH A 878
+   426 HOH912   6646 RESIDUE           4 A     HOH     0 **** HOH A 912
+   427 HOH867   6649 RESIDUE           4 B     HOH     0 **** HOH B 867
+   428 HOH868   6652 RESIDUE           4 B     HOH     0 **** HOH B 868
+   429 HOH887   6655 RESIDUE           4 B     HOH     0 **** HOH B 887
