@@ -13,21 +13,25 @@ Coming soon!
 
 ## How to Run
 Currently, only production mode on a pre-trained model is supported until datasets are online.
-* Build the conda environments in `./envs/ob_env.yml` and `./envs/pytorch_env.yml`. This will add two new conda environments named `ob` and `pytorch_env` respectively.
+* Build the conda environment by running
  ```
- conda env create -f envs/ob_env.yml
- conda env create -f envs/pytorch_env.yml
- ```
+mamba create -n grasp python==3.7.10
+
+mamba install conda-forge::cython
+mamba install conda-forge::openbabel=2.4.1
+mamba install conda-forge::rdkit
+mamba install conda-forge::mdtraj
+mamba install conda-forge::mdanalysis
+
+pip install networkx==2.5 ```
 
 * Move protein structures to `./benchmark_data_dir/production/unprocessed_inputs/`. Heteroatoms do not need to be removed, they will be cleaned during parsing.
 * Load `ob` and parse the structures into graphs.
  ```
- conda activate ob
  python3 parse_files.py production
  ```
 * Run GrASP over the protein graphs.
  ```
- conda deactivate; conda activate pytorch_env
  python3 infer_test_set.py
  ```
 * Paint structures with GrASP predictions in the b-factor column.
