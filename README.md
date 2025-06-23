@@ -1,6 +1,6 @@
 # Graph Attention Site Prediction (GrASP)
-## Preprint
-https://biorxiv.org/content/10.1101/2023.07.25.550565v1
+## Publication
+https://pubs.acs.org/doi/10.1021/acs.jcim.3c01698
 
 ## Colab
 Fetch a PDB file and try GrASP on it in our Colab demo.
@@ -9,7 +9,11 @@ Fetch a PDB file and try GrASP on it in our Colab demo.
 
 
 ## Download Datasets
-Coming soon!
+[GrASP sc-PDB](https://zenodo.org/records/15571599)
+
+[GrASP COACH420](https://zenodo.org/records/15572019)
+
+[GrASP HOLO4K](https://zenodo.org/records/15571950)
 
 ## How to Run
 Currently, only production mode on a pre-trained model is supported until datasets are online.
