@@ -9,6 +9,8 @@ Fetch a PDB file and try GrASP on it in our Colab demo.
 
 
 ## Download Datasets
+In each dataset, `ready_to_parse.mol2.zip` contains the minimal structure files necessary to predict and evaluate binding sites with a general method, while `processed.zip` contains the PyTorch Geometric graphs used to run GrASP.
+
 [GrASP sc-PDB](https://zenodo.org/records/15571599)
 
 [GrASP COACH420](https://zenodo.org/records/15572019)
